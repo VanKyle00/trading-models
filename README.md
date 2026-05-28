@@ -83,7 +83,7 @@ auto-generated from each model's `model.md` frontmatter.
 ```bash
 git clone https://github.com/<you>/trading-models.git
 cd trading-models
-uv sync --all-extras
+uv sync --extra dev    # `uv sync` alone is enough if you only want to run the app
 cp .env.example .env   # fill in any API keys you need (none required for the seed models)
 ```
 
