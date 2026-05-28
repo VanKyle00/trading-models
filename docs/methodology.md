@@ -20,6 +20,15 @@ captures those assumptions.
 - **Single-asset**: The v1 engine is single-asset and assumes the user's
   signal already reflects any sizing logic. A multi-asset / portfolio
   variant is a future addition.
+- **Two front-ends, one math core.** `run_backtest` is vectorized — pass
+  a price series and a signal series. `run_event_backtest` is event-
+  driven — pass a sequence of `Bar` events and a `Strategy` callback.
+  Both produce identical `BacktestResult` shapes and identical PnL,
+  because the event engine just records the strategy's per-bar target
+  and delegates the math to the vectorized engine. Choose the event
+  engine when the strategy is path-dependent (stop-losses, trailing
+  stops, regime filters); choose the vectorized engine for pure-signal
+  strategies.
 
 ## Transaction costs
 

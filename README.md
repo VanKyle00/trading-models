@@ -29,17 +29,17 @@ auto-generated from each model's `model.md` frontmatter.
 
 ## Roadmap
 
-- **Binance crypto loader** — daily OHLCV via the public REST endpoint, no
-  API key required. Unlocks the microstructure family.
-- **Event-driven backtest engine** — required before any microstructure
-  model can land. Will live alongside the vectorized engine in
-  `tradinglib/backtest/`.
 - **Microstructure seed model** — orderbook imbalance / microprice on
-  Binance L2 once the event-driven engine and loader are in.
+  Binance L2. The two prerequisites (Binance loader + event-driven
+  backtest engine) are now in; the remaining piece is a tick / L2
+  ingestion path (WebSocket capture → parquet).
 - **Walk-forward CV** — moving from chronological 80/20 splits to rolling
   walk-forward as the default for the ML family.
 - **Vendor-grade equities loaders** — Polygon or Alpaca to replace
   yfinance for production-quality bars.
+- **More alt-data sources** — the Trends contrarian model was a negative
+  result; NewsAPI + a proper headline-sentiment model is the next
+  experiment worth running.
 
 ## Repository tour
 
