@@ -1,0 +1,10 @@
+{
+  "symbol": "SPY",
+  "n_train": 2971,
+  "n_test": 743,
+  "split_date": "2022-01-14",
+  "train_corr": 0.7123100550715115,
+  "test_corr": 0.10537820501198916,
+  "train_sign_accuracy": 0.6492763379333558,
+  "test_sign_accuracy": 0.531628532974428
+}
