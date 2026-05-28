@@ -64,11 +64,24 @@ with st.sidebar:
     relevant_presets = presets_for_assets(selected.get("assets"))
     if relevant_presets:
         st.caption("Regime presets")
+
+        def _apply_preset(preset_start: date, preset_end: date) -> None:
+            # on_click fires *before* the next rerun, so we can update
+            # the date-input session-state keys here. Doing the same
+            # write inline after the widget renders triggers
+            # StreamlitAPIException: cannot modify widget key after the
+            # widget is instantiated.
+            st.session_state["start_date"] = preset_start
+            st.session_state["end_date"] = preset_end
+
         for preset in relevant_presets:
-            if st.button(preset.label, key=f"preset_{preset.label}", use_container_width=True):
-                st.session_state["start_date"] = preset.start
-                st.session_state["end_date"] = preset.end
-                st.rerun()
+            st.button(
+                preset.label,
+                key=f"preset_{preset.label}",
+                on_click=_apply_preset,
+                args=(preset.start, preset.end),
+                use_container_width=True,
+            )
 
     st.divider()
 
