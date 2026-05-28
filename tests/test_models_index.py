@@ -1,16 +1,18 @@
-"""Tests for the MODELS.md index generator."""
+"""Tests for the MODELS.md index generator and the underlying discovery
+helpers in :mod:`tradinglib.models_index`."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
+from tradinglib.models_index import find_models, parse_frontmatter
+
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from regenerate_models_index import (  # noqa: E402
     fmt,
-    parse_frontmatter,
     render,
     row_to_markdown,
 )
@@ -42,6 +44,30 @@ def test_parse_frontmatter_no_header(tmp_path: Path) -> None:
     p = tmp_path / "model.md"
     p.write_text("just plain text, no yaml\n", encoding="utf-8")
     assert parse_frontmatter(p) is None
+
+
+def test_find_models_scans_directory_tree(tmp_path: Path, monkeypatch) -> None:
+    # Redirect repo_root so the path-relativization works against tmp_path
+    from tradinglib import models_index as mi
+
+    monkeypatch.setattr(mi, "repo_root", lambda: tmp_path)
+
+    a = tmp_path / "models" / "classical" / "01-alpha"
+    b = tmp_path / "models" / "ml" / "01-beta"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+    (a / "model.md").write_text(
+        "---\nname: Alpha\nfamily: classical\n---\nbody\n", encoding="utf-8"
+    )
+    (b / "model.md").write_text("---\nname: Beta\nfamily: ml\n---\nbody\n", encoding="utf-8")
+
+    rows = find_models(tmp_path / "models")
+    assert len(rows) == 2
+    names = {r["name"] for r in rows}
+    assert names == {"Alpha", "Beta"}
+    # _path is set relative to repo_root() with forward slashes
+    paths = {r["_path"] for r in rows}
+    assert paths == {"models/classical/01-alpha", "models/ml/01-beta"}
 
 
 def test_fmt_handles_types() -> None:

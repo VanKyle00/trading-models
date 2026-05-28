@@ -18,6 +18,7 @@ dependencies = [
     "matplotlib>=3.9",
     "plotly>=5.0",
     "scipy>=1.13",
+    "streamlit>=1.40",
 ]
 
 [project.optional-dependencies]

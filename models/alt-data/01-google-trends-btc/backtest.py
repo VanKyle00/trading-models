@@ -19,7 +19,9 @@ Sunday-anchored weeks to align with Google Trends' weekly index.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -34,6 +36,8 @@ TIMEFRAME = "2021-01-01 2024-12-31"
 START = "2021-01-01"
 END = "2024-12-31"
 ZSCORE_WINDOW = 4
+FEE_BPS = 2.0
+SLIPPAGE_BPS = 3.0
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
 
@@ -50,30 +54,66 @@ def build_signal(interest: pd.Series, window: int = ZSCORE_WINDOW) -> pd.Series:
     return signal
 
 
-def main() -> None:
-    RESULTS.mkdir(parents=True, exist_ok=True)
+def run_for_gui(
+    start: str | date = START,
+    end: str | date = END,
+    window: int = ZSCORE_WINDOW,
+) -> dict[str, Any]:
+    """Trends contrarian backtest on a user-selected sub-window.
 
-    # Weekly BTC close — yfinance gives daily; resample to Sunday-end weeks
+    Google Trends values are relative within the original query window
+    (``TIMEFRAME``), so the loader always pulls the full 2021-2024 window
+    and we slice the user's selection afterward. Z-score uses the full
+    series for proper trailing context, then is sliced for evaluation.
+    """
     daily = load_daily(SYMBOL, start=START, end=END)
     btc_weekly = daily["close"].resample("W-SUN").last().dropna()
-
     interest = load_interest(QUERY, timeframe=TIMEFRAME)
 
-    # Align on the common weekly index
     common = btc_weekly.index.intersection(interest.index)
     btc_weekly = btc_weekly.loc[common]
     interest = interest.loc[common]
 
-    signal = build_signal(interest)
+    signal_full = build_signal(interest, window=window)
 
-    # Weekly bars → 52 periods per year for annualization
+    start_ts = pd.Timestamp(start, tz="UTC")
+    end_ts = pd.Timestamp(end, tz="UTC")
+    mask = (btc_weekly.index >= start_ts) & (btc_weekly.index <= end_ts)
+    btc_weekly = btc_weekly.loc[mask]
+    interest = interest.loc[mask]
+    signal = signal_full.loc[mask]
+
+    if len(btc_weekly) < 2:
+        raise ValueError(
+            f"only {len(btc_weekly)} weekly bars in [{start}, {end}] — pick a wider window"
+        )
+
     result = run_backtest(
         btc_weekly,
         signal,
-        fee_bps=2.0,
-        slippage_bps=3.0,
+        fee_bps=FEE_BPS,
+        slippage_bps=SLIPPAGE_BPS,
         periods_per_year=52,
     )
+
+    data = pd.DataFrame({"close": btc_weekly, "interest": interest, "signal": signal})
+    return {
+        "data": data,
+        "result": result,
+        "symbol": SYMBOL,
+        "params": {
+            "start": str(start),
+            "end": str(end),
+            "zscore_window": window,
+        },
+    }
+
+
+def main() -> None:
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    out = run_for_gui(START, END)
+    result = out["result"]
+    data = out["data"]
 
     metrics_path = RESULTS / "metrics.json"
     metrics_path.write_text(json.dumps(result.metrics, indent=2))
@@ -85,7 +125,7 @@ def main() -> None:
         2, 1, figsize=(11, 7), sharex=True, gridspec_kw={"height_ratios": [3, 1]}
     )
     result.equity_curve.plot(ax=axes[0], label="Trends contrarian (BTC)")
-    buy_hold = (1.0 + btc_weekly.pct_change().fillna(0.0)).cumprod() * result.config[
+    buy_hold = (1.0 + data["close"].pct_change().fillna(0.0)).cumprod() * result.config[
         "initial_capital"
     ]
     buy_hold.plot(ax=axes[0], label="Buy & hold (BTC weekly)", alpha=0.6)
@@ -94,7 +134,9 @@ def main() -> None:
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    interest.plot(ax=axes[1], color="steelblue", alpha=0.7, label="'bitcoin' search interest")
+    data["interest"].plot(
+        ax=axes[1], color="steelblue", alpha=0.7, label="'bitcoin' search interest"
+    )
     axes[1].set_ylabel("Search interest")
     axes[1].grid(True, alpha=0.3)
     axes[1].legend(loc="upper left")

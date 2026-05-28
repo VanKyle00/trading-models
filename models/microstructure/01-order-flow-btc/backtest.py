@@ -33,7 +33,9 @@ maintains its own rolling buffer — natural fit for the imperative API.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -49,7 +51,9 @@ END = "2024-08-06"
 BAR_SECONDS = 60
 SMOOTH_WINDOW = 5
 ENTRY_THRESHOLD = 0.20
-PERIODS_PER_YEAR = 525_600  # 1-minute bars per calendar year
+PERIODS_PER_YEAR = 525_600
+FEE_BPS = 2.0
+SLIPPAGE_BPS = 5.0
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
 
@@ -88,32 +92,73 @@ class RollingOFIStrategy:
             engine.set_target_position(0.0)
 
 
-def main() -> None:
-    RESULTS.mkdir(parents=True, exist_ok=True)
+def run_for_gui(
+    start: str | date = START,
+    end: str | date = END,
+    bar_seconds: int = BAR_SECONDS,
+    smooth_window: int = SMOOTH_WINDOW,
+    entry_threshold: float = ENTRY_THRESHOLD,
+) -> dict[str, Any]:
+    """OFI backtest on a user-selected date range.
 
-    print(f"Loading {SYMBOL} trades {START} -> {END} ...")
-    trades = load_trades(SYMBOL, START, END)
-    print(f"  {len(trades):,} trades")
+    First call downloads aggTrades ZIPs from Binance's public CDN and
+    caches per-day parquet (~50-100 MB per BTCUSDT-day). Subsequent
+    calls within the cached range are fast.
+    """
+    trades = load_trades(SYMBOL, start, end)
+    bars_df = aggregate_to_bars(trades, bar_seconds=bar_seconds)
 
-    print(f"Aggregating to {BAR_SECONDS}-second bars ...")
-    bars_df = aggregate_to_bars(trades, bar_seconds=BAR_SECONDS)
-    print(f"  {len(bars_df):,} bars")
+    if len(bars_df) < smooth_window + 2:
+        raise ValueError(
+            f"only {len(bars_df)} bars in [{start}, {end}] — need at least "
+            f"{smooth_window + 2} for the smoothed OFI signal"
+        )
 
     bars = bars_from_dataframe(bars_df[["open", "high", "low", "close", "volume"]])
     ofi_lookup = bars_df["ofi"].to_dict()
 
     strategy = RollingOFIStrategy(
         ofi_lookup=ofi_lookup,
-        window=SMOOTH_WINDOW,
-        threshold=ENTRY_THRESHOLD,
+        window=smooth_window,
+        threshold=entry_threshold,
     )
     result = run_event_backtest(
         bars,
         strategy,
-        fee_bps=2.0,
-        slippage_bps=5.0,
+        fee_bps=FEE_BPS,
+        slippage_bps=SLIPPAGE_BPS,
         periods_per_year=PERIODS_PER_YEAR,
     )
+
+    smoothed = bars_df["ofi"].rolling(smooth_window).mean()
+    data = pd.DataFrame(
+        {
+            "close": bars_df["close"],
+            "ofi": bars_df["ofi"],
+            "ofi_smoothed": smoothed,
+        }
+    )
+    return {
+        "data": data,
+        "result": result,
+        "symbol": SYMBOL,
+        "params": {
+            "start": str(start),
+            "end": str(end),
+            "bar_seconds": bar_seconds,
+            "smooth_window": smooth_window,
+            "entry_threshold": entry_threshold,
+        },
+    }
+
+
+def main() -> None:
+    RESULTS.mkdir(parents=True, exist_ok=True)
+
+    print(f"Loading {SYMBOL} trades {START} -> {END} ...")
+    out = run_for_gui(START, END)
+    result = out["result"]
+    data = out["data"]
 
     metrics_path = RESULTS / "metrics.json"
     metrics_path.write_text(json.dumps(result.metrics, indent=2))
@@ -125,17 +170,14 @@ def main() -> None:
         2, 1, figsize=(11, 7), sharex=True, gridspec_kw={"height_ratios": [3, 1]}
     )
     result.equity_curve.plot(ax=axes[0], label="OFI strategy")
-    bh = (1.0 + bars_df["close"].pct_change().fillna(0.0)).cumprod() * result.config[
-        "initial_capital"
-    ]
+    bh = (1.0 + data["close"].pct_change().fillna(0.0)).cumprod() * result.config["initial_capital"]
     bh.plot(ax=axes[0], label="Buy & hold (1-minute)", alpha=0.6)
     axes[0].set_title(f"{SYMBOL} {START} to {END} — rolling OFI vs buy & hold (1-minute bars)")
     axes[0].set_ylabel("Equity ($)")
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    smoothed = bars_df["ofi"].rolling(SMOOTH_WINDOW).mean()
-    smoothed.plot(ax=axes[1], color="steelblue", linewidth=0.7, alpha=0.8)
+    data["ofi_smoothed"].plot(ax=axes[1], color="steelblue", linewidth=0.7, alpha=0.8)
     axes[1].axhline(ENTRY_THRESHOLD, color="green", linestyle="--", linewidth=0.7, alpha=0.6)
     axes[1].axhline(-ENTRY_THRESHOLD, color="red", linestyle="--", linewidth=0.7, alpha=0.6)
     axes[1].axhline(0.0, color="black", linewidth=0.3, alpha=0.3)

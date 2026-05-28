@@ -4,13 +4,18 @@ Loads the artifact written by ``train.py``, predicts next-day log returns
 on the OOS window, converts predictions into a position (long when the
 predicted return is positive, flat otherwise), and runs the standard
 backtest engine. Saves ``results/metrics.json`` and ``results/equity_curve.png``.
+
+Exposes :func:`run_for_gui` so the Streamlit app can predict + backtest
+on user-selected date windows without re-training.
 """
 
 from __future__ import annotations
 
 import json
 import sys
+from datetime import date
 from pathlib import Path
+from typing import Any
 
 import joblib
 import matplotlib.pyplot as plt
@@ -19,16 +24,80 @@ import pandas as pd
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from train import END, START, SYMBOL, build_features  # noqa: E402
+from train import END, START, SYMBOL, build_features, train_model  # noqa: E402
 
 from tradinglib.backtest import run_backtest  # noqa: E402
 from tradinglib.loaders.equities.yfinance import load_daily  # noqa: E402
 
 RESULTS = HERE / "results"
+FEE_BPS = 1.0
+SLIPPAGE_BPS = 0.5
+
+
+def _get_or_train_bundle() -> dict[str, Any]:
+    """Return the trained-model bundle, training on demand if missing."""
+    bundle_path = RESULTS / "model.joblib"
+    if bundle_path.exists():
+        return joblib.load(bundle_path)
+    # First-time path (e.g. fresh Streamlit Cloud clone — joblib is gitignored).
+    bars = load_daily(SYMBOL, start=START, end=END)
+    bundle = train_model(bars["close"])
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    joblib.dump(bundle, bundle_path)
+    return bundle
+
+
+def run_for_gui(
+    start: str | date | None = None,
+    end: str | date | None = None,
+) -> dict[str, Any]:
+    """Predict + backtest on a user-selected window.
+
+    Inference-only: uses the model trained on 2010 → split. If the
+    joblib is missing (fresh clone), it's trained once and cached. The
+    GUI date window is intersected with the OOS slice (`split → END`)
+    so we don't accidentally evaluate on training data.
+    """
+    bundle = _get_or_train_bundle()
+    model = bundle["model"]
+    features = bundle["features"]
+    split = bundle["split_index"]
+
+    bars = load_daily(SYMBOL, start=START, end=END)
+    prices = bars["close"]
+    feats = build_features(prices)
+
+    # Clip the requested window to the OOS slice to avoid training-data peeks
+    start_ts = max(pd.Timestamp(start, tz="UTC"), split) if start is not None else split
+    end_ts = pd.Timestamp(end, tz="UTC") if end is not None else feats.index.max()
+
+    x = feats.loc[(feats.index >= start_ts) & (feats.index <= end_ts), features].dropna()
+    if x.empty:
+        raise ValueError(
+            f"no OOS bars in [{start_ts.date()}, {end_ts.date()}] — the model's "
+            f"OOS slice starts at {split.date()}"
+        )
+    pred = pd.Series(model.predict(x), index=x.index, name="predicted_return")
+    signal = (pred > 0).astype(float)
+
+    user_prices = prices.loc[signal.index]
+    result = run_backtest(user_prices, signal, fee_bps=FEE_BPS, slippage_bps=SLIPPAGE_BPS)
+
+    data = pd.DataFrame({"close": user_prices, "predicted_return": pred, "signal": signal})
+    return {
+        "data": data,
+        "result": result,
+        "symbol": SYMBOL,
+        "params": {
+            "start": str(start_ts.date()),
+            "end": str(end_ts.date()),
+            "oos_split": split.date().isoformat(),
+        },
+    }
 
 
 def main() -> None:
-    bundle = joblib.load(RESULTS / "model.joblib")
+    bundle = _get_or_train_bundle()
     model = bundle["model"]
     features = bundle["features"]
     split = bundle["split_index"]
@@ -39,13 +108,11 @@ def main() -> None:
 
     x_oos = feats.loc[feats.index >= split, features].dropna()
     pred = pd.Series(model.predict(x_oos), index=x_oos.index)
-
-    # Long when predicted next-day log return is positive, flat otherwise
     signal = (pred > 0).astype(float)
     oos_prices = prices.loc[signal.index]
+    result = run_backtest(oos_prices, signal, fee_bps=FEE_BPS, slippage_bps=SLIPPAGE_BPS)
 
-    result = run_backtest(oos_prices, signal, fee_bps=1.0, slippage_bps=0.5)
-
+    RESULTS.mkdir(parents=True, exist_ok=True)
     metrics_path = RESULTS / "metrics.json"
     metrics_path.write_text(json.dumps(result.metrics, indent=2))
     print(f"Wrote {metrics_path}")

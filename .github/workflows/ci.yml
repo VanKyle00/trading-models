@@ -33,6 +33,11 @@ jobs:
       - name: Run tests
         run: uv run pytest
 
+      - name: Streamlit app imports cleanly
+        run: |
+          uv run python -m py_compile app/streamlit_app.py
+          uv run python -c "import app.adapters, app.models_registry, app.presets, app.ui.data_view, app.ui.results_view"
+
       - name: Verify MODELS.md is up to date
         run: |
           uv run python scripts/regenerate_models_index.py

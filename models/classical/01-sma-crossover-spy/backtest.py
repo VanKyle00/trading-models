@@ -9,7 +9,9 @@ and proves the infrastructure works.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -22,6 +24,8 @@ FAST_WINDOW = 50
 SLOW_WINDOW = 200
 START = "2010-01-01"
 END = "2024-12-31"
+FEE_BPS = 1.0
+SLIPPAGE_BPS = 0.5
 
 
 def build_signal(prices: pd.Series, fast: int = FAST_WINDOW, slow: int = SLOW_WINDOW) -> pd.Series:
@@ -31,16 +35,46 @@ def build_signal(prices: pd.Series, fast: int = FAST_WINDOW, slow: int = SLOW_WI
     return (fast_ma > slow_ma).astype(float)
 
 
+def run_for_gui(
+    start: str | date = START,
+    end: str | date = END,
+    fast: int = FAST_WINDOW,
+    slow: int = SLOW_WINDOW,
+) -> dict[str, Any]:
+    """Run the SMA crossover end-to-end without writing to disk.
+
+    Returns a dict with:
+      - ``data``: DataFrame indexed by timestamp with ``close``, ``fast_ma``,
+        ``slow_ma``, and ``signal`` columns — used by the GUI's data view.
+      - ``result``: the :class:`BacktestResult` from ``run_backtest``.
+      - ``symbol``: the traded symbol, for plot titles.
+      - ``params``: dict echo of the inputs.
+    """
+    bars = load_daily(SYMBOL, start=start, end=end)
+    prices = bars["close"]
+    fast_ma = prices.rolling(fast).mean()
+    slow_ma = prices.rolling(slow).mean()
+    signal = (fast_ma > slow_ma).astype(float)
+
+    result = run_backtest(prices, signal, fee_bps=FEE_BPS, slippage_bps=SLIPPAGE_BPS)
+
+    data = pd.DataFrame({"close": prices, "fast_ma": fast_ma, "slow_ma": slow_ma, "signal": signal})
+    return {
+        "data": data,
+        "result": result,
+        "symbol": SYMBOL,
+        "params": {"start": str(start), "end": str(end), "fast": fast, "slow": slow},
+    }
+
+
 def main() -> None:
     here = Path(__file__).resolve().parent
     out_dir = here / "results"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    bars = load_daily(SYMBOL, start=START, end=END)
-    prices = bars["close"]
-    signal = build_signal(prices)
-
-    result = run_backtest(prices, signal, fee_bps=1.0, slippage_bps=0.5)
+    out = run_for_gui(START, END)
+    result = out["result"]
+    prices = out["data"]["close"]
 
     metrics_path = out_dir / "metrics.json"
     metrics_path.write_text(json.dumps(result.metrics, indent=2))

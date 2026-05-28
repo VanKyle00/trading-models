@@ -10,6 +10,21 @@ metrics. The shared library in `tradinglib/` provides a unified backtest
 engine so every model is measured the same way and the results in the
 table below are directly comparable.
 
+## Live demo
+
+There's an interactive Streamlit app at **[trading-models.streamlit.app](https://trading-models.streamlit.app)**
+*(URL placeholder — connect this repo at [share.streamlit.io](https://share.streamlit.io) to activate)*
+where you can pick a model, see its input data, and run a backtest over
+any date range or canonical regime window (COVID crash, 2022 bear, BTC
+2024-08-05 crash, etc.) without installing anything locally.
+
+To run the app yourself:
+
+```bash
+uv sync
+uv run streamlit run app/streamlit_app.py
+```
+
 ## Current models
 
 | Model | Family | Window | Assets | OOS Sharpe | Max DD | Status |
@@ -50,6 +65,7 @@ auto-generated from each model's `model.md` frontmatter.
 
 | Directory | What lives there |
 | --- | --- |
+| `app/` | Streamlit GUI for browsing models + running backtests interactively |
 | `tradinglib/` | Shared package — data, features, backtest engine, metrics, viz |
 | `tradinglib/loaders/` | Data loaders, one subpackage per asset class |
 | `data/ingestion/` | Documentation of each data source |

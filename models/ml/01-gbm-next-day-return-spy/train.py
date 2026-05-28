@@ -4,12 +4,17 @@ Trains on the first 80% of the historical window, evaluates on the held-out
 last 20%. The trained model + feature list + split index get pickled to
 ``results/model.joblib`` so ``backtest.py`` can run a backtest on the OOS
 window without retraining.
+
+The training logic is also exposed as :func:`train_model` so the GUI can
+lazy-train on demand if the joblib is missing (e.g. on a fresh
+Streamlit Cloud deploy where ``*.joblib`` is gitignored).
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -46,22 +51,18 @@ def build_features(prices: pd.Series) -> pd.DataFrame:
     return df
 
 
-def main() -> None:
-    RESULTS.mkdir(parents=True, exist_ok=True)
+def train_model(prices: pd.Series, train_frac: float = TRAIN_FRAC) -> dict[str, Any]:
+    """Fit XGBoost on the first ``train_frac`` of ``prices``.
 
-    bars = load_daily(SYMBOL, start=START, end=END)
-    prices = bars["close"]
-
+    Returns a bundle dict with keys: ``model``, ``features``,
+    ``split_index`` — the same shape that ``results/model.joblib`` stores.
+    """
     features = build_features(prices)
-    target = log_return(prices, 1).shift(-1)  # next-day log return
-
+    target = log_return(prices, 1).shift(-1)
     aligned = pd.concat([features, target.rename("y")], axis=1).dropna()
-    n_train = int(len(aligned) * TRAIN_FRAC)
-    train, test = aligned.iloc[:n_train], aligned.iloc[n_train:]
-
+    n_train = int(len(aligned) * train_frac)
+    train_split = aligned.iloc[:n_train]
     feature_cols = [c for c in aligned.columns if c != "y"]
-    x_train, y_train = train[feature_cols], train["y"]
-    x_test, y_test = test[feature_cols], test["y"]
 
     model = xgb.XGBRegressor(
         n_estimators=300,
@@ -73,26 +74,45 @@ def main() -> None:
         random_state=42,
         tree_method="hist",
     )
-    model.fit(x_train, y_train, eval_set=[(x_test, y_test)], verbose=False)
+    model.fit(train_split[feature_cols], train_split["y"], verbose=False)
+    return {
+        "model": model,
+        "features": feature_cols,
+        "split_index": aligned.index[n_train],
+    }
 
-    pred_train = model.predict(x_train)
-    pred_test = model.predict(x_test)
+
+def main() -> None:
+    RESULTS.mkdir(parents=True, exist_ok=True)
+
+    bars = load_daily(SYMBOL, start=START, end=END)
+    prices = bars["close"]
+    bundle = train_model(prices, train_frac=TRAIN_FRAC)
+    model = bundle["model"]
+    features = bundle["features"]
+    split = bundle["split_index"]
+
+    feature_matrix = build_features(prices)
+    target = log_return(prices, 1).shift(-1)
+    aligned = pd.concat([feature_matrix, target.rename("y")], axis=1).dropna()
+    train_split = aligned.loc[aligned.index < split]
+    test_split = aligned.loc[aligned.index >= split]
+
+    pred_train = model.predict(train_split[features])
+    pred_test = model.predict(test_split[features])
 
     summary = {
         "symbol": SYMBOL,
-        "n_train": int(n_train),
-        "n_test": int(len(aligned) - n_train),
-        "split_date": aligned.index[n_train].date().isoformat(),
-        "train_corr": float(np.corrcoef(pred_train, y_train)[0, 1]),
-        "test_corr": float(np.corrcoef(pred_test, y_test)[0, 1]),
-        "train_sign_accuracy": float((np.sign(pred_train) == np.sign(y_train)).mean()),
-        "test_sign_accuracy": float((np.sign(pred_test) == np.sign(y_test)).mean()),
+        "n_train": len(train_split),
+        "n_test": len(test_split),
+        "split_date": split.date().isoformat(),
+        "train_corr": float(np.corrcoef(pred_train, train_split["y"])[0, 1]),
+        "test_corr": float(np.corrcoef(pred_test, test_split["y"])[0, 1]),
+        "train_sign_accuracy": float((np.sign(pred_train) == np.sign(train_split["y"])).mean()),
+        "test_sign_accuracy": float((np.sign(pred_test) == np.sign(test_split["y"])).mean()),
     }
 
-    joblib.dump(
-        {"model": model, "features": feature_cols, "split_index": aligned.index[n_train]},
-        RESULTS / "model.joblib",
-    )
+    joblib.dump(bundle, RESULTS / "model.joblib")
     (RESULTS / "train_metrics.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
 
