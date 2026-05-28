@@ -16,7 +16,7 @@ import streamlit as st
 from app.adapters import run
 from app.models_registry import list_models
 from app.presets import presets_for_assets
-from app.ui import data_view, results_view
+from app.ui import data_details, data_view, results_view
 
 st.set_page_config(
     page_title="Trading Models",
@@ -141,5 +141,6 @@ with st.spinner(f"Running {selected['name']} on {start} → {end} ..."):
         st.error(f"Unexpected failure: {type(e).__name__}: {e}")
         st.stop()
 
+data_details.render(selected, out)
 data_view.render(selected, out)
 results_view.render(out)
