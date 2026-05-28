@@ -25,6 +25,7 @@ ingest = [
     "yfinance>=0.2",
     "httpx>=0.27",
     "praw>=7.7",
+    "pytrends>=4.9.2",
 ]
 ml = [
     "scikit-learn>=1.5",

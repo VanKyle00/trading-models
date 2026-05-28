@@ -16,22 +16,30 @@ table below are directly comparable.
 | --- | --- | --- | --- | --- | --- | --- |
 | [SMA Crossover on SPY](models/classical/01-sma-crossover-spy/) | classical | swing | equities | 0.73 | -0.34 | working |
 | [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | 0.84 | -0.14 | working |
+| [Google Trends Contrarian on BTC](models/alt-data/01-google-trends-btc/) | alt-data | swing | crypto | -0.30 | -0.80 | negative-result |
+
+The third row is intentional: a hypothesis (search interest as a contrarian
+sentiment signal) was tested honestly and the data rejected it. See the
+model's README for the full writeup and what the inverse direction looks
+like. Negative results are first-class citizens here — the alternative is a
+portfolio of overfit "winners".
 
 The full sortable index lives in [MODELS.md](MODELS.md) and is
 auto-generated from each model's `model.md` frontmatter.
 
 ## Roadmap
 
-- **Alt-data model** — sentiment/search-interest signal applied to crypto.
-  Loader needs careful design around historical data availability; see
-  [`docs/data-sources.md`](docs/data-sources.md).
-- **Microstructure model** — orderbook imbalance / microprice on a free
-  crypto venue (Binance L2). Requires the event-driven backtest engine to
-  land first.
+- **Binance crypto loader** — daily OHLCV via the public REST endpoint, no
+  API key required. Unlocks the microstructure family.
+- **Event-driven backtest engine** — required before any microstructure
+  model can land. Will live alongside the vectorized engine in
+  `tradinglib/backtest/`.
+- **Microstructure seed model** — orderbook imbalance / microprice on
+  Binance L2 once the event-driven engine and loader are in.
 - **Walk-forward CV** — moving from chronological 80/20 splits to rolling
-  walk-forward as a default for the ML family.
-- **Live data loaders** — Polygon and Alpaca for equities; Binance for
-  crypto trades + L2.
+  walk-forward as the default for the ML family.
+- **Vendor-grade equities loaders** — Polygon or Alpaca to replace
+  yfinance for production-quality bars.
 
 ## Repository tour
 
