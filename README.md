@@ -17,29 +17,34 @@ table below are directly comparable.
 | [SMA Crossover on SPY](models/classical/01-sma-crossover-spy/) | classical | swing | equities | 0.73 | -0.34 | working |
 | [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | 0.84 | -0.14 | working |
 | [Google Trends Contrarian on BTC](models/alt-data/01-google-trends-btc/) | alt-data | swing | crypto | -0.30 | -0.80 | negative-result |
+| [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | -86.5 | -0.36 | negative-result |
 
-The third row is intentional: a hypothesis (search interest as a contrarian
-sentiment signal) was tested honestly and the data rejected it. See the
-model's README for the full writeup and what the inverse direction looks
-like. Negative results are first-class citizens here — the alternative is a
-portfolio of overfit "winners".
+Rows 3 and 4 are intentional negative results: hypotheses were tested
+honestly and the data rejected them. Each model's README documents
+what was tested, the inverse direction where applicable, and what the
+result implies. Negative results are first-class citizens here — the
+alternative is a portfolio of overfit "winners".
+
+Note on the microstructure Sharpe: the -86.5 number is annualized
+assuming 525,600 minute-bars per year. The *direction* (clearly
+losing) and the scale-invariant metrics (hit rate 29.7%, drawdown
+-36%) are what matter for cross-model comparison; see the model's
+README for a daily-bar-equivalent rescaling.
 
 The full sortable index lives in [MODELS.md](MODELS.md) and is
 auto-generated from each model's `model.md` frontmatter.
 
 ## Roadmap
 
-- **Microstructure seed model** — orderbook imbalance / microprice on
-  Binance L2. The two prerequisites (Binance loader + event-driven
-  backtest engine) are now in; the remaining piece is a tick / L2
-  ingestion path (WebSocket capture → parquet).
 - **Walk-forward CV** — moving from chronological 80/20 splits to rolling
   walk-forward as the default for the ML family.
 - **Vendor-grade equities loaders** — Polygon or Alpaca to replace
   yfinance for production-quality bars.
-- **More alt-data sources** — the Trends contrarian model was a negative
-  result; NewsAPI + a proper headline-sentiment model is the next
-  experiment worth running.
+- **L2-derived OFI** — the trade-side OFI experiment was a negative
+  result; the next iteration uses depth-update events for a proper
+  book-imbalance signal. Requires a WebSocket capture loader.
+- **More alt-data sources** — NewsAPI + a proper headline-sentiment
+  model is the next experiment worth running on that front.
 
 ## Repository tour
 

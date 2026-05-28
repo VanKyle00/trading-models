@@ -6,4 +6,5 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | [Google Trends Contrarian on BTC](models/alt-data/01-google-trends-btc/) | alt-data | swing | crypto | google_trends_bitcoin, yfinance_daily_bars | -0.30 | -0.80 | negative-result |
 | [SMA Crossover on SPY](models/classical/01-sma-crossover-spy/) | classical | swing | equities | yfinance_daily_bars | 0.73 | -0.34 | working |
+| [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | binance_aggTrades | -86.50 | -0.36 | negative-result |
 | [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | yfinance_daily_bars | 0.84 | -0.14 | working |
