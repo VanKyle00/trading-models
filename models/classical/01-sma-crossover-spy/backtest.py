@@ -65,7 +65,13 @@ def run_for_gui(
         "data": data,
         "result": result,
         "symbol": symbol,
-        "params": {"start": str(start), "end": str(end), "symbol": symbol, "fast": fast, "slow": slow},
+        "params": {
+            "start": str(start),
+            "end": str(end),
+            "symbol": symbol,
+            "fast": fast,
+            "slow": slow,
+        },
     }
 
 

@@ -109,8 +109,7 @@ def run_for_gui(
     """
     if symbol != SYMBOL:
         raise ValueError(
-            f"this model is locked to {SYMBOL} (Binance aggTrades data); "
-            f"got {symbol!r}"
+            f"this model is locked to {SYMBOL} (Binance aggTrades data); got {symbol!r}"
         )
     trades = load_trades(SYMBOL, start, end)
     bars_df = aggregate_to_bars(trades, bar_seconds=bar_seconds)

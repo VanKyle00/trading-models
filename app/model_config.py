@@ -43,6 +43,4 @@ def default_ticker(model: dict[str, Any]) -> str:
     choices = ticker_choices(model)
     if choices:
         return choices[0]
-    raise ValueError(
-        f"model {model.get('name', '?')!r} has no default_ticker and no tickers list"
-    )
+    raise ValueError(f"model {model.get('name', '?')!r} has no default_ticker and no tickers list")

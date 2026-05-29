@@ -59,16 +59,18 @@ with st.sidebar:
 
     mode = ticker_mode(selected)
     if mode == "free":
-        symbol = st.text_input(
-            "Ticker",
-            value=default_ticker(selected),
-            help="Any yfinance symbol — e.g. SPY, QQQ, AAPL, TLT, BTC-USD.",
-        ).strip().upper()
+        symbol = (
+            st.text_input(
+                "Ticker",
+                value=default_ticker(selected),
+                help="Any yfinance symbol — e.g. SPY, QQQ, AAPL, TLT, BTC-USD.",
+            )
+            .strip()
+            .upper()
+        )
     elif mode == "choice":
         choices = ticker_choices(selected)
-        symbol = st.selectbox(
-            "Ticker", choices, index=choices.index(default_ticker(selected))
-        )
+        symbol = st.selectbox("Ticker", choices, index=choices.index(default_ticker(selected)))
     else:  # fixed — locked model
         symbol = default_ticker(selected)
         st.text_input(
