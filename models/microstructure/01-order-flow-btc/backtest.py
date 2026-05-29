@@ -95,6 +95,8 @@ class RollingOFIStrategy:
 def run_for_gui(
     start: str | date = START,
     end: str | date = END,
+    *,
+    symbol: str = SYMBOL,
     bar_seconds: int = BAR_SECONDS,
     smooth_window: int = SMOOTH_WINDOW,
     entry_threshold: float = ENTRY_THRESHOLD,
@@ -105,6 +107,11 @@ def run_for_gui(
     caches per-day parquet (~50-100 MB per BTCUSDT-day). Subsequent
     calls within the cached range are fast.
     """
+    if symbol != SYMBOL:
+        raise ValueError(
+            f"this model is locked to {SYMBOL} (Binance aggTrades data); "
+            f"got {symbol!r}"
+        )
     trades = load_trades(SYMBOL, start, end)
     bars_df = aggregate_to_bars(trades, bar_seconds=bar_seconds)
 

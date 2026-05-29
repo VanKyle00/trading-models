@@ -50,6 +50,8 @@ def _get_or_train_bundle() -> dict[str, Any]:
 def run_for_gui(
     start: str | date | None = None,
     end: str | date | None = None,
+    *,
+    symbol: str = SYMBOL,
 ) -> dict[str, Any]:
     """Predict + backtest on a user-selected window.
 
@@ -58,6 +60,11 @@ def run_for_gui(
     GUI date window is intersected with the OOS slice (`split → END`)
     so we don't accidentally evaluate on training data.
     """
+    if symbol != SYMBOL:
+        raise ValueError(
+            f"this model is locked to {SYMBOL} (the XGBoost model was trained "
+            f"on it); retraining on {symbol!r} is out of scope for the GUI"
+        )
     bundle = _get_or_train_bundle()
     model = bundle["model"]
     features = bundle["features"]
