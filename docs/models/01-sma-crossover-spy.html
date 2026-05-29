@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Moving-Average Crossover as a Lagged Trend Filter — trading-models</title>
+<link rel="stylesheet" href="paper.css">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], tags: 'ams', packages: {'[+]': ['ams']} },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+</head>
+<body>
+<div class="paper">
+
+  <div class="preprint-bar"><span>trading-models <span class="tag">· working paper I</span></span><span>Classical · Trend Following</span></div>
+
+  <div class="title-block">
+    <h1 class="paper-title">The Moving-Average Crossover as a Lagged Trend Filter</h1>
+    <p class="subtitle"><em>What a 50/200 golden cross really is: a difference of two low-pass filters, and the delay you pay for it.</em></p>
+    <p class="byline"><span class="who">trading-models</span> research notes · Classical family, model 01</p>
+    <p class="dateline">Compiled 2026-05-28 · SPY daily bars, 2010–2024</p>
+    <div class="meta-tags">
+      <span class="meta-tag"><b>Family</b>classical</span>
+      <span class="meta-tag"><b>Window</b>swing</span>
+      <span class="meta-tag"><b>Assets</b>equities</span>
+      <span class="meta-tag"><b>Data</b>yfinance daily</span>
+      <span class="meta-tag"><b>Period</b>2010–2024</span>
+      <span class="meta-tag"><b>Bars</b>3,774</span>
+      <span class="meta-tag"><b>Status</b>working</span>
+    </div>
+  </div>
+
+  <div class="abstract">
+    <h2>Abstract</h2>
+    <p>We study the canonical 50/200-day simple-moving-average (SMA) crossover applied to SPY daily adjusted bars over 2010–2024 (3,774 bars). We treat the rule not as folklore but as a linear filtering problem: each SMA is a finite-impulse-response (FIR) low-pass filter whose Dirichlet-kernel frequency response carries a constant <em>group delay</em> of \((n-1)/2\) samples, and the crossover difference \(D_t=\mathrm{SMA}_{50}-\mathrm{SMA}_{200}\) is a difference-of-low-pass — i.e. a band-pass — estimator of local trend. From this lens we derive the rule's two structural costs: turnover-driven whipsaw in ranging regimes, and lag-induced drawdown because the exit signal inherits the slow filter's ~100-day delay. The backtest, executed one bar lagged with a 1.5 bp round-trip cost, returns +9.5% annualized, Sharpe 0.73, Sortino 1.08, hit rate 55.9%, and a deep −33.7% maximum drawdown. We show the Sharpe carries a standard error near 0.29 (\(t\approx2.5\)); but with the usual in-sample, single-asset, single-rule caveats, the apparent edge is statistically fragile and economically consistent with simply harvesting the trend risk premium rather than beating it.</p>
+    <p class="keywords"><b>Keywords.</b> trend following, moving-average crossover, FIR filter, group delay, Sharpe ratio inference, time-series momentum, transaction costs.</p>
+  </div>
+
+  <h2>Introduction</h2>
+  <p class="lead">Trend following is the oldest quantitative bet in markets: that prices, once moving, tend to keep moving, so a rule that goes long after strength and steps aside after weakness should earn a premium for bearing the risk that trends reverse. The moving-average crossover is the textbook embodiment of this idea. When a fast average of price rises above a slow one — the celebrated "golden cross" — recent prices sit above their longer-run level, which we read as a positive local trend; when the fast falls below the slow — the "death cross" — we read weakness and move to cash. This paper takes the simplest, most widely cited version, the 50-day versus 200-day SMA on the S&amp;P 500 ETF (SPY), and dissects it.</p>
+
+  <p>Our purpose is deliberately modest and pedagogical. This is the repository's <em>hello-world</em>: a naive SMA crossover is well established <em>not</em> to beat buy-and-hold after costs over long horizons, and we do not claim otherwise. What the model earns its place by is exercising the full pipeline — load, signal, backtest, metrics, plot — and by giving us a clean object on which to develop the mathematics that every later paper reuses. The crossover is, after all, a linear filter, and viewing it that way makes its strengths (it really does smooth noise and ride large trends) and its pathologies (delay and whipsaw) fall out of one diagram rather than out of anecdote.</p>
+
+  <p>The hypothesis we test is precise: when SPY's 50-day SMA is above its 200-day SMA the market is trending up and being long earns positive return; on a death cross, step aside; no shorting. Sections&nbsp;3–4 build the filter-theoretic and statistical machinery; Section&nbsp;5 reports results; Sections&nbsp;6–7 interpret and bound them.</p>
+
+  <h2>Data</h2>
+  <p>We use SPY daily adjusted bars retrieved from <code>yfinance</code> over 2010-01-01 to 2024-12-31, yielding \(N=3{,}774\) trading bars. The adjusted close folds dividends and splits into a single total-return price series \(P_t\), so the simple return \(R_t = P_t/P_{t-1}-1\) and the log return \(r_t=\ln(P_t/P_{t-1})\) are total returns. SPY is among the most liquid instruments in existence; market-impact and borrow frictions are negligible at the swing horizon, which lets us isolate the rule's own behavior rather than execution noise. The 200-day average requires a 200-bar warm-up, so the first signal is emitted only once both averages are defined; equity and metrics are computed over the post-warm-up sample.</p>
+
+  <h2>Signal Construction</h2>
+
+  <h3>The simple moving average as an FIR filter</h3>
+  <p>The \(n\)-day simple moving average is</p>
+  \begin{equation} \mathrm{SMA}_n(t)=\frac1n\sum_{k=0}^{n-1}P_{t-k}, \end{equation}
+  <p>a linear time-invariant filter with finite impulse response \(h_k=1/n\) for \(0\le k<n\) and zero otherwise. Its discrete-time frequency response is the (normalized) Dirichlet kernel,</p>
+  \[ H_n(\omega)=\frac1n\sum_{k=0}^{n-1}e^{-i\omega k}=\frac1n\,e^{-i\omega(n-1)/2}\,\frac{\sin(n\omega/2)}{\sin(\omega/2)}, \]
+  <p>whose magnitude \(|H_n(\omega)|\) peaks at the zero frequency and decays as \(\omega\) grows: the SMA is a <em>low-pass</em> filter that passes the slow-moving trend and attenuates high-frequency noise. Two features of \(H_n\) matter for trading. First, the linear phase factor \(e^{-i\omega(n-1)/2}\) means the filter has constant <strong>group delay</strong></p>
+  \begin{equation} \tau_g=-\frac{d}{d\omega}\arg H_n(\omega)=\frac{n-1}{2}\ \text{samples.} \end{equation}
+  <p>Every frequency component is delayed by the same \((n-1)/2\) bars, so the SMA does not distort shape — it merely shifts the signal back in time. The 50-day SMA therefore lags price by \(\approx 24.5\) trading days and the 200-day by \(\approx 99.5\) days. Smoothing is bought with delay, and there is no free lunch: a longer window suppresses more noise but lags more. Second, the kernel has <em>sidelobes</em> — the \(\sin(n\omega/2)\) numerator forces \(|H_n|\) to ripple rather than roll off monotonically — so the SMA is an imperfect low-pass that leaks some high-frequency energy back into the smoothed series.</p>
+
+  <div class="keybox accent"><span class="lab">Definition</span> The \(n\)-day simple moving average \(\mathrm{SMA}_n(t)=\tfrac1n\sum_{k=0}^{n-1}P_{t-k}\) is a length-\(n\) FIR low-pass filter with flat weights \(h_k=1/n\), magnitude response \(|H_n(\omega)|=\bigl|\sin(n\omega/2)/(n\sin(\omega/2))\bigr|\), linear phase, and constant group delay \(\tau_g=(n-1)/2\).</div>
+
+  <h3>The crossover statistic is a band-pass trend estimator</h3>
+  <p>Let \(f=50<s=200\) and define the crossover statistic</p>
+  \begin{equation} D_t=\mathrm{SMA}_f(t)-\mathrm{SMA}_s(t)=\sum_{k}\bigl(h^f_k-h^s_k\bigr)\,P_{t-k}, \end{equation}
+  <p>which is itself an LTI filter with impulse response \(g_k=h^f_k-h^s_k\). Because both terms are low-pass, their difference is a <strong>band-pass</strong> filter: the zero-frequency (constant-level) component cancels — a flat price gives \(D_t=0\) — and the very-high-frequency noise is attenuated by both averages, so what survives is the medium-frequency content. Operationally, \(D_t>0\) precisely when the recent (fast-averaged) price level sits above the longer-run (slow-averaged) level, which is a discrete proxy for a positive local slope, i.e. an up-trend. A difference of two low-pass filters is a band-pass filter that estimates trend; the crossover rule simply thresholds its sign.</p>
+
+  <p>The signal and target weight are accordingly</p>
+  \begin{equation} s_t=\mathbf 1[D_t>0],\qquad w_t=s_t\in\{0,1\}, \end{equation}
+  <p>long on a golden cross, flat on a death cross, never short.</p>
+
+  <h2>Backtest Protocol and Performance Metrics</h2>
+  <p>We adopt the catalogue's shared evaluation battery (full definitions in <code>methodology.md</code>); here we state only what we report. Execution is lagged one bar — a signal observed at the close of \(t\) is realized over \(t\to t+1\) — so the net per-bar strategy return is</p>
+  \begin{equation} r^s_t = w_{t-1}R_t - c\,\lvert w_t - w_{t-1}\rvert, \end{equation}
+  <p>where \(c\) is the per-unit round-trip cost. We charge \(c=1\,\text{bp}\) commission \(+\,0.5\,\text{bp}\) slippage \(=1.5\,\text{bp}=1.5\times10^{-4}\) per unit of turnover. Compounded equity is</p>
+  \begin{equation} E_t = E_0\prod_{\tau\le t}\bigl(1+r^s_\tau\bigr). \end{equation}
+  <p>With the risk-free rate set to zero, \(P=252\) periods per year and \(N\) bars, we report: the annualized return \(\bigl(\prod_t(1+r^s_t)\bigr)^{P/N}-1\); the annualized Sharpe \(\widehat{SR}=(\bar r^s/s)\sqrt P\) with sample mean \(\bar r^s\) and sample standard deviation \(s\); the Sortino ratio \((\bar r^s/\sigma_d)\sqrt P\) using downside deviation</p>
+  \begin{equation} \sigma_d=\sqrt{\tfrac1N\sum_t \min(r^s_t,0)^2}; \end{equation}
+  <p>the maximum drawdown</p>
+  \begin{equation} \mathrm{MDD}=\max_t\Bigl(1 - E_t/\max_{\tau\le t}E_\tau\Bigr); \end{equation}
+  <p>and the hit rate, the fraction of <em>active</em> bars (\(w_{t-1}=1\)) with \(r^s_t>0\).</p>
+
+  <p>Two cost-side quantities organize the discussion. Define realized <strong>turnover</strong> as the number of regime flips,</p>
+  \begin{equation} \Upsilon=\sum_t \lvert w_t-w_{t-1}\rvert, \end{equation}
+  <p>so the total cost drag is simply \(c\,\Upsilon\). A buy-and-hold benchmark pays \(c\) once (\(\Upsilon=1\)); the crossover pays it on every round trip through the zero line of \(D_t\).</p>
+
+  <h2>Results</h2>
+
+  <figure>
+    <img src="../../models/classical/01-sma-crossover-spy/results/equity_curve.png" alt="Equity curve of the 50/200 SMA crossover strategy on SPY, 2010–2024, against buy-and-hold.">
+    <figcaption>Strategy equity \(E_t\) for the 50/200 SMA crossover on SPY (net of 1.5 bp round-trip cost), 2010–2024. The curve tracks SPY through sustained up-trends, sits in cash during death-cross intervals, and exhibits its deepest drawdown when a sharp decline outruns the slow average's ~100-day delay.</figcaption>
+  </figure>
+
+  <div class="table-wrap">
+    <p class="tcap">Backtest metrics, 50/200 SMA crossover on SPY, 2010–2024 (\(N=3{,}774\) bars, \(c=1.5\) bp, one-bar-lagged execution).</p>
+    <table class="data">
+      <thead><tr><th>Metric</th><th class="r">Value</th></tr></thead>
+      <tbody>
+        <tr><td>Annualized return</td><td class="r pos">+9.5%</td></tr>
+        <tr><td>Sharpe ratio (annualized)</td><td class="r">0.7336</td></tr>
+        <tr><td>Sortino ratio (annualized)</td><td class="r">1.0830</td></tr>
+        <tr><td>Maximum drawdown</td><td class="r neg">−33.7%</td></tr>
+        <tr><td>Hit rate (active bars)</td><td class="r">55.9%</td></tr>
+        <tr><td>Bars</td><td class="r">3,774</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The strategy compounds at +9.5% per year with an annualized Sharpe of 0.73 and a Sortino of 1.08, the latter exceeding the former because the downside-only deviation \(\sigma_d\) is smaller than the full standard deviation — the rule clips some left-tail bars by sitting in cash. The hit rate of 55.9% on active bars is a thin majority, as one expects from a trend filter that earns its keep from a few large directional moves rather than from being right often. The equity curve rides SPY's long post-2010 bull legs while flattening out during the intervals when \(D_t<0\). The headline tension is the −33.7% maximum drawdown sitting beside a respectable Sharpe; the next section shows these are two faces of the same delay.</p>
+
+  <h2>Discussion</h2>
+
+  <h3>Whipsaw and turnover</h3>
+  <p>In a mean-reverting or ranging regime the price oscillates without net drift, so the band-pass output \(D_t\) hovers around zero and crosses it repeatedly. Each crossing flips \(w_t\) by one unit and, via Eq.&nbsp;(9), adds \(c\) to the cost drag — yet flips clustered in a flat market are flips into trades that go nowhere. This is <em>whipsaw</em>: the rule pays the round-trip cost \(c\Upsilon\) and gives up the bid–ask repeatedly while the underlying does not trend. Because buy-and-hold pays \(c\) exactly once, turnover-driven cost is the dominant friction <em>relative</em> to the benchmark, and it is incurred precisely in the regimes where the trend hypothesis is false. The 50/200 pair is comparatively slow and so whipsaws less than a 5/20 pair would, but the mechanism is the same and is the first reason the rule struggles to beat buy-and-hold net of costs.</p>
+
+  <h3>Lag-induced drawdown</h3>
+  <p>The exit signal — the death cross — depends on the 200-day SMA, which by Eq.&nbsp;(2) carries a group delay of \(\approx 100\) bars. In a sharp drawdown the price peaks and rolls over long before the slow average does, so the death cross fires roughly a quarter after the top. The strategy therefore <em>structurally</em> participates in the early leg of every crash; it cannot do otherwise without a faster (and noisier, more whipsaw-prone) exit. This is the direct cause of the −33.7% maximum drawdown. Crucially, the same delay that produces deep drawdowns is what produces the positive Sharpe: the filter rides the right side of large, persistent trends precisely because it is slow enough not to be shaken out by them. Delay buys trend capture and pays for it in late exits — one knob, two consequences.</p>
+
+  <h3>Statistical significance of the Sharpe</h3>
+  <p>Is a Sharpe of 0.73 real? Under the iid approximation of Lo (2002), the standard error of an annualized Sharpe is \(\mathrm{SE}(\widehat{SR})\approx\sqrt{(1+\tfrac12 SR^2)/T}\) with \(T\) the sample length in years. With \(SR=0.7336\) and \(T\approx15\),</p>
+  \begin{equation} \mathrm{SE}(\widehat{SR})\approx\sqrt{\frac{1+0.5\cdot 0.7336^2}{15}}=\sqrt{\frac{1.269}{15}}\approx 0.29, \end{equation}
+  <p>so the implied \(t\)-statistic is</p>
+  \begin{equation} t=\frac{\widehat{SR}}{\mathrm{SE}(\widehat{SR})}\approx\frac{0.7336}{0.29}\approx 2.5, \end{equation}
+  <p>a one-sided \(p\approx 0.01\). Taken at face value this looks decisively non-zero. It is not, and the caveats are not cosmetic.</p>
+
+  <div class="remark"><span class="lab">Result.</span> The crossover's Sharpe is nominally significant (\(t\approx2.5\)), but the estimate is in-sample, on a single asset, for a single textbook rule whose window lengths are themselves chosen from a small, heavily data-mined family. Adjusting for those degrees of freedom, the edge is effectively indistinguishable from passively bearing the trend / equity risk premium — consistent with the literature that crossover rules do not beat buy-and-hold net of costs over long horizons.</div>
+
+  <p>The deeper point is that the iid SE ignores both the autocorrelation in strategy returns (which inflates the true SE) and, more importantly, the selection over rules and parameters that the number 0.73 already reflects. The 50/200 pair is not a hypothesis drawn before seeing the data; it is the survivor of a century of practitioner search. A defensible reading is that the strategy harvests the same risk premium an investor would earn by holding SPY, repackaged with a different drawdown profile, and that the cost \(c\Upsilon\) plus the lagged exits leave little or no genuine alpha on top.<sup>1</sup></p>
+
+  <h2>Limitations and Extensions</h2>
+  <p>Several limitations bound the result and point to natural extensions.</p>
+  <p><strong>No shorting.</strong> The weight is constrained to \(\{0,1\}\), so the rule cannot profit from down-trends, only avoid them. Allowing \(w_t\in\{-1,0,1\}\) would test the trend hypothesis symmetrically but would also expose the strategy to the well-documented asymmetry of equity-index trends (sharp down, grinding up).</p>
+  <p><strong>FIR versus IIR.</strong> The SMA's flat weights waste degrees of freedom — distant and recent prices count equally. The exponential moving average (EMA), an infinite-impulse-response (IIR) filter with geometrically decaying weights, achieves comparable smoothing with markedly less group delay, mitigating the late-exit problem at the cost of a longer (theoretically infinite) memory and nonlinear-phase distortion. The popular MACD line is exactly such a construction — \(\mathrm{EMA}_{12}-\mathrm{EMA}_{26}\), itself a difference-of-moving-averages band-pass, structurally identical to our \(D_t\) but built from EMAs.</p>
+  <p><strong>Alternative trend operators.</strong> Donchian channels (breakout of an \(n\)-day high/low) implement trend detection through order statistics rather than linear filtering and react differently to gaps and ranges. More broadly, the crossover is one instance of <em>time-series momentum</em>, which Moskowitz, Ooi &amp; Pedersen (2012) document as a pervasive, cross-asset return predictor — suggesting the right framing is not "does this rule beat the index" but "how efficiently does this rule load on a known momentum risk premium." Faber (2007) makes the tactical-allocation case for exactly such moving-average timing across asset classes.</p>
+
+  <div class="footnotes">
+    <ol>
+      <li>The single round-trip-cost figure \(c=1.5\) bp is conservative for SPY but does not model financing on the cash leg, dividend timing within bars, or the small tracking error between SPY and the index it replicates; none of these materially alters the qualitative conclusions.</li>
+    </ol>
+  </div>
+
+  <h2 class="nonum">References</h2>
+  <ol class="references">
+    <li>Brock, W., Lakonishok, J., &amp; LeBaron, B. (1992). Simple technical trading rules and the stochastic properties of stock returns. <em>The Journal of Finance, 47</em>(5), 1731–1764.</li>
+    <li>Lo, A. W. (2002). The statistics of Sharpe ratios. <em>Financial Analysts Journal, 58</em>(4), 36–52.</li>
+    <li>Moskowitz, T. J., Ooi, Y. H., &amp; Pedersen, L. H. (2012). Time series momentum. <em>Journal of Financial Economics, 104</em>(2), 228–250.</li>
+    <li>Faber, M. T. (2007). A quantitative approach to tactical asset allocation. <em>The Journal of Wealth Management, 9</em>(4), 69–79.</li>
+    <li>Zakamulin, V. (2017). <em>Market Timing with Moving Averages: The Anatomy and Performance of Trading Rules.</em> Palgrave Macmillan.</li>
+  </ol>
+
+  <nav class="paper-nav"><a class="home" href="index.html">← All papers</a><a href="02-xgboost-next-day-return-spy.html">Paper II · Gradient-Boosted Forecasts →</a></nav>
+
+  <footer class="colophon">
+    <p>SOURCE: models/classical/01-sma-crossover-spy/ · REPRODUCE: uv run python models/classical/01-sma-crossover-spy/backtest.py</p>
+    <p>trading-models · working paper · 2026-05-28</p>
+  </footer>
+
+</div>
+</body>
+</html>

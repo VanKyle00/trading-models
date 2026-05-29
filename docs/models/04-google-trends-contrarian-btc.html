@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Attention as a Contrarian Signal for Bitcoin — trading-models</title>
+<link rel="stylesheet" href="paper.css">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], tags: 'ams', packages: {'[+]': ['ams']} },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+</head>
+<body>
+<div class="paper">
+
+  <div class="preprint-bar"><span>trading-models <span class="tag">· working paper IV</span></span><span>Alternative Data · Attention</span></div>
+
+  <div class="title-block">
+    <h1 class="paper-title">Search Attention as a Contrarian Signal for Bitcoin</h1>
+    <p class="subtitle"><em>A standardized Google Trends signal that degenerates into a price-mean-reversion rule, and the negative backtest that follows.</em></p>
+    <p class="byline"><span class="who">trading-models</span> research notes · Alt-data family, model 01</p>
+    <p class="dateline">Compiled 2026-05-28 · Weekly BTC-USD, 2021–2024</p>
+    <div class="meta-tags">
+      <span class="meta-tag"><b>Family</b> alt-data</span>
+      <span class="meta-tag"><b>Window</b> swing (weekly)</span>
+      <span class="meta-tag"><b>Assets</b> crypto</span>
+      <span class="meta-tag"><b>Data</b> Google Trends + yfinance</span>
+      <span class="meta-tag"><b>Bars</b> 209</span>
+      <span class="meta-tag"><b>Status</b> negative-result</span>
+    </div>
+  </div>
+
+  <div class="abstract">
+    <h2>Abstract</h2>
+    <p>We test whether retail search attention, proxied by Google Trends interest in the query <em>bitcoin</em>, carries a tradeable contrarian signal at weekly resolution. The premise is standard in the attention-and-sentiment literature: extreme search interest may flag a crowded, mean-reverting regime, so a spike in attention should precede a near-term price decline (short) and a trough should precede a recovery (long). We standardize the attention series with a four-week rolling <em>z</em>-score and trade the contrarian rule on BTC-USD over 2021–2024 (209 weekly bars). The strategy loses money: annualized return −20.5%, Sharpe −0.30, Sortino −0.42, maximum drawdown −79.8%, hit rate 26.4%. We argue this is not bad luck but a structural artefact. Because attention is a near-monotone function of price, the positive scale factor cancels under standardization and the <em>z</em>-score of attention collapses, to first order, onto the <em>z</em>-score of price — the contrarian rule is a price-based mean-reversion rule in alt-data costume. The signal is <em>coincident</em>, not leading: attention and the return realize together, leaving no exploitable sign at the tradeable horizon \(k\ge 1\). With \(\widehat{SR}=-0.30\pm0.51\) the result is statistically indistinguishable from zero, and none of the three rule variants survives a multiple-testing haircut. We ship the negative result in full.</p>
+    <p class="keywords"><b>Keywords.</b> attention, Google Trends, alternative data, Bitcoin, contrarian, mean reversion, coincident indicator, Sharpe ratio, multiple testing, negative result.</p>
+  </div>
+
+  <h2>Introduction</h2>
+  <p class="lead">Attention is a scarce resource, and the economics of attention has become an empirical asset-pricing program. Da, Engelberg and Gao (2011) showed that direct search-volume measures predict short-run returns and reversals in equities; Preis, Moat and Stanley (2013) found that Google Trends queries on financial terms preceded moves in the Dow. The hope animating this paper is the same one that animates the alt-data industry: that the aggregate gaze of retail participants, captured before it shows up in prices, is informative about what prices will do next.</p>
+  <p>A first distinction is essential. As a <em>level</em>, search interest in <em>bitcoin</em> is almost certainly uninformative: it tracks price so tightly that the two series are nearly monotone transforms of one another, and a feature that is a deterministic function of price adds nothing to a price-based strategy. The interesting object is the <em>anomaly</em> — attention measured against its own recent baseline. The hypothesis we test is contrarian: an attention <em>spike</em> relative to baseline signals retail FOMO and an over-extended tape, so the near-term return should be negative (go short); an attention <em>trough</em> signals disinterest and capitulation, so the near-term return should be positive (go long).</p>
+  <p>The result is unambiguously negative, and the value of the exercise lies in understanding <em>why</em>. We show analytically that standardizing a price-coincident series does not manufacture a non-price signal: it removes the level (the part everyone agrees is uninformative) but leaves a residual that, at weekly resolution with a short lookback, is dominated by ordinary price reversal. The contrarian rule is therefore a disguised price-mean-reversion rule, and it loses for the same reason naive weekly mean-reversion on BTC loses over this window.</p>
+
+  <h2>Data</h2>
+  <p>The price series is BTC-USD daily close from yfinance, resampled to a Sunday-end weekly grid by taking the last observation of each week. The attention series is global Google Trends interest in the query <em>bitcoin</em>, retrieved weekly via <code>pytrends</code>. The sample window is 2021-01-01 to 2024-12-31, yielding \(N=209\) weekly bars after alignment.</p>
+  <p>Two data caveats deserve emphasis. First, Google Trends values are <em>relative</em>: each series is rescaled to the interval \([0,100]\) where \(100\) is the peak interest <em>within the queried window</em>, and the normalization changes when the window changes. To avoid the silent rescaling that occurs when stitching short queries, the loader issues a single query spanning the full window and caches the response, so all 209 observations live on one consistent \([0,100]\) scale. Second, the engine is lookahead-safe by construction: the standardization at week \(t\) uses only observations through week \(t\), and the resulting position is executed with a one-week lag (Section 5). No future information enters the signal.</p>
+
+  <h2>The attention <em>z</em>-score signal</h2>
+  <p>Let \(A_t\) denote weekly search interest. We standardize \(A_t\) against a four-week trailing window using the rolling mean \(\mu_t\), population standard deviation \(\sigma_t\), and the resulting <em>z</em>-score:</p>
+  \begin{equation}
+  \mu_t=\frac14\sum_{k=0}^{3}A_{t-k},\qquad
+  \sigma_t=\sqrt{\frac14\sum_{k=0}^{3}\bigl(A_{t-k}-\mu_t\bigr)^2},\qquad
+  z_t=\frac{A_t-\mu_t}{\sigma_t}.
+  \end{equation}
+
+  <div class="keybox accent">
+    <span class="lab">Definition</span>
+    The <strong>attention <em>z</em>-score</strong> \(z_t\) is the standardized deviation of current search interest from its four-week trailing mean. The contrarian position is
+    \[
+    w_t=\begin{cases}+1 & z_t<-1 \quad(\text{trough}\Rightarrow\text{long}),\\[2pt] -1 & z_t>+1 \quad(\text{spike}\Rightarrow\text{short}),\\[2pt] \;\;0 & \text{otherwise (flat).}\end{cases}
+    \]
+  </div>
+
+  <div class="remark">
+    <span class="lab">Result.</span> The rolling standard deviation is estimated from only four overlapping points. A four-sample population estimate of \(\sigma\) has roughly three degrees of freedom and a large sampling variance, so \(\sigma_t\) is itself a noisy quantity — and because it appears in the denominator of \(z_t\), the <em>z</em>-score inherits and amplifies that noise, especially when the local dispersion of \(A_t\) is small. Threshold crossings at \(|z_t|=1\) are therefore drawn from a noisy, heavy-tailed statistic rather than a clean signal.
+  </div>
+
+  <h2>Why the signal degenerates to price</h2>
+  <p>The central claim of this paper is methodological: standardizing a price-coincident series does not produce a non-price feature. Suppose attention is a monotone increasing function of price plus idiosyncratic noise,</p>
+  \begin{equation}
+  A_t=\varphi(P_t)+\eta_t,\qquad \varphi'>0,
+  \end{equation}
+  <p>a functional form consistent with the very high Spearman rank correlation \(\rho_S(A_t,P_t)\) observed between the two series. Over a short rolling window the price excursion \(P_t-\bar P_t\) is small, so a first-order Taylor expansion of \(\varphi\) about the local mean price \(\bar P_t\) gives</p>
+  \begin{equation}
+  A_t-\mu_t\;\approx\;\varphi'(\bar P_t)\,\bigl(P_t-\bar P_t\bigr),\qquad
+  \sigma^A_t\;\approx\;\varphi'(\bar P_t)\,\sigma^P_t,
+  \end{equation}
+  <p>where \(\bar P_t\) and \(\sigma^P_t\) are the four-week rolling mean and standard deviation of price and we have suppressed the small noise term \(\eta_t\). Forming the <em>z</em>-score, the positive scale factor \(\varphi'(\bar P_t)>0\) appears identically in numerator and denominator and cancels:</p>
+  \begin{equation}
+  z^A_t=\frac{A_t-\mu_t}{\sigma^A_t}\;\approx\;\frac{\varphi'(\bar P_t)\,(P_t-\bar P_t)}{\varphi'(\bar P_t)\,\sigma^P_t}=\frac{P_t-\bar P_t}{\sigma^P_t}=z^P_t.
+  \end{equation}
+
+  <div class="remark">
+    <span class="lab">Result.</span> To first order \(z^A_t\approx z^P_t\): the standardized attention signal equals the standardized <em>price</em> signal. The contrarian rule "short when \(z^A_t>1\)" therefore reads "short when price stands more than one rolling standard deviation above its four-week mean" — a pure price-mean-reversion rule. The <em>z</em>-transform strips out the price level (the uninformative part), but at weekly resolution with a four-week lookback the surviving residual is dominated by short-horizon price reversal and carries no information beyond price itself.
+  </div>
+
+  <p>The cancellation also explains why the noise term is benign for the degeneracy argument: \(\eta_t\) perturbs \(z^A_t\) away from \(z^P_t\), but any such perturbation is, by construction, independent of price and hence cannot supply a price-predictive edge. What remains after standardization is either price (which we already have) or noise (which we cannot trade).</p>
+
+  <h3>Lead, coincident, or lag: the testable distinction</h3>
+  <p>Whether attention is <em>useful</em> reduces to a question about timing. Define the lag-\(k\) cross-correlation between the standardized attention signal and forward returns,</p>
+  \begin{equation}
+  \rho_k=\operatorname{corr}\!\bigl(z^A_t,\;R_{t+k}\bigr),\qquad R_t=\frac{P_t}{P_{t-1}}-1.
+  \end{equation}
+  <p>A genuinely <em>leading</em> signal carries predictive mass at horizons \(k\ge 1\); for a contrarian sign this means \(\rho_k<0\) for some tradeable \(k\ge 1\). A <em>coincident</em> indicator concentrates its mass at \(k=0\) with \(\rho_{k>0}\approx 0\) — attention and the return realize in the same bar. A <em>lagging</em> one peaks at \(k<0\). The contrarian hypothesis is the assertion \(\rho_{k\ge 1}<0\); the negative backtest below is the empirical rejection of that assertion. Because \(z^A_t\approx z^P_t\) and weekly BTC returns are close to serially uncorrelated, the predictive mass that exists sits at \(k=0\): by the time a spike in \(z^A_t\) is observable, the price move that produced it has already happened. Equation (5) makes the failure mode concrete — the strategy is structurally unable to harvest a \(k=0\) coincidence with a \(k\ge 1\) execution.</p>
+
+  <h2>Backtest protocol and metrics</h2>
+  <p>We use the catalogue's shared evaluation battery, noted here once. With simple return \(R_t=P_t/P_{t-1}-1\) and discrete weight \(w_t\in\{-1,0,+1\}\), positions execute with a one-bar (one-week) lag and incur a per-unit-turnover cost \(c\). The net strategy return and equity are</p>
+  \begin{equation}
+  r^s_t=w_{t-1}R_t-c\,\lvert w_t-w_{t-1}\rvert,\qquad
+  E_t=E_0\prod_{\tau\le t}\bigl(1+r^s_\tau\bigr),
+  \end{equation}
+  <p>with \(c=5\text{ bp}\) (2 bp commission + 3 bp slippage). Performance statistics, with \(P=52\) periods per year:</p>
+  \begin{align}
+  \widehat{SR}&=\frac{\bar r^s}{s}\sqrt{P},
+   & \mathrm{Sortino}&=\frac{\bar r^s}{\sigma_d}\sqrt{P},\quad \sigma_d=\sqrt{\tfrac1N\textstyle\sum_t\min(r^s_t,0)^2},\\
+  \mathrm{MDD}&=\max_t\Bigl(1-\frac{E_t}{\max_{\tau\le t}E_\tau}\Bigr),
+   & \widehat\pi&=\frac1N\textstyle\sum_t\mathbf 1\{w_{t-1}R_t>0\}.
+  \end{align}
+  <p>Sharpe standard errors follow Lo (2002) under the iid approximation,</p>
+  \begin{equation}
+  \mathrm{SE}\bigl(\widehat{SR}\bigr)\approx\sqrt{\frac{1+\tfrac12\,\widehat{SR}^{\,2}}{T}},
+  \end{equation}
+  <p>with \(T\) the sample length in years.</p>
+
+  <h2>Results — the hypothesis is rejected</h2>
+  <p>The contrarian rule loses across every dimension and never recovers its early drawdown.</p>
+
+  <figure>
+    <img src="../../models/alt-data/01-google-trends-btc/results/equity_curve.png" alt="Equity curve of the contrarian Google-Trends z-score strategy on weekly BTC-USD against buy-and-hold, 2021–2024, showing a persistent decline and an 80% drawdown.">
+    <figcaption>Equity curve of the attention-contrarian strategy on weekly BTC-USD, 2021–2024, versus buy-and-hold. The strategy bleeds from the outset: shorting attention spikes coincides with shorting price strength, and longing troughs coincides with buying weakness, so positions are consistently on the wrong side of the prevailing weekly move. Terminal drawdown reaches −79.8%.</figcaption>
+  </figure>
+
+  <div class="table-wrap">
+    <p class="tcap">Table 1. Headline performance of the contrarian rule (weekly BTC-USD, 2021–2024, \(N=209\)).</p>
+    <table class="data">
+      <thead><tr><th>Metric</th><th class="r">Value</th></tr></thead>
+      <tbody>
+        <tr><td>Annualized return</td><td class="r neg">−20.5%</td></tr>
+        <tr><td>Sharpe ratio</td><td class="r neg">−0.30</td></tr>
+        <tr><td>Sortino ratio</td><td class="r neg">−0.42</td></tr>
+        <tr><td>Max drawdown</td><td class="r neg">−79.8%</td></tr>
+        <tr><td>Hit rate</td><td class="r">26.4%</td></tr>
+        <tr><td>Bars (weekly)</td><td class="r">209</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The 26.4% hit rate is the tell: the rule is on the wrong side of the move roughly three weeks in four. This is exactly what equation (4) predicts — by shorting standardized price strength and buying standardized price weakness on a trending, momentum-dominated asset over this window, the strategy systematically fades the direction that subsequently persists.</p>
+
+  <p>A natural defence is that we simply chose the wrong sign or the wrong directionality. We therefore evaluate three framings of the same standardized signal.</p>
+
+  <div class="table-wrap">
+    <p class="tcap">Table 2. Robustness across rule variants (same signal, same costs, same window).</p>
+    <table class="data">
+      <thead><tr><th>Variant</th><th class="r">Sharpe</th><th class="r">Ann. return</th><th class="r">Max drawdown</th></tr></thead>
+      <tbody>
+        <tr><td>Contrarian (this model)</td><td class="r neg">−0.30</td><td class="r neg">−20.5%</td><td class="r neg">−79.8%</td></tr>
+        <tr><td>Momentum (long/short, inverse rule)</td><td class="r pos">+0.24</td><td class="r pos">+0.8%</td><td class="r neg">−73.6%</td></tr>
+        <tr><td>Momentum (long-only)</td><td class="r pos">+0.44</td><td class="r pos">+9.9%</td><td class="r neg">−69.5%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Flipping the sign to momentum turns the point estimate positive, consistent with the degeneracy story — the same standardized series, traded <em>with</em> the prevailing price move rather than against it, is no longer guaranteed to fade momentum. But "less negative" is not "tradeable", as the next section makes precise.</p>
+
+  <h2>Discussion</h2>
+  <h3>Statistical insignificance</h3>
+  <p>The sample spans \(T=209/52\approx 4.0\) years. Substituting the contrarian point estimate into equation (10),</p>
+  \begin{equation}
+  \mathrm{SE}\bigl(\widehat{SR}\bigr)\approx\sqrt{\frac{1+\tfrac12(0.30)^2}{4.0}}=\sqrt{\frac{1.045}{4.0}}\approx 0.51.
+  \end{equation}
+
+  <div class="remark">
+    <span class="lab">Result.</span> \(\widehat{SR}=-0.30\pm0.51\). The estimate is statistically indistinguishable from zero. "The hypothesis is rejected" should be read precisely as <em>no detectable edge</em> rather than "a reliably profitable inverse strategy exists." The large negative point estimate and the catastrophic −79.8% drawdown reinforce the practical reading: this is not a signal one would risk capital on in either direction.
+  </div>
+
+  <h3>Variants, Calmar, and multiple testing</h3>
+  <p>The strongest variant — long-only momentum at Sharpe +0.44 and +9.9% annualized — is still untradeable on a risk-adjusted basis. Its Calmar ratio, annualized return over the magnitude of maximum drawdown, is</p>
+  \begin{equation}
+  \mathrm{Calmar}=\frac{9.9\%}{69.5\%}\approx 0.14,
+  \end{equation}
+  <p>meaning the investor endures a 70% peak-to-trough loss to earn under 10% per year — a payoff dominated by simply holding cash. More fundamentally, having tried contrarian, then long/short momentum, then long-only momentum is a <em>multiple-testing</em> exercise. With \(K\) independent trials the expected maximum in-sample Sharpe is inflated even under the null of zero true edge; the order statistic of \(K\) draws from a zero-mean distribution grows roughly like \(\sqrt{2\ln K}\) in standard-error units. The Deflated Sharpe Ratio of Bailey and López de Prado (2014) and the multiple-testing haircut of Harvey, Liu and Zhu (2016) both adjust the significance threshold upward for the number of configurations tried. Given the wide \(\mathrm{SE}\approx 0.51\) on a single test, none of the three variants — with raw Sharpes of −0.30, +0.24, and +0.44 — clears the deflated bar. The honest reading is that no framing of this signal yields a strategy worth deploying.</p>
+
+  <h2>Limitations and extensions</h2>
+  <p>Three limitations bound the strength of the conclusion. First, the sample is small: \(N=209\) weekly bars over a single, unusually volatile BTC regime (the 2021 peak, the 2022 collapse, the 2023–2024 recovery), so the estimates carry wide confidence bands and the verdict is "no edge here", not "no edge anywhere." Second, the relative renormalization of Google Trends means the \([0,100]\) scale is window-specific; although we query once over the full window to keep the scale consistent, the absolute level is not comparable to a query over a different span, and any extension that re-queries must re-standardize. Third, the strategy is lookahead-safe by construction — the <em>z</em>-score at week \(t\) uses only data through \(t\) and trades with a one-week lag — so the negative result cannot be blamed on, nor rescued by, a leakage artefact.</p>
+  <p>Several extensions could plausibly recover a non-degenerate signal. (i) <em>Higher resolution</em>: daily Trends data, obtained by stitching overlapping multi-window queries and re-normalizing across the seams, would let attention and price decouple at the sub-weekly horizon where retail flow may genuinely lead. (ii) <em>Cross-keyword structure</em>: contrasting directional queries such as "buy bitcoin" against "sell bitcoin" or "bitcoin price" could isolate a sentiment <em>direction</em> rather than a sentiment <em>magnitude</em>, escaping the scalar degeneracy of equation (4). (iii) <em>News and social signals</em> whose timestamp can precede price — a headline or a viral post arrives before the trade — offer a structurally leading source that search interest, a reaction to price, does not.</p>
+  <p>Finally, why ship a negative result at all? A catalogue of only winners is a catalogue of overfit. This paper proves that the alt-data pipeline carries a genuine non-price signal end-to-end through the standard backtest harness — ingestion, lookahead-safe standardization, costed execution, and the full metric battery — and reports the numbers honestly, including the unflattering ones. The negative result is itself the deliverable: it documents a clean methodological trap (standardizing a price-coincident series) and the empirical evidence that the trap is real.</p>
+
+  <div class="footnotes">
+    <ol>
+      <li>The first-order cancellation in equation (4) is exact only in the limit of a vanishing rolling window; over a finite four-week window the curvature of \(\varphi\) and the noise \(\eta_t\) introduce residual departures from \(z^P_t\), but neither is correlated with future price and so neither supplies a tradeable edge.</li>
+      <li>The Sharpe standard error in equation (10) assumes iid returns; weekly BTC returns exhibit mild autocorrelation and fat tails, which would widen the band further. The reported \(\pm0.51\) is therefore conservative as a lower bound on uncertainty.</li>
+    </ol>
+  </div>
+
+  <h2 class="nonum">References</h2>
+  <ol class="references">
+    <li>Da, Z., Engelberg, J., &amp; Gao, P. (2011). <em>In Search of Attention.</em> Journal of Finance, 66(5), 1461–1499.</li>
+    <li>Preis, T., Moat, H. S., &amp; Stanley, H. E. (2013). <em>Quantifying Trading Behavior in Financial Markets Using Google Trends.</em> Scientific Reports, 3, 1684.</li>
+    <li>Lo, A. W. (2002). <em>The Statistics of Sharpe Ratios.</em> Financial Analysts Journal, 58(4), 36–52.</li>
+    <li>Bailey, D. H., &amp; López de Prado, M. (2014). <em>The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting, and Non-Normality.</em> Journal of Portfolio Management, 40(5), 94–107.</li>
+    <li>Harvey, C. R., Liu, Y., &amp; Zhu, H. (2016). <em>… and the Cross-Section of Expected Returns.</em> Review of Financial Studies, 29(1), 5–68.</li>
+  </ol>
+
+  <nav class="paper-nav">
+    <a href="03-order-flow-imbalance-btc.html">← Paper III · Order-Flow Imbalance</a>
+    <a class="home" href="index.html">All papers →</a>
+  </nav>
+
+  <footer class="colophon">
+    <p>SOURCE: models/alt-data/01-google-trends-btc/ · REPRODUCE: uv run python models/alt-data/01-google-trends-btc/backtest.py</p>
+    <p>trading-models · working paper · 2026-05-28</p>
+  </footer>
+
+</div>
+</body>
+</html>
