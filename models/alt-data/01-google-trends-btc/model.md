@@ -4,6 +4,7 @@ family: alt-data
 window: swing
 assets: [crypto]
 data_sources: [google_trends_bitcoin, yfinance_daily_bars]
+tickers: [BTC-USD]
 status: negative-result
 sharpe_oos: -0.30
 max_drawdown: -0.80

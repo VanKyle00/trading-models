@@ -39,3 +39,12 @@ def test_unspecified_tickers_defaults_to_fixed_and_has_no_default() -> None:
     assert ticker_choices(m) == []
     with pytest.raises(ValueError):
         default_ticker(m)
+
+
+def test_every_model_declares_tickers() -> None:
+    from app.models_registry import list_models
+
+    for m in list_models():
+        assert "tickers" in m, f"{m['name']} is missing a `tickers` frontmatter field"
+        # A default must be resolvable for the sidebar to render.
+        assert default_ticker(m)
