@@ -42,8 +42,8 @@ import pandas as pd
 
 from tradinglib.backtest import bars_from_dataframe, run_event_backtest
 from tradinglib.backtest.event_engine import Bar, EventEngine
-from tradinglib.features.microstructure import aggregate_to_bars
-from tradinglib.loaders.crypto.binance_trades import load_trades
+from tradinglib.features.microstructure import aggregate_daily_chunks
+from tradinglib.loaders.crypto.binance_trades import iter_daily_trades
 
 SYMBOL = "BTCUSDT"
 START = "2024-08-04"
@@ -111,8 +111,10 @@ def run_for_gui(
         raise ValueError(
             f"this model is locked to {SYMBOL} (Binance aggTrades data); got {symbol!r}"
         )
-    trades = load_trades(SYMBOL, start, end)
-    bars_df = aggregate_to_bars(trades, bar_seconds=bar_seconds)
+    # Stream the aggregation day-by-day so peak memory stays bounded to a
+    # single day's ticks (~9M rows for a BTCUSDT-day) instead of the whole
+    # window concatenated — the multi-day load was OOM-killing the hosted demo.
+    bars_df = aggregate_daily_chunks(iter_daily_trades(SYMBOL, start, end), bar_seconds=bar_seconds)
 
     if len(bars_df) < smooth_window + 2:
         raise ValueError(

@@ -130,6 +130,33 @@ def test_load_trades_rejects_reversed_range(monkeypatch: pytest.MonkeyPatch) -> 
         loader.load_trades("BTCUSDT", "2024-08-10", "2024-08-05")
 
 
+def test_iter_daily_trades_yields_one_frame_per_day(
+    fake_zip: bytes, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.crypto import binance_trades as loader
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+
+    client = MagicMock()
+    client.__enter__ = MagicMock(return_value=client)
+    client.__exit__ = MagicMock(return_value=False)
+    client.get = MagicMock(return_value=_make_response(fake_zip))
+
+    with patch.object(loader.httpx, "Client", return_value=client):
+        frames = list(loader.iter_daily_trades("BTCUSDT", "2024-08-04", "2024-08-06"))
+
+    assert len(frames) == 3  # one frame per day, not one concatenated frame
+    assert all(list(f.columns) == ["price", "qty", "is_buyer_maker"] for f in frames)
+    assert client.get.call_count == 3
+
+
+def test_iter_daily_trades_rejects_reversed_range() -> None:
+    from tradinglib.loaders.crypto.binance_trades import iter_daily_trades
+
+    with pytest.raises(ValueError, match="is after end"):
+        list(iter_daily_trades("BTCUSDT", "2024-08-10", "2024-08-05"))
+
+
 def test_to_date_accepts_string_and_date() -> None:
     from tradinglib.loaders.crypto.binance_trades import _to_date
 
