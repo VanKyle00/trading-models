@@ -38,6 +38,8 @@ def build_signal(prices: pd.Series, fast: int = FAST_WINDOW, slow: int = SLOW_WI
 def run_for_gui(
     start: str | date = START,
     end: str | date = END,
+    *,
+    symbol: str = SYMBOL,
     fast: int = FAST_WINDOW,
     slow: int = SLOW_WINDOW,
 ) -> dict[str, Any]:
@@ -50,7 +52,7 @@ def run_for_gui(
       - ``symbol``: the traded symbol, for plot titles.
       - ``params``: dict echo of the inputs.
     """
-    bars = load_daily(SYMBOL, start=start, end=end)
+    bars = load_daily(symbol, start=start, end=end)
     prices = bars["close"]
     fast_ma = prices.rolling(fast).mean()
     slow_ma = prices.rolling(slow).mean()
@@ -62,8 +64,14 @@ def run_for_gui(
     return {
         "data": data,
         "result": result,
-        "symbol": SYMBOL,
-        "params": {"start": str(start), "end": str(end), "fast": fast, "slow": slow},
+        "symbol": symbol,
+        "params": {
+            "start": str(start),
+            "end": str(end),
+            "symbol": symbol,
+            "fast": fast,
+            "slow": slow,
+        },
     }
 
 

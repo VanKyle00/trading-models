@@ -4,6 +4,7 @@ family: microstructure
 window: intraday
 assets: [crypto]
 data_sources: [binance_aggTrades]
+tickers: [BTCUSDT]
 status: negative-result
 sharpe_oos: -86.5
 max_drawdown: -0.36

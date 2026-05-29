@@ -57,6 +57,8 @@ def build_signal(interest: pd.Series, window: int = ZSCORE_WINDOW) -> pd.Series:
 def run_for_gui(
     start: str | date = START,
     end: str | date = END,
+    *,
+    symbol: str = SYMBOL,
     window: int = ZSCORE_WINDOW,
 ) -> dict[str, Any]:
     """Trends contrarian backtest on a user-selected sub-window.
@@ -66,6 +68,11 @@ def run_for_gui(
     and we slice the user's selection afterward. Z-score uses the full
     series for proper trailing context, then is sliced for evaluation.
     """
+    if symbol != SYMBOL:
+        raise ValueError(
+            f"this model is locked to {SYMBOL} (paired with Google-Trends "
+            f"'bitcoin' interest); got {symbol!r}"
+        )
     daily = load_daily(SYMBOL, start=START, end=END)
     btc_weekly = daily["close"].resample("W-SUN").last().dropna()
     interest = load_interest(QUERY, timeframe=TIMEFRAME)

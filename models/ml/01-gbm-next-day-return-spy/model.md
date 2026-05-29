@@ -4,6 +4,7 @@ family: ml
 window: swing
 assets: [equities]
 data_sources: [yfinance_daily_bars]
+tickers: [SPY]
 status: working
 sharpe_oos: 0.84
 max_drawdown: -0.14

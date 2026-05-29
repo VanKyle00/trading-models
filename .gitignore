@@ -66,3 +66,6 @@ htmlcov/
 
 # Logs
 *.log
+
+# Superpowers brainstorming/spec artifacts
+docs/superpowers/

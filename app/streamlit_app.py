@@ -14,6 +14,7 @@ from datetime import date
 import streamlit as st
 
 from app.adapters import run
+from app.model_config import default_ticker, ticker_choices, ticker_mode
 from app.models_registry import list_models
 from app.presets import presets_for_assets
 from app.ui import data_details, data_view, results_view
@@ -55,6 +56,29 @@ with st.sidebar:
     model_labels = {m["name"]: m for m in models}
     selected_name = st.selectbox("Model", list(model_labels.keys()))
     selected = model_labels[selected_name]
+
+    mode = ticker_mode(selected)
+    if mode == "free":
+        symbol = (
+            st.text_input(
+                "Ticker",
+                value=default_ticker(selected),
+                help="Any yfinance symbol — e.g. SPY, QQQ, AAPL, TLT, BTC-USD.",
+            )
+            .strip()
+            .upper()
+        )
+    elif mode == "choice":
+        choices = ticker_choices(selected)
+        symbol = st.selectbox("Ticker", choices, index=choices.index(default_ticker(selected)))
+    else:  # fixed — locked model
+        symbol = default_ticker(selected)
+        st.text_input(
+            "Ticker",
+            value=symbol,
+            disabled=True,
+            help="This model is locked to its data source and can't switch tickers.",
+        )
 
     st.divider()
 
@@ -125,9 +149,13 @@ if start >= end:
     st.error("Start date must be before end date.")
     st.stop()
 
-with st.spinner(f"Running {selected['name']} on {start} → {end} ..."):
+if not symbol:
+    st.error("Enter a ticker to run the backtest.")
+    st.stop()
+
+with st.spinner(f"Running {selected['name']} on {symbol}, {start} → {end} ..."):
     try:
-        out = run(selected, str(start), str(end))
+        out = run(selected, str(start), str(end), symbol=symbol)
     except ValueError as e:
         st.error(f"Couldn't run the backtest: {e}")
         st.stop()
