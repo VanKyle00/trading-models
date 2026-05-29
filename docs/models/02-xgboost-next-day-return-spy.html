@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gradient-Boosted Forecasts of Next-Day Equity Returns — trading-models</title>
+<link rel="stylesheet" href="paper.css">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], tags: 'ams', packages: {'[+]': ['ams']} },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+</head>
+<body>
+<div class="paper">
+
+  <div class="preprint-bar"><span>trading-models <span class="tag">· working paper II</span></span><span>Machine Learning · Supervised Forecasting</span></div>
+
+  <div class="title-block">
+    <h1 class="paper-title">Gradient-Boosted Forecasts of Next-Day Equity Returns</h1>
+    <p class="subtitle"><em>A regularized additive learner on eight technical features, and an honest accounting of how little of its in-sample skill survives out of sample.</em></p>
+    <p class="byline"><span class="who">trading-models</span> research notes · ML family, model 01</p>
+    <p class="dateline">Compiled 2026-05-28 · SPY daily, OOS window 2022–2024</p>
+    <div class="meta-tags">
+      <span class="meta-tag"><b>Family</b> ml</span>
+      <span class="meta-tag"><b>Window</b> swing</span>
+      <span class="meta-tag"><b>Assets</b> equities</span>
+      <span class="meta-tag"><b>Data</b> yfinance daily</span>
+      <span class="meta-tag"><b>Split</b> 80/20 chronological</span>
+      <span class="meta-tag"><b>OOS bars</b> 744</span>
+      <span class="meta-tag"><b>Status</b> working</span>
+    </div>
+  </div>
+
+  <div class="abstract">
+    <h2>Abstract</h2>
+    <p>We ask whether a gradient-boosted regression tree can extract a tradable directional signal from a small panel of standard technical features on the SPY exchange-traded fund. The learner is an XGBoost regressor (300 trees, depth 4, shrinkage 0.03, row/column subsampling 0.8) trained to predict the next day's log return from eight inputs: multi-horizon returns, realized volatilities, the 14-day Wilder RSI, and price deviations from two moving averages. The model is fit on a strictly chronological 80/20 split (no shuffling) to forbid lookahead; the held-out window spans January 2022 through December 2024.</p>
+    <p>In sample the predictor is highly accurate — prediction-to-target correlation 0.712 and sign accuracy 0.649 — but out of sample these collapse to an information coefficient of 0.105 and a sign accuracy of 0.532, barely above a coin flip. Despite this thin edge, a long/flat trading rule earns an annualized 11.5% at a Sharpe of 0.84 and a Sortino of 1.32 over 744 out-of-sample bars, with a maximum drawdown of −13.9% and a hit rate of only 45.2%.</p>
+    <p>We reconcile these numbers analytically. The Fundamental Law of Active Management predicts a maximum information ratio of \(0.105\sqrt{252}\approx 1.67\); the realized 0.84 implies a transfer coefficient near one-half, the price of the long-only, binary, cost-bearing implementation. We then show why a sub-50% hit rate can still be profitable: the relevant quantity is the covariance of the position with the realized return, not the probability of being right, and the long/flat map is a convex, option-like filter on the signal.</p>
+    <p class="keywords"><b>Keywords.</b> gradient boosting, XGBoost, supervised forecasting, information coefficient, fundamental law of active management, lookahead bias, transfer coefficient.</p>
+  </div>
+
+  <h2>Introduction</h2>
+  <p class="lead">The supervised-forecasting premise is seductive in its simplicity: collect features that summarize the recent state of a price series, attach to each the return that followed, and let a flexible learner discover whatever non-linear mapping connects the two. If markets harbor any conditional structure in the daily mean, a sufficiently expressive regressor ought to surface it. This paper subjects that premise to a deliberately modest test and an unusually candid post-mortem.</p>
+  <p>Our hypothesis is narrow and falsifiable: a boosted-tree regressor can learn enough non-linear structure in standard technical features to produce a directional next-day-return signal that beats a passive long position in regimes that contain real drawdowns. The vehicle is SPY, the most liquid equity index proxy available, sampled daily. The learner is gradient boosting — the workhorse of tabular machine learning — configured conservatively so that any edge we observe is not an artifact of tuning against the test set.</p>
+  <p>The contribution is less the model than the accounting. We will find that the in-sample fit is excellent and the out-of-sample fit is nearly absent, and yet the economic backtest is respectable. Rather than celebrate or dismiss this, we derive the relationships that make all three facts mutually consistent: the bias–variance gap that explains the collapse in predictive accuracy, the Fundamental Law that bounds how much signal the realized Sharpe can carry, and a covariance decomposition that explains profitability under a losing hit rate. The mathematics, not the headline return, is the point.</p>
+
+  <h2>Data and Features</h2>
+  <p>We use SPY daily adjusted bars from <em>yfinance</em>, spanning 2010-01-01 to 2024-12-31. Let \(P_t\) denote the adjusted close on bar \(t\). All features are deterministic functions of information available at the close of bar \(t\), and the target is the return realized over the following bar, so that no input ever peeks at its own label.</p>
+  <p>The \(k\)-bar log return and the \(k\)-bar realized volatility are</p>
+  \begin{equation}
+    r^{(k)}_t=\ln\!\frac{P_t}{P_{t-k}},\qquad
+    \mathrm{vol}^{(k)}_t=\sqrt{\frac1k\sum_{i=1}^{k}\bigl(r^{(1)}_{t-i+1}-\bar r\bigr)^2},
+  \end{equation}
+  with \(\bar r\) the sample mean of the one-bar log returns inside the window. The relative-strength index uses Wilder's exponential smoothing. With up- and down-moves</p>
+  \begin{equation}
+    U_t=\max(P_t-P_{t-1},0),\qquad D_t=\max(P_{t-1}-P_t,0),
+  \end{equation}
+  the smoothed averages recur as
+  \begin{equation}
+    \overline U_t=\frac{(n-1)\,\overline U_{t-1}+U_t}{n},\qquad
+    \overline D_t=\frac{(n-1)\,\overline D_{t-1}+D_t}{n},
+  \end{equation}
+  and the index is
+  \begin{equation}
+    \mathrm{RS}_t=\frac{\overline U_t}{\overline D_t},\qquad
+    \mathrm{RSI}_t=100-\frac{100}{1+\mathrm{RS}_t},\qquad n=14.
+  \end{equation}
+  <p>Finally, the price deviation from an \(n\)-bar simple moving average is \(\mathrm{px\_vs\_sma}_n(t)=P_t/\mathrm{SMA}_n(t)-1\). The eight scalar features per bar are <code>ret_1</code>, <code>ret_5</code>, <code>ret_20</code> (returns at horizons 1, 5, 20), <code>vol_5</code>, <code>vol_20</code>, <code>rsi_14</code>, and <code>px_vs_sma20</code>, <code>px_vs_sma60</code>. The regression target is the next-bar log return.</p>
+
+  <div class="keybox accent"><span class="lab">Definition</span> The supervised problem is the single scalar regression \(y_t=r^{(1)}_{t+1}=\ln(P_{t+1}/P_t)\) on the feature vector \(x_t=\bigl(r^{(1)}_t,\,r^{(5)}_t,\,r^{(20)}_t,\,\mathrm{vol}^{(5)}_t,\,\mathrm{vol}^{(20)}_t,\,\mathrm{RSI}^{(14)}_t,\,\mathrm{px\_vs\_sma}_{20}(t),\,\mathrm{px\_vs\_sma}_{60}(t)\bigr)\in\mathbb R^{8}\). Everything downstream is a deterministic transform of the fitted map \(\hat F(x_t)\).</div>
+
+  <h2>The Learner: Regularized Gradient Boosting</h2>
+  <p>Gradient boosting builds the predictor as a shrunken sum of regression trees,</p>
+  \[ \hat F_M(x)=\sum_{m=1}^{M}\eta\,f_m(x), \]
+  <p>where each \(f_m\) is a tree and \(\eta\) is the learning rate. The ensemble is grown stagewise. At round \(t\) we hold the previous prediction \(\hat y_i^{(t-1)}\) fixed and choose a new tree to minimize the regularized objective</p>
+  \begin{equation}
+    \mathcal L^{(t)}=\sum_{i=1}^{n}\ell\!\left(y_i,\hat y_i^{(t-1)}+f_t(x_i)\right)+\Omega(f_t),\qquad
+    \Omega(f)=\gamma T+\tfrac12\lambda\sum_{j=1}^{T}w_j^2,
+  \end{equation}
+  <p>in which \(T\) is the number of leaves, \(w_j\) the weight in leaf \(j\), \(\gamma\) a per-leaf complexity penalty, and \(\lambda\) an \(L_2\) shrinkage on the leaf weights.</p>
+  <p>XGBoost (Chen &amp; Guestrin, 2016) replaces the loss by its second-order Taylor expansion around the current prediction. Writing the gradient and Hessian of the loss as \(g_i=\partial_{\hat y}\,\ell(y_i,\hat y_i^{(t-1)})\) and \(h_i=\partial^2_{\hat y}\,\ell(y_i,\hat y_i^{(t-1)})\),</p>
+  \[ \mathcal L^{(t)}\simeq\sum_{i=1}^{n}\Bigl[g_i\,f_t(x_i)+\tfrac12 h_i\,f_t(x_i)^2\Bigr]+\Omega(f_t). \]
+  <p>For the squared-error loss \(\ell=(y-\hat y)^2\) used here the derivatives are explicit:</p>
+  \begin{equation}
+    g_i=-2\bigl(y_i-\hat y_i^{(t-1)}\bigr),\qquad h_i=2.
+  \end{equation}
+  <p>The gradient is (up to a factor of two) the current residual, so each tree fits what the ensemble has so far failed to explain; the constant Hessian means the Newton step coincides with ordinary least-squares fitting for this loss. The second-order machinery earns its keep for non-quadratic losses, but stating it here makes the leaf algebra below transparent.</p>
+  <p>For a tree of fixed structure, let \(I_j=\{i:x_i\text{ falls in leaf }j\}\) and define the leaf aggregates \(G_j=\sum_{i\in I_j}g_i\) and \(H_j=\sum_{i\in I_j}h_i\). The quadratic objective is solved in closed form: the optimal weight and the resulting structure score are</p>
+  \begin{equation}
+    w_j^\star=-\frac{G_j}{H_j+\lambda},\qquad
+    \tilde{\mathcal L}=-\frac12\sum_{j=1}^{T}\frac{G_j^2}{H_j+\lambda}+\gamma T.
+  \end{equation}
+  <p>The score \(\tilde{\mathcal L}\) is the impurity functional that drives tree growth. Because enumerating all tree topologies is intractable, XGBoost grows greedily: a candidate split partitions a node's instances into left and right children \(L,R\), and is accepted only if it reduces \(\tilde{\mathcal L}\). The gain of a split is the difference of structure scores before and after,</p>
+  \begin{equation}
+    \mathrm{Gain}=\frac12\!\left[\frac{G_L^2}{H_L+\lambda}+\frac{G_R^2}{H_R+\lambda}-\frac{(G_L+G_R)^2}{H_L+H_R+\lambda}\right]-\gamma.
+  \end{equation}
+  <p>A split is taken only when \(\mathrm{Gain}>0\); the \(-\gamma\) term is a built-in pruning threshold that suppresses splits whose impurity reduction does not exceed the per-leaf cost.</p>
+  <p>Three hyperparameters govern the regularization regime, and we set all three conservatively. The shrinkage \(\eta=0.03\) scales every tree's contribution down by a factor of more than thirty, so no single tree dominates the fit; learning is slow and incremental, which is why 300 trees are needed to accumulate signal — a textbook bias-for-variance trade in which many weak, shrunken corrections outperform a few aggressive ones. Row and column subsampling at 0.8 implement stochastic gradient boosting (Friedman, 2002): each tree sees 80% of the rows and 80% of the features, which decorrelates the ensemble members and damps overfitting much as bagging does. Depth 4 caps each tree at \(2^4=16\) leaves, so the learner can represent interactions among at most four features at a time — low-order non-linearity by construction, not the high-order memorization that deeper trees invite.</p>
+
+  <h2>Training Protocol</h2>
+  <p>The single most consequential design choice is <em>not</em> to shuffle. Financial series are serially dependent and non-stationary: adjacent bars share overlapping feature windows and live in the same volatility regime. A random train/test split scatters near-duplicate, autocorrelated neighbors across both sides of the partition, so the model effectively trains on points that are statistical twins of the ones it is later scored on. This is label leakage, and it inflates every out-of-sample metric, sometimes dramatically.</p>
+  <p>The lookahead-safe protocol is a strictly chronological split: train on the past, test on the future, never the reverse. We use an 80/20 cut with no shuffling — \(n_{\text{train}}=2971\) bars ending just before the split, and \(n_{\text{test}}=743\) bars beginning at the split date 2022-01-14. A still more rigorous treatment, which we flag for future work, inserts an embargo or <em>purge</em> around the boundary (López de Prado, 2018) to remove training points whose label windows overlap the test region; with a one-bar target horizon the residual leakage here is minimal, but the principle is the same. The full hyperparameter set — 300 trees, depth 4, learning rate 0.03, subsample 0.8, colsample_bytree 0.8, random_state 42 — was fixed in advance and never adjusted in response to test-set performance, the discipline that gives the out-of-sample numbers their meaning.</p>
+
+  <h2>Backtest Protocol and Metrics</h2>
+  <p>We define the metric battery once for the whole catalogue; subsequent papers reference it. Let the simple and log returns be \(R_t=P_t/P_{t-1}-1\) and \(r_t=\ln(P_t/P_{t-1})\). A position \(w_t\in\{0,1\}\) is held with one-bar execution lag, so the net per-bar strategy return is</p>
+  \begin{equation}
+    r^s_t=w_{t-1}R_t-c\,\lvert w_t-w_{t-1}\rvert,\qquad c=1.5\text{ bp},
+  \end{equation}
+  <p>where the cost \(c\) (a 1 bp commission-and-slippage component plus 0.5 bp of impact) is charged per unit of turnover. Equity compounds as \(E_t=E_0\prod_\tau(1+r^s_\tau)\). With the risk-free rate set to zero, \(P=252\) trading days, and \(N\) bars, the performance statistics are</p>
+  \begin{equation}
+    \text{ann.\ return}=\Bigl(\textstyle\prod_t(1+r^s_t)\Bigr)^{P/N}-1,\qquad
+    \widehat{SR}=\frac{\bar r^s}{s}\sqrt P,
+  \end{equation}
+  \begin{equation}
+    \sigma_d=\sqrt{\frac1N\sum_{t}\min(r^s_t,0)^2},\quad
+    \text{Sortino}=\frac{\bar r^s}{\sigma_d}\sqrt P,\quad
+    \mathrm{MDD}=\max_t\Bigl(1-\frac{E_t}{\max_{\tau\le t}E_\tau}\Bigr),
+  \end{equation}
+  <p>with \(s\) the sample standard deviation of \(r^s_t\) and the hit rate defined as the fraction of active bars (\(w_{t-1}=1\)) for which \(r^s_t>0\). The trading rule maps the model's prediction to a position by going long when the signal is positive and standing flat otherwise:</p>
+  \begin{equation}
+    w_t=\mathbf 1\!\left\{\hat F(x_t)>0\right\}.
+  \end{equation}
+  <p>This binary, long-only map is deliberately crude: it discards the predicted magnitude entirely and never shorts. We will see in the discussion that this crudeness is exactly what costs the strategy half of its theoretical signal — and also what caps its drawdown.</p>
+
+  <h2>Results: Predictive Accuracy and Economic Performance</h2>
+  <p>We first read the model's mind through the information coefficient, \(\mathrm{IC}=\mathrm{corr}(\hat y,y)\), and the directional sign accuracy. The contrast between the training window and the held-out window is stark.</p>
+
+  <div class="table-wrap">
+    <p class="tcap">Table 1. Predictive diagnostics, in-sample versus out-of-sample (train_metrics.json).</p>
+    <table class="data">
+      <thead><tr><th>Diagnostic</th><th class="r">Train</th><th class="r">Test (OOS)</th></tr></thead>
+      <tbody>
+        <tr><td>Prediction correlation (IC)</td><td class="r">0.7123</td><td class="r">0.1054</td></tr>
+        <tr><td>Sign accuracy</td><td class="r">0.6493</td><td class="r">0.5316</td></tr>
+        <tr><td>Sample size (bars)</td><td class="r">2971</td><td class="r">743</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The training IC of 0.712 is the fingerprint of a flexible learner that has substantially memorized its window; the out-of-sample IC of 0.105 is what genuinely generalizes. Out-of-sample sign accuracy of 0.532 is barely above the 0.500 of a coin flip. This gap — high in-sample skill, thin out-of-sample skill — is the canonical bias–variance signature, and it is precisely the diagnosis the chronological split was built to deliver honestly. A shuffled split would have reported an inflated test IC and hidden the problem.</p>
+  <p>Now the economic outcome. Translating the thin signal through the long/flat rule and the cost model over the 744-bar held-out window produces the backtest in Table 2.</p>
+
+  <div class="table-wrap">
+    <p class="tcap">Table 2. Out-of-sample backtest, 2022-01-14 through 2024-12-31 (metrics.json).</p>
+    <table class="data">
+      <thead><tr><th>Metric</th><th class="r">Value</th></tr></thead>
+      <tbody>
+        <tr><td>Annualized return</td><td class="r pos">+11.5%</td></tr>
+        <tr><td>Sharpe ratio</td><td class="r">0.8388</td></tr>
+        <tr><td>Sortino ratio</td><td class="r">1.3217</td></tr>
+        <tr><td>Maximum drawdown</td><td class="r neg">−13.9%</td></tr>
+        <tr><td>Hit rate (active bars)</td><td class="r">45.2%</td></tr>
+        <tr><td>Out-of-sample bars</td><td class="r">744</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <img src="../../models/ml/01-gbm-next-day-return-spy/results/equity_curve.png" alt="Out-of-sample equity curve of the gradient-boosted long/flat strategy on SPY, 2022–2024.">
+    <figcaption>Out-of-sample equity curve of the long/flat boosted-tree strategy on SPY over the held-out window. The shallow drawdown relative to buy-and-hold reflects the strategy sitting flat on predicted-negative days during the 2022 decline.</figcaption>
+  </figure>
+
+  <p>So a model whose directional accuracy is 53% in sample and 53% out of sample — and which is right on fewer than half its <em>active</em> bars — nonetheless compounds at 11.5% with a Sortino above 1.3. The Sortino exceeding the Sharpe tells us the downside deviation is smaller than the total deviation: the realized losses are milder than the realized variance would suggest. The remainder of the paper explains why none of this is contradictory.</p>
+
+  <h2>Discussion</h2>
+  <h3>From information coefficient to Sharpe: the Fundamental Law</h3>
+  <p>How much Sharpe should an IC of 0.105 be able to support? The Fundamental Law of Active Management (Grinold, 1989; Grinold &amp; Kahn) gives the bridge. It states that the information ratio attainable from a forecasting signal is, to first order, the product of skill and the square root of breadth,</p>
+  \begin{equation}
+    \mathrm{IR}\approx\mathrm{IC}\cdot\sqrt{\mathrm{BR}},
+  \end{equation}
+  <p>where breadth \(\mathrm{BR}\) is the number of independent bets taken per year. A daily strategy on one asset makes roughly \(\mathrm{BR}\approx252\) approximately independent directional bets per year. With the out-of-sample IC of 0.105 this implies a theoretical ceiling</p>
+  \[ \mathrm{IR}_{\max}\approx 0.105\sqrt{252}\approx 1.67. \]
+  <p>The realized out-of-sample Sharpe is 0.84. The ratio of realized to attainable information ratio defines the <em>transfer coefficient</em>,</p>
+  \begin{equation}
+    \mathrm{TC}=\frac{\mathrm{IR}_{\text{realized}}}{\mathrm{IC}\sqrt{\mathrm{BR}}}\approx\frac{0.84}{1.67}\approx 0.50.
+  \end{equation}
+
+  <div class="remark"><span class="lab">Result.</span> Only about half of the theoretically available signal reaches the bottom line. The leakage is fully accounted for by the implementation: the long-only constraint forbids profiting from predicted-down days by shorting; the binary \(w\in\{0,1\}\) position throws away the predicted magnitude, so a weak buy and a strong buy are sized identically; and turnover costs erode the rest. A magnitude-aware, long–short sizing rule would, in principle, recover much of the missing \(\mathrm{TC}\) — at the cost of larger drawdowns.</div>
+
+  <h3>Why a losing hit rate still makes money</h3>
+  <p>The hit rate of 45.2% says the strategy loses on most of the days it is invested, yet it is profitable. The resolution is that the regression targets the conditional <em>mean</em> return, not the sign, and the relevant quantity for profit is a covariance, not a probability. Decompose the expected strategy return (ignoring costs) into a covariance term and a market-exposure term:</p>
+  \begin{equation}
+    \mathbb E[r^s_t]=\mathbb E[w_{t-1}R_t]=\mathrm{Cov}(w_{t-1},R_t)+\mathbb E[w_{t-1}]\,\mathbb E[R_t].
+  \end{equation}
+  <p>Profit requires \(\mathrm{Cov}(w,R)>0\) — the position must be positive more often when the return is large and positive — but this can hold even when \(\Pr(R>0\mid w=1)<\tfrac12\). Two mechanisms make it work here. First, magnitude asymmetry: the long-and-up days carry larger absolute returns than the more numerous long-and-down days, so a minority of correct, large bets outweighs a majority of small wrong ones. Second, convexity: the long/flat map \(w=\max(0,\mathbf 1\{\hat F>0\})\) is a convex, option-like filter that truncates the left tail by sitting out predicted-negative days. By standing flat through the worst forecasts, the strategy clips its losses — which is exactly why its maximum drawdown of −13.9% is shallow relative to a passive long position and why the Sortino comfortably exceeds the Sharpe.</p>
+
+  <h2>Limitations and Extensions</h2>
+  <p>The out-of-sample evidence rests on 743 daily samples — roughly three calendar years — which is a thin and regime-specific basis: the window happens to contain both the 2022 drawdown and the 2023–2024 recovery, and the IC may not be stable across other regimes. A single asset offers no cross-sectional breadth, so the \(\mathrm{BR}\approx252\) figure is generous. We did not perform purged, embargoed \(k\)-fold cross-validation; a single chronological split gives one realization of the test statistic and no estimate of its sampling variance. Because boosted-tree pipelines invite many configuration choices, the reported Sharpe is also exposed to multiple-testing inflation, and a Deflated Sharpe Ratio adjustment (López de Prado, 2018) would discount it for the number of trials implicitly run. On the modeling side, the binary position is the clearest lever: a magnitude-aware sizing rule, possibly with a short leg, should raise the transfer coefficient toward unity, and richer feature sets or volatility-targeted position sizing are natural next steps. The honest summary is that the model demonstrates a small, real, and fragile edge — and that the value of the exercise lies in measuring its fragility precisely.</p>
+
+  <h2 class="nonum">References</h2>
+  <ol class="references">
+    <li>Chen, T. &amp; Guestrin, C. (2016). <em>XGBoost: A Scalable Tree Boosting System.</em> Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD), 785–794.</li>
+    <li>Friedman, J. H. (2001). <em>Greedy Function Approximation: A Gradient Boosting Machine.</em> The Annals of Statistics, 29(5), 1189–1232.</li>
+    <li>Friedman, J. H. (2002). <em>Stochastic Gradient Boosting.</em> Computational Statistics &amp; Data Analysis, 38(4), 367–378.</li>
+    <li>Grinold, R. C. (1989). <em>The Fundamental Law of Active Management.</em> Journal of Portfolio Management, 15(3), 30–37.</li>
+    <li>Grinold, R. C. &amp; Kahn, R. N. (2000). <em>Active Portfolio Management: A Quantitative Approach for Producing Superior Returns and Controlling Risk</em> (2nd ed.). McGraw-Hill.</li>
+    <li>López de Prado, M. (2018). <em>Advances in Financial Machine Learning.</em> Wiley. (Purging and embargoing; the Deflated Sharpe Ratio.)</li>
+    <li>Wilder, J. W. (1978). <em>New Concepts in Technical Trading Systems.</em> Trend Research. (Original definition of the Relative Strength Index.)</li>
+  </ol>
+
+  <div class="footnotes">
+    <ol>
+      <li>The metric battery (simple/log returns, costed per-bar strategy return, annualized return, Sharpe, Sortino, maximum drawdown, hit rate) is defined identically across the four-paper catalogue; later papers refer back to this statement rather than restating it.</li>
+      <li>The header reports 744 out-of-sample bars while the predictive diagnostics use 743; the one-bar difference is the alignment of the lagged position with the realized return at the test-set boundary.</li>
+    </ol>
+  </div>
+
+  <nav class="paper-nav"><a href="01-sma-crossover-spy.html">← Paper I · MA Crossover</a><a href="03-order-flow-imbalance-btc.html">Paper III · Order-Flow Imbalance →</a></nav>
+
+  <footer class="colophon"><p>SOURCE: models/ml/01-gbm-next-day-return-spy/ · REPRODUCE: uv run python models/ml/01-gbm-next-day-return-spy/train.py &amp;&amp; backtest.py</p><p>trading-models · working paper · 2026-05-28</p></footer>
+
+</div>
+</body>
+</html>

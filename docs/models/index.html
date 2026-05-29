@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Models — Working Papers</title>
+<link rel="stylesheet" href="paper.css">
+</head>
+<body>
+<div class="paper">
+
+  <div class="preprint-bar">
+    <span>trading-models <span class="tag">· working papers</span></span>
+    <span>Quantitative Research</span>
+  </div>
+
+  <div class="title-block">
+    <h1 class="paper-title">A Catalogue of Systematic Trading Models</h1>
+    <p class="subtitle">Four hypotheses, four families, evaluated end-to-end — winners and negative results reported alike.</p>
+    <p class="byline"><span class="who">trading-models</span> research notes</p>
+    <p class="dateline">Compiled 2026-05-28 · one self-contained paper per model</p>
+  </div>
+
+  <div class="abstract">
+    <h2>Preface</h2>
+    <p>Each model in this repository is documented as a standalone working paper. The papers
+    share a common evaluation protocol — lookahead-safe signal construction, one-bar execution
+    lag, explicit transaction costs, and a fixed battery of risk-adjusted performance metrics —
+    so that results across families are read on the same footing.</p>
+    <p>Two of the four hypotheses fail. They are written up with the same rigour as the two that
+    work, because a catalogue that reports only winners is, statistically, a catalogue that has
+    been overfit. Negative results here are evidence, not omissions.</p>
+    <p class="keywords"><b>Conventions.</b> Returns are simple unless noted; the risk-free rate is
+    taken as zero; the Sharpe ratio is annualized by <span class="mono">√(periods/year)</span>
+    with the period count stated per paper. See <a href="../methodology.md">methodology.md</a>
+    and <a href="../glossary.md">glossary.md</a> for shared definitions.</p>
+  </div>
+
+  <h2 class="nonum" style="counter-increment:none">The Papers</h2>
+
+  <nav class="toc">
+    <a class="toc-item" href="01-sma-crossover-spy.html">
+      <span class="no">Paper I · Classical · Trend Following</span>
+      <h3>The Moving-Average Crossover as a Lagged Trend Filter</h3>
+      <p>The 50/200-day golden-cross rule on SPY, framed as a finite-impulse-response filter with
+      explicit group delay. Why it earns a positive Sharpe yet cannot avoid a deep drawdown.</p>
+      <p class="stat">SPY daily, 2010–2024 · Sharpe <span class="pos">+0.73</span> · Max DD <span class="neg">−34%</span> · <b>working</b></p>
+    </a>
+
+    <a class="toc-item" href="02-xgboost-next-day-return-spy.html">
+      <span class="no">Paper II · Machine Learning · Supervised Forecasting</span>
+      <h3>Gradient-Boosted Forecasts of Next-Day Equity Returns</h3>
+      <p>A second-order boosted-tree regressor on eight technical features. The information
+      coefficient collapses out-of-sample; we reconcile a sub-50% hit rate with a positive Sharpe
+      through the Fundamental Law of Active Management.</p>
+      <p class="stat">SPY daily, OOS 2022–2024 · Sharpe <span class="pos">+0.84</span> · Max DD <span class="neg">−14%</span> · <b>working</b></p>
+    </a>
+
+    <a class="toc-item" href="03-order-flow-imbalance-btc.html">
+      <span class="no">Paper III · Microstructure · Order Flow</span>
+      <h3>Order-Flow Imbalance and the Decay of Price Impact</h3>
+      <p>Trade-signed order-flow imbalance on minute-bar BTCUSDT across the 2024-08-05 crash. The
+      continuation hypothesis is rejected; we derive why minute-frequency Sharpe is not comparable
+      to the daily-bar papers and what the scale-invariant metrics say instead.</p>
+      <p class="stat">BTCUSDT 1-min, Aug 2024 · Hit rate <span class="neg">29.7%</span> · Max DD <span class="neg">−36%</span> · <b>negative result</b></p>
+    </a>
+
+    <a class="toc-item" href="04-google-trends-contrarian-btc.html">
+      <span class="no">Paper IV · Alternative Data · Attention</span>
+      <h3>Search Attention as a Contrarian Signal for Bitcoin</h3>
+      <p>A rolling z-score of "bitcoin" search interest, traded contrarian. We show the z-transform
+      fails to strip the price-coincident component at weekly resolution, and that even the momentum
+      inverse is untradeable once drawdown is accounted for.</p>
+      <p class="stat">Weekly BTC, 2021–2024 · Sharpe <span class="neg">−0.30</span> · Max DD <span class="neg">−80%</span> · <b>negative result</b></p>
+    </a>
+  </nav>
+
+  <footer class="colophon">
+    <p>SOURCE: models/&lt;family&gt;/NN-slug/ &nbsp;·&nbsp; REPRODUCE: uv run python models/&lt;family&gt;/&lt;slug&gt;/backtest.py</p>
+    <p>SEE ALSO: <a href="../methodology.md">methodology.md</a> · <a href="../glossary.md">glossary.md</a> · <a href="../data-sources.md">data-sources.md</a> · <a href="../../MODELS.md">MODELS.md</a></p>
+    <p>trading-models · working papers · 2026-05-28</p>
+  </footer>
+
+</div>
+</body>
+</html>

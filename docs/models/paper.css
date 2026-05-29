@@ -1,0 +1,471 @@
+/* ============================================================
+   trading-models — academic working-paper stylesheet
+   A refined university-press / preprint aesthetic.
+   Shared by every model paper in docs/models/.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+:root {
+  --paper:      #fcfbf7;
+  --paper-edge: #f3f0e8;
+  --ink:        #1c1b18;
+  --ink-soft:   #44423c;
+  --ink-faint:  #8a857a;
+  --rule:       #d9d4c7;
+  --rule-soft:  #e7e3d8;
+  --accent:     #8a2b2b;   /* oxblood — links, rules, drop-caps */
+  --accent-dim: #b06a52;
+  --pos:        #2f6b46;
+  --neg:        #a23a2e;
+  --box-bg:     #f6f3ea;
+  --serif: "Spectral", Georgia, "Times New Roman", serif;
+  --mono:  "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(138,43,43,0.025), transparent 55%);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 18.5px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "onum" 1, "pnum" 1, "kern" 1, "liga" 1;
+}
+
+/* counters for sections, equations live in MathJax */
+body { counter-reset: sec fig tbl; }
+
+.paper {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 36px 140px;
+}
+
+/* ===================== MASTHEAD / TITLE BLOCK ===================== */
+
+.preprint-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 40px 0 14px;
+  border-bottom: 2px solid var(--ink);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.preprint-bar .tag { color: var(--accent); }
+
+.title-block { padding: 40px 0 8px; }
+
+h1.paper-title {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: clamp(31px, 5vw, 46px);
+  line-height: 1.1;
+  letter-spacing: -0.012em;
+  margin: 0 0 6px;
+  color: var(--ink);
+}
+.subtitle {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(18px, 2.6vw, 22px);
+  color: var(--ink-soft);
+  margin: 10px 0 0;
+  line-height: 1.35;
+}
+.byline {
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 22px 0 2px;
+}
+.byline .who { font-weight: 500; color: var(--ink); }
+.dateline {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  margin: 4px 0 0;
+}
+
+/* tags row under title */
+.meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 0;
+}
+.meta-tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+  background: var(--paper-edge);
+  padding: 4px 10px;
+  border-radius: 2px;
+}
+.meta-tag b { color: var(--ink-faint); font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.13em; margin-right: 7px; }
+
+/* ===================== ABSTRACT ===================== */
+
+.abstract {
+  margin: 34px 0 8px;
+  padding: 26px 30px;
+  background: var(--box-bg);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+}
+.abstract h2 {
+  all: unset;
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 12px;
+  counter-increment: none;
+}
+.abstract h2::before { content: none !important; }
+.abstract p {
+  font-size: 16.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+}
+.abstract p:last-child { margin-bottom: 0; }
+
+/* keywords / JEL-style line */
+.keywords {
+  font-size: 15px;
+  color: var(--ink-soft);
+  margin: 18px 0 0;
+}
+.keywords b { font-variant: small-caps; letter-spacing: 0.04em; color: var(--ink); }
+
+/* ===================== HEADINGS (numbered) ===================== */
+
+h2 {
+  counter-increment: sec;
+  counter-reset: subsec;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  margin: 52px 0 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+}
+h2::before {
+  content: counter(sec) ".\00a0\00a0";
+  color: var(--accent);
+  font-weight: 600;
+}
+/* unnumbered headings (References, Acknowledgements) */
+h2.nonum { counter-increment: none; }
+h2.nonum::before { content: none; }
+
+h3 {
+  counter-increment: subsec;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 19px;
+  margin: 32px 0 2px;
+  color: var(--ink);
+}
+h3::before {
+  content: counter(sec) "." counter(subsec) "\00a0\00a0";
+  color: var(--accent-dim);
+  font-weight: 600;
+}
+
+h4 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 26px 0 8px;
+}
+
+/* ===================== BODY TEXT ===================== */
+
+p { margin: 14px 0; }
+
+/* drop cap on first paragraph after abstract's following section */
+.lead::first-letter {
+  font-weight: 600;
+  font-size: 3.1em;
+  line-height: 0.82;
+  float: left;
+  padding: 6px 10px 0 0;
+  color: var(--accent);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(138,43,43,0.28);
+  transition: border-color .15s, background .15s;
+}
+a:hover { border-color: var(--accent); background: rgba(138,43,43,0.05); }
+
+strong, b { font-weight: 600; color: var(--ink); }
+em, i { font-style: italic; }
+
+ul, ol { margin: 14px 0; padding-left: 26px; }
+li { margin: 7px 0; }
+li::marker { color: var(--accent-dim); }
+
+code, .mono {
+  font-family: var(--mono);
+  font-size: 0.83em;
+  background: var(--paper-edge);
+  border: 1px solid var(--rule-soft);
+  padding: 0.5px 5px;
+  border-radius: 3px;
+  color: var(--ink);
+}
+
+blockquote {
+  margin: 20px 0;
+  padding: 4px 0 4px 22px;
+  border-left: 3px solid var(--rule);
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* ===================== EQUATIONS & DEFINITION BOXES ===================== */
+
+/* MathJax display equations get breathing room */
+mjx-container[display="true"] { margin: 20px 0 !important; }
+
+/* boxed key result / definition */
+.keybox {
+  margin: 22px 0;
+  padding: 18px 24px;
+  background: var(--box-bg);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+.keybox.accent { border-left: 3px solid var(--accent); }
+.keybox .lab {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 6px;
+}
+.keybox p:first-of-type { margin-top: 0; }
+.keybox p:last-child { margin-bottom: 0; }
+
+/* a "Remark"/"Result" callout */
+.remark {
+  margin: 22px 0;
+  padding: 16px 22px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent-dim);
+  background: rgba(176,106,82,0.05);
+  border-radius: 0 3px 3px 0;
+  font-size: 17px;
+}
+.remark .lab {
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 8px;
+}
+.remark p:last-child { margin-bottom: 0; }
+
+/* ===================== FIGURES ===================== */
+
+figure {
+  margin: 30px 0;
+  padding: 0;
+  text-align: center;
+}
+figure img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  background: #fff;
+  border-radius: 2px;
+}
+figcaption {
+  counter-increment: fig;
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin-top: 12px;
+  text-align: left;
+  padding: 0 8px;
+}
+figcaption::before {
+  content: "Figure " counter(fig) ". ";
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ===================== TABLES ===================== */
+
+.table-wrap { margin: 28px 0; }
+.table-wrap .tcap {
+  counter-increment: tbl;
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+  text-align: left;
+}
+.table-wrap .tcap::before {
+  content: "Table " counter(tbl) ". ";
+  font-weight: 600;
+  color: var(--ink);
+}
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 13px;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+table.data thead th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 10px 14px 9px 0;
+  border-bottom: 1px solid var(--ink);
+  white-space: nowrap;
+}
+table.data th.r, table.data td.r { text-align: right; padding-right: 0; }
+table.data tbody td {
+  padding: 9px 14px 9px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--ink-soft);
+  vertical-align: baseline;
+}
+table.data tbody tr:last-child td { border-bottom: none; }
+table.data tbody td:first-child { color: var(--ink); }
+.pos { color: var(--pos); }
+.neg { color: var(--neg); }
+
+/* ===================== FOOTNOTES & REFERENCES ===================== */
+
+.footnotes {
+  margin-top: 56px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  font-size: 14.5px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+.footnotes ol { padding-left: 22px; }
+.footnotes li { margin: 6px 0; }
+
+ol.references {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  padding-left: 26px;
+}
+ol.references li { margin: 11px 0; }
+ol.references i { color: var(--ink); }
+
+sup.fn a { border: none; font-size: 0.72em; }
+
+/* ===================== NAV / FOOTER ===================== */
+
+.paper-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 60px;
+  padding-top: 22px;
+  border-top: 2px solid var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.paper-nav a { border: none; }
+.paper-nav .home { color: var(--ink-faint); }
+
+footer.colophon {
+  margin-top: 28px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  line-height: 1.8;
+}
+
+/* ===================== INDEX PAGE ===================== */
+
+.toc { margin: 18px 0 0; }
+.toc-item {
+  display: block;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 22px 26px;
+  margin: 16px 0;
+  background: var(--paper);
+  border-left: 3px solid var(--accent);
+  transition: background .15s, transform .15s;
+}
+.toc-item:hover { background: var(--box-bg); transform: translateX(2px); }
+.toc-item .no {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.toc-item h3 {
+  all: unset;
+  display: block;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 23px;
+  color: var(--ink);
+  margin: 6px 0 6px;
+}
+.toc-item p { margin: 0; font-size: 16px; color: var(--ink-soft); }
+.toc-item .stat {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  margin-top: 12px;
+}
+.toc-item .stat .pos { color: var(--pos); }
+.toc-item .stat .neg { color: var(--neg); }
+
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  .paper { padding: 0 22px 90px; }
+}
