@@ -57,28 +57,45 @@ with st.sidebar:
     selected_name = st.selectbox("Model", list(model_labels.keys()))
     selected = model_labels[selected_name]
 
+    # Resolving the ticker can fail if a model's `tickers:` frontmatter is
+    # missing or malformed (e.g. a stale deploy serving outdated model.md, or
+    # cached metadata from before the field was added). That must not take down
+    # the whole app — the model selectbox above has already rendered, so we
+    # surface an actionable error for this model and stop, letting the user
+    # pick another model. CI's test_every_model_declares_tickers keeps valid
+    # frontmatter a hard requirement, so this only ever fires on a bad deploy.
     mode = ticker_mode(selected)
-    if mode == "free":
-        symbol = (
+    try:
+        if mode == "free":
+            symbol = (
+                st.text_input(
+                    "Ticker",
+                    value=default_ticker(selected),
+                    help="Any yfinance symbol — e.g. SPY, QQQ, AAPL, TLT, BTC-USD.",
+                )
+                .strip()
+                .upper()
+            )
+        elif mode == "choice":
+            choices = ticker_choices(selected)
+            symbol = st.selectbox("Ticker", choices, index=choices.index(default_ticker(selected)))
+        else:  # fixed — locked model
+            symbol = default_ticker(selected)
             st.text_input(
                 "Ticker",
-                value=default_ticker(selected),
-                help="Any yfinance symbol — e.g. SPY, QQQ, AAPL, TLT, BTC-USD.",
+                value=symbol,
+                disabled=True,
+                help="This model is locked to its data source and can't switch tickers.",
             )
-            .strip()
-            .upper()
+    except (ValueError, KeyError) as exc:
+        st.error(
+            f"**{selected['name']}** has no usable ticker configuration "
+            "(its `tickers:` frontmatter is missing or malformed). Pick another "
+            "model from the dropdown above. If you just deployed an update, "
+            "reboot the app (Manage app → Reboot) so it reloads the latest "
+            f"`model.md` files.\n\nDetails: `{exc}`"
         )
-    elif mode == "choice":
-        choices = ticker_choices(selected)
-        symbol = st.selectbox("Ticker", choices, index=choices.index(default_ticker(selected)))
-    else:  # fixed — locked model
-        symbol = default_ticker(selected)
-        st.text_input(
-            "Ticker",
-            value=symbol,
-            disabled=True,
-            help="This model is locked to its data source and can't switch tickers.",
-        )
+        st.stop()
 
     st.divider()
 
