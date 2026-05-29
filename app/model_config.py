@@ -38,7 +38,7 @@ def ticker_choices(model: dict[str, Any]) -> list[str]:
 def default_ticker(model: dict[str, Any]) -> str:
     """Return the symbol the control should start on."""
     explicit = model.get("default_ticker")
-    if explicit:
+    if explicit is not None:
         return str(explicit)
     choices = ticker_choices(model)
     if choices:
