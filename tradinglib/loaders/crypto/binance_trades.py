@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 from typing import cast
 
@@ -56,18 +57,35 @@ def load_trades(
     parquet at ``data/processed/binance/<symbol>/aggTrades/YYYY-MM-DD.parquet``.
     Multi-day requests stitch the per-day parquets together in-memory.
     """
+    return pd.concat(iter_daily_trades(symbol, start, end, refresh=refresh)).sort_index()
+
+
+def iter_daily_trades(
+    symbol: str,
+    start: str | date,
+    end: str | date,
+    *,
+    refresh: bool = False,
+) -> Iterator[pd.DataFrame]:
+    """Yield one day's canonical trades at a time over ``[start, end]`` inclusive.
+
+    The lazy, memory-bounded counterpart to :func:`load_trades`: callers that
+    aggregate incrementally (see
+    :func:`tradinglib.features.microstructure.aggregate_daily_chunks`) can
+    process a multi-day range without ever holding more than a single day's
+    millions of ticks in memory. ``load_trades`` is just
+    ``pd.concat(iter_daily_trades(...))`` for callers that do want the whole
+    range at once.
+    """
     start_d = _to_date(start)
     end_d = _to_date(end)
     if start_d > end_d:
         raise ValueError(f"start ({start_d}) is after end ({end_d})")
 
-    frames = []
     cur = start_d
     while cur <= end_d:
-        frames.append(_load_one_day(symbol, cur, refresh=refresh))
+        yield _load_one_day(symbol, cur, refresh=refresh)
         cur += timedelta(days=1)
-
-    return pd.concat(frames).sort_index()
 
 
 def _load_one_day(symbol: str, day: date, *, refresh: bool) -> pd.DataFrame:
@@ -94,16 +112,20 @@ def _parse_zip(content: bytes) -> pd.DataFrame:
     with zipfile.ZipFile(io.BytesIO(content)) as zf:
         member = zf.namelist()[0]
         with zf.open(member) as f:
+            # Only read the four columns we keep — skipping the three int64
+            # trade-id columns (and is_best_match) roughly halves peak parse
+            # memory on a ~9M-row BTCUSDT-day, which matters on memory-capped
+            # hosts. The canonical parquet schema is unchanged.
             df = pd.read_csv(
                 f,
                 names=_RAW_COLUMNS,
                 header=None,
+                usecols=["price", "qty", "timestamp_ms", "is_buyer_maker"],
                 dtype={
                     "price": "float64",
                     "qty": "float64",
                     "timestamp_ms": "int64",
                     "is_buyer_maker": "str",
-                    "is_best_match": "str",
                 },
             )
     df["is_buyer_maker"] = df["is_buyer_maker"] == "True"
