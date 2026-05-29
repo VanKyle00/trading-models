@@ -12,7 +12,7 @@ table below are directly comparable.
 
 ## Live demo
 
-There's an interactive Streamlit app at **[trading-models.streamlit.app]([https://trading-models.streamlit.app](https://trading-models-swqny2mhsqftylrq8hj3w9.streamlit.app/))**
+There's an interactive Streamlit app at **[trading-models.streamlit.app](https://trading-models-swqny2mhsqftylrq8hj3w9.streamlit.app/)**
 where you can pick a model, see its input data, and run a backtest over
 any date range or canonical regime window (COVID crash, 2022 bear, BTC
 2024-08-05 crash, etc.) without installing anything locally.
