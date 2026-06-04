@@ -5,7 +5,7 @@ A trade opens when the position moves away from flat (0) and closes when it
 returns to flat or flips sign. An open position at the end of the series is
 closed on the final bar at its price. PnL is the price change over the holding
 window times the (signed) position size held; ``duration`` is the number of
-bars held.
+bars between entry and exit (``exit_i - entry_i``), not counting the exit bar.
 
 This is the shared source of truth for the trade table and the price-chart
 buy/sell markers (which previously lived inline in the Streamlit data view).
@@ -15,9 +15,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-COLUMNS = [
-    "entry_time", "exit_time", "side", "entry_price", "exit_price", "pnl", "duration"
-]
+COLUMNS = ["entry_time", "exit_time", "side", "entry_price", "exit_price", "pnl", "duration"]
 
 
 def trades_from_position(position: pd.Series, prices: pd.Series) -> pd.DataFrame:
@@ -25,11 +23,23 @@ def trades_from_position(position: pd.Series, prices: pd.Series) -> pd.DataFrame
 
     ``position`` and ``prices`` are bar-indexed; ``prices`` is reindexed onto
     ``position``'s index. Each row: entry_time, exit_time, side
-    ('long'/'short'), entry_price, exit_price, pnl, duration (bars held).
+    ('long'/'short'), entry_price, exit_price, pnl, duration (bars between
+    entry and exit, not counting the exit bar).
+
+    Raises ``ValueError`` if ``prices`` has no value for a bar in ``position``'s
+    index — a silently NaN-filled price would corrupt the trade PnL.
     """
     prices = prices.reindex(position.index)
+    if prices.isna().any():
+        missing = prices.index[prices.isna()].tolist()
+        raise ValueError(
+            f"prices is missing values at {missing[:5]} (and possibly more); "
+            "prices and position must share the same bar calendar"
+        )
     rows: list[dict] = []
 
+    # Position values come from model signals and are exactly 0.0 / ±1.0 (or
+    # integer multiples), so float `== 0.0` comparison is safe here.
     open_size = 0.0
     entry_i = 0
     for i in range(len(position)):
@@ -47,7 +57,13 @@ def trades_from_position(position: pd.Series, prices: pd.Series) -> pd.DataFrame
     return pd.DataFrame(rows, columns=COLUMNS)
 
 
-def _close(position, prices, entry_i, exit_i, size) -> dict:
+def _close(
+    position: pd.Series,
+    prices: pd.Series,
+    entry_i: int,
+    exit_i: int,
+    size: float,
+) -> dict:
     entry_price = float(prices.iloc[entry_i])
     exit_price = float(prices.iloc[exit_i])
     return {
