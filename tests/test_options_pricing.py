@@ -77,3 +77,25 @@ def test_implied_vol_put_round_trips() -> None:
     true_vol = 0.18
     price = bs_price("put", 100, 95, 0.75, true_vol, 0.04)
     assert implied_vol(price, "put", 100, 95, 0.75, 0.04) == pytest.approx(true_vol, abs=1e-4)
+
+
+from tradinglib.options.pricing import crr_price
+
+
+def test_crr_european_converges_to_bs() -> None:
+    bs = bs_price("call", 100, 100, 1.0, 0.20, 0.05)
+    crr = crr_price("call", 100, 100, 1.0, 0.20, 0.05, style="european", steps=2000)
+    assert crr == pytest.approx(bs, abs=1e-2)
+
+
+def test_american_call_equals_european_without_dividends() -> None:
+    euro = crr_price("call", 100, 100, 1.0, 0.20, 0.05, style="european", steps=1000)
+    amer = crr_price("call", 100, 100, 1.0, 0.20, 0.05, style="american", steps=1000)
+    assert amer == pytest.approx(euro, abs=1e-6)
+
+
+def test_american_put_at_least_european_put() -> None:
+    euro = crr_price("put", 100, 100, 1.0, 0.20, 0.05, style="european", steps=1000)
+    amer = crr_price("put", 100, 100, 1.0, 0.20, 0.05, style="american", steps=1000)
+    assert amer >= euro - 1e-9
+    assert amer > euro  # early exercise has positive value for an ATM put here
