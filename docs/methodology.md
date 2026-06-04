@@ -30,6 +30,22 @@ captures those assumptions.
   stops, regime filters); choose the vectorized engine for pure-signal
   strategies.
 
+## Options (mark-to-market) results
+
+Options strategies run through `tradinglib.backtest.options_engine`, which
+marks a multi-leg position to market each bar rather than using the linear
+`position × return` math. The resulting `BacktestResult` reuses
+`compute_metrics`, but two fields are reinterpreted:
+
+- **`position`** — net portfolio *delta* expressed as a fraction of equity
+  (`net_delta_shares × spot / equity`), not a target weight.
+- **`turnover`** — traded notional (underlying + option premium) divided by
+  equity for that bar.
+
+`equity_curve` is the portfolio's mark-to-market value and `returns` is its
+bar-over-bar percent change, so Sharpe/Sortino/drawdown stay comparable to
+every other model.
+
 ## Transaction costs
 
 - **Linear in turnover**: Cost per bar = `turnover * (fee_bps + slippage_bps) / 10_000`,
