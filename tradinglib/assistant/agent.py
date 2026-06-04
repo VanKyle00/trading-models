@@ -25,8 +25,28 @@ from tradinglib.assistant.types import (
 _MAX_TURNS = 16  # hard backstop on top of the budget
 
 
-def run_chat(user_message: str, provider: LLMProvider, budget: Budget) -> Iterator[dict[str, Any]]:
-    conversation: list[Message] = [UserMsg(user_message)]
+def run_chat(
+    user_message: str,
+    provider: LLMProvider,
+    budget: Budget,
+    context: str | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Drive the bounded tool-use loop, yielding SSE event dicts.
+
+    ``context`` (optional) is a plain-text summary of the backtest the user is
+    currently looking at. When present it is folded into the opening message so
+    the assistant can answer "explain the worst month" against the on-screen run
+    without first re-running it. Absent, the assistant behaves as a standalone
+    agent that runs its own backtests via its tools.
+    """
+    opening = user_message
+    if context:
+        opening = (
+            "The user is looking at this backtest result on screen:\n"
+            f"{context}\n\n"
+            f"Their question: {user_message}"
+        )
+    conversation: list[Message] = [UserMsg(opening)]
 
     for _ in range(_MAX_TURNS):
         try:

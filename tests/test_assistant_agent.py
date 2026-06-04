@@ -53,6 +53,31 @@ def test_runs_a_tool_then_answers():
     assert "five" in events[-1]["text"]
 
 
+def test_context_is_folded_into_opening_message():
+    provider = StubProvider(
+        [AssistantTurn(text="ok", tool_calls=(), stop_reason="end_turn", usage=Usage(3, 3))]
+    )
+    _events(
+        run_chat(
+            "explain the worst month",
+            provider,
+            Budget(),
+            context="Backtest: Momentum · SPY\nMetrics: Sharpe=1.42",
+        )
+    )
+    opening = provider.calls[0][0].text  # first UserMsg of the first turn
+    assert "Sharpe=1.42" in opening
+    assert "explain the worst month" in opening
+
+
+def test_no_context_leaves_message_verbatim():
+    provider = StubProvider(
+        [AssistantTurn(text="ok", tool_calls=(), stop_reason="end_turn", usage=Usage(3, 3))]
+    )
+    _events(run_chat("hello", provider, Budget()))
+    assert provider.calls[0][0].text == "hello"
+
+
 def test_budget_exhaustion_ends_gracefully():
     looping = [
         AssistantTurn(

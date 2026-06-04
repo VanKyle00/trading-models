@@ -101,8 +101,8 @@ class ClaudeProvider:
             model=self._model,
             max_tokens=self._max_tokens,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            tools=tools,
-            messages=_to_anthropic_messages(conversation),
+            tools=tools,  # type: ignore[arg-type]  # plain dicts; SDK accepts at runtime
+            messages=_to_anthropic_messages(conversation),  # type: ignore[arg-type]
         )
         return _turn_from_response(resp)
 

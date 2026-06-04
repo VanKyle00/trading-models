@@ -79,6 +79,34 @@ def test_index_lists_models_and_params():
     assert "Fast SMA" in html  # a param label from ModelSpec
 
 
+def test_index_has_theme_toggle_and_assistant_console():
+    client = TestClient(create_app())
+    html = client.get("/").text
+    assert 'data-theme-set="bone"' in html and 'data-theme-set="night"' in html
+    assert 'id="composer"' in html  # the assistant console input
+    assert "/api/v1/chat" in html  # console wired to the SSE endpoint
+
+
+def test_run_partial_renders_metric_strip_and_run_context():
+    client = TestClient(create_app())
+    resp = client.post(
+        "/run",
+        data={
+            "model_id": "models/classical/01-sma-crossover-spy",
+            "symbol": "SPY",
+            "start": "2022-01-01",
+            "end": "2023-01-01",
+            "fast": "20",
+            "slow": "50",
+        },
+    )
+    assert resp.status_code == 200
+    html = resp.text
+    assert "metric-strip" in html  # the hero metrics grid
+    assert 'id="run-context"' in html  # context blob the console reads
+    assert "Max Drawdown" in html  # a hero metric label
+
+
 def test_run_partial_renders_results():
     client = TestClient(create_app())
     resp = client.post(
