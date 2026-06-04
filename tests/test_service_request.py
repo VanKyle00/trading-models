@@ -66,3 +66,36 @@ def test_cost_override_rejected_on_incapable_model():
 
 def test_none_symbol_uses_default_ok():
     validate(_req(symbol=None), model_spec(CLASSICAL))  # no raise; run() fills the default
+
+
+def test_bool_rejected_for_float_param():
+    options = "models/options/01-delta-hedged-long-option-spy"
+    with pytest.raises(RequestError, match="type"):
+        validate(
+            BacktestRequest(
+                model_id=options,
+                symbol="SPY",
+                start=date(2023, 1, 1),
+                end=date(2023, 6, 1),
+                params={"implied_vol": True},
+            ),
+            model_spec(options),
+        )
+
+
+def test_initial_capital_override_rejected_on_incapable_model():
+    with pytest.raises(RequestError, match="sizing"):
+        validate(
+            BacktestRequest(
+                model_id=MICRO,
+                symbol="BTCUSDT",
+                start=date(2024, 8, 4),
+                end=date(2024, 8, 6),
+                initial_capital=50_000.0,
+            ),
+            model_spec(MICRO),
+        )
+
+
+def test_sizing_and_capital_override_ok_on_capable_model():
+    validate(_req(size_mult=2.0, initial_capital=50_000.0), model_spec(CLASSICAL))  # no raise

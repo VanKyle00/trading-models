@@ -17,7 +17,7 @@ from tradinglib.service.spec import ModelSpec
 
 
 class RequestError(ValueError):
-    """A backtest request that is invalid against its model's ModelSpec."""
+    """Raised when a BacktestRequest fails validation against its ModelSpec."""
 
 
 @dataclass(frozen=True)
@@ -41,13 +41,16 @@ def validate(request: BacktestRequest, spec: ModelSpec) -> None:
     _validate_symbol(request.symbol, spec)
     _validate_params(request.params, spec)
 
-    overrides_costs = any(
-        v is not None for v in (request.fee_bps, request.slippage_bps, request.initial_capital)
-    )
-    if overrides_costs and not spec.supports_costs:
+    if (
+        request.fee_bps is not None or request.slippage_bps is not None
+    ) and not spec.supports_costs:
         raise RequestError(f"model {spec.name!r} does not support cost overrides")
-    if request.size_mult is not None and not spec.supports_sizing:
-        raise RequestError(f"model {spec.name!r} does not support position sizing")
+    if (
+        request.size_mult is not None or request.initial_capital is not None
+    ) and not spec.supports_sizing:
+        raise RequestError(
+            f"model {spec.name!r} does not support position sizing or capital overrides"
+        )
 
 
 def _validate_symbol(symbol: str | None, spec: ModelSpec) -> None:
@@ -74,7 +77,9 @@ def _validate_params(params: dict[str, Any], spec: ModelSpec) -> None:
             raise RequestError(f"unknown param {name!r} for model {spec.name!r}")
         if p.type == "int" and not (isinstance(value, int) and not isinstance(value, bool)):
             raise RequestError(f"param {name!r} must be type int, got {type(value).__name__}")
-        if p.type == "float" and not isinstance(value, (int, float)):
+        if p.type == "float" and not (
+            isinstance(value, (int, float)) and not isinstance(value, bool)
+        ):
             raise RequestError(f"param {name!r} must be type float, got {type(value).__name__}")
         if not (p.min <= value <= p.max):
             raise RequestError(f"param {name!r}={value} out of range [{p.min}, {p.max}]")
