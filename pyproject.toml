@@ -35,6 +35,8 @@ dependencies = [
     # ML the seed models import unconditionally
     "scikit-learn>=1.5",
     "xgboost>=2.0",
+    # LLM assistant (provider-swappable; Claude is the default backend)
+    "anthropic>=0.69",
 ]
 
 [project.optional-dependencies]

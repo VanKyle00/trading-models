@@ -1,9 +1,27 @@
-<h2>{{ symbol }} — {{ model_name }}</h2>
-<table>
-  {% for k, v in metrics.items() %}
-  <tr><td><strong>{{ k }}</strong></td><td>{{ "%.4f"|format(v) if v is number else v }}</td></tr>
+<div class="run-head">
+  <h2>{{ model_name }} <span class="sym">{{ symbol }}</span></h2>
+</div>
+
+<div class="metric-strip">
+  {% for m in hero %}
+  <div class="metric">
+    <div class="m-label">{{ m.label }}</div>
+    <div class="m-value {{ m.tone }}">{{ m.value }}</div>
+  </div>
   {% endfor %}
-</table>
-{% for name, html in figures.items() %}
-<div class="chart">{{ html|safe }}</div>
-{% endfor %}
+</div>
+
+{% if secondary %}
+<div class="secondary">
+  {% for m in secondary %}<span><b>{{ m.label }}</b> {{ m.value }}</span>{% endfor %}
+</div>
+{% endif %}
+
+<div class="charts">
+  {% for name, html in figures.items() %}
+  <div class="chart" data-chart="{{ name }}">{{ html|safe }}</div>
+  {% endfor %}
+</div>
+
+{# Picked up by the assistant console so chat is grounded in this run. #}
+<script type="application/json" id="run-context">{{ run_context_json|safe }}</script>

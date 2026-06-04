@@ -19,6 +19,17 @@ from tradinglib.service.run import BacktestRun
 Builder = Callable[[BacktestRun], go.Figure]
 BUILDERS: dict[str, Builder] = {}
 
+# Palette — chosen to read on BOTH the bone (light) and night (dark) themes,
+# since charts are rendered server-side once per run and can't restyle on a
+# client-side theme flip. Transparent backgrounds let the page theme show
+# through; the warm mid-grey axis/grid stays legible either way.
+UP = "#2f9e54"
+DOWN = "#cf3b32"
+ACCENT = "#c8852f"
+NEUTRAL = "#8a8478"
+_FONT = "JetBrains Mono, ui-monospace, SFMono-Regular, monospace"
+_GRID = "rgba(138,132,120,0.22)"
+
 
 def register(name: str) -> Callable[[Builder], Builder]:
     def deco(fn: Builder) -> Builder:
@@ -39,7 +50,16 @@ def build_all(run: BacktestRun) -> dict[str, go.Figure]:
 
 
 def _layout(fig: go.Figure, **kw) -> go.Figure:
-    fig.update_layout(margin={"t": 30, "b": 30, "l": 0, "r": 0}, **kw)
+    fig.update_layout(
+        margin={"t": 30, "b": 30, "l": 0, "r": 0},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"family": _FONT, "color": NEUTRAL, "size": 11},
+        legend={"bgcolor": "rgba(0,0,0,0)"},
+        **kw,
+    )
+    fig.update_xaxes(gridcolor=_GRID, zerolinecolor=_GRID, linecolor=_GRID)
+    fig.update_yaxes(gridcolor=_GRID, zerolinecolor=_GRID, linecolor=_GRID)
     return fig
 
 
@@ -55,7 +75,7 @@ def _equity(run: BacktestRun) -> go.Figure:
             x=res.equity_curve.index,
             y=res.equity_curve.values,
             name="Strategy",
-            line={"color": "#2563eb", "width": 2},
+            line={"color": UP, "width": 2},
         )
     )
     fig.add_trace(
@@ -63,7 +83,7 @@ def _equity(run: BacktestRun) -> go.Figure:
             x=buy_hold.index,
             y=buy_hold.values,
             name="Buy & hold",
-            line={"color": "gray", "width": 1.5, "dash": "dash"},
+            line={"color": NEUTRAL, "width": 1.5, "dash": "dash"},
         )
     )
     return _layout(fig, height=380, yaxis_title="Equity ($)")
@@ -79,7 +99,8 @@ def _drawdown(run: BacktestRun) -> go.Figure:
             x=drawdown.index,
             y=drawdown.values,
             fill="tozeroy",
-            line={"color": "#dc2626"},
+            line={"color": DOWN},
+            fillcolor="rgba(207,59,50,0.15)",
             name="Drawdown",
         )
     )
@@ -98,10 +119,10 @@ def _rolling_sharpe(run: BacktestRun, window: int = 63) -> go.Figure:
             x=sharpe.index,
             y=sharpe.values,
             name=f"Rolling Sharpe ({window})",
-            line={"color": "#7c3aed"},
+            line={"color": ACCENT},
         )
     )
-    fig.add_hline(y=0.0, line={"color": "black", "width": 0.5, "dash": "dot"})
+    fig.add_hline(y=0.0, line={"color": NEUTRAL, "width": 0.5, "dash": "dot"})
     return _layout(fig, height=280, yaxis_title="Sharpe")
 
 
@@ -109,7 +130,7 @@ def _rolling_sharpe(run: BacktestRun, window: int = 63) -> go.Figure:
 def _returns_hist(run: BacktestRun) -> go.Figure:
     r = run.result.returns
     fig = go.Figure()
-    fig.add_trace(go.Histogram(x=r.values, nbinsx=60, marker={"color": "#2563eb"}, name="Returns"))
+    fig.add_trace(go.Histogram(x=r.values, nbinsx=60, marker={"color": ACCENT}, name="Returns"))
     return _layout(fig, height=280, xaxis_title="Per-bar return", yaxis_title="Count", bargap=0.02)
 
 
@@ -144,7 +165,8 @@ def _exposure(run: BacktestRun) -> go.Figure:
             y=pos.values,
             fill="tozeroy",
             name="Position",
-            line={"color": "#0891b2"},
+            line={"color": "#3a6ea5"},
+            fillcolor="rgba(58,110,165,0.15)",
         )
     )
     return _layout(fig, height=240, yaxis_title="Position (fraction)")
@@ -167,5 +189,22 @@ def _trades_table(run: BacktestRun) -> go.Figure:
         [f"{v:.2f}" for v in trades["pnl"]],
         list(trades["duration"]),
     ]
-    fig = go.Figure(go.Table(header={"values": header}, cells={"values": cells}))
+    fig = go.Figure(
+        go.Table(
+            header={
+                "values": header,
+                "fill_color": "rgba(138,132,120,0.18)",
+                "font": {"color": NEUTRAL, "family": _FONT},
+                "line_color": _GRID,
+                "align": "left",
+            },
+            cells={
+                "values": cells,
+                "fill_color": "rgba(0,0,0,0)",
+                "font": {"color": NEUTRAL, "family": _FONT},
+                "line_color": _GRID,
+                "align": "left",
+            },
+        )
+    )
     return _layout(fig, height=320)

@@ -69,3 +69,4 @@ htmlcov/
 
 # Superpowers brainstorming/spec artifacts
 docs/superpowers/
+.superpowers/

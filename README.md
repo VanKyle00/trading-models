@@ -35,6 +35,12 @@ The new workbench (richer charts, runs alongside the Streamlit bench) starts wit
 Then open http://localhost:8000. It serves the same backtests as the Streamlit
 app via the shared `tradinglib.service` layer.
 
+The chat assistant uses the Anthropic API — set `ANTHROPIC_API_KEY` in the
+environment to enable `/api/v1/chat`. The model defaults to Claude Haiku 4.5;
+override with `ASSISTANT_MODEL` (e.g. `claude-sonnet-4-6`). The assistant is a
+bounded agent: it can only list models, read a model's spec, and run backtests —
+no code execution — with per-session token/run caps and per-IP rate limiting.
+
 ## Current models
 
 | Model | Family | Window | Assets | OOS Sharpe | Max DD | Status |

@@ -1,58 +1,317 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="bone">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trading Models — Workbench</title>
+
+  <!-- set theme before first paint to avoid a flash -->
+  <script>
+    (function () {
+      try { document.documentElement.setAttribute("data-theme", localStorage.getItem("tm-theme") || "bone"); }
+      catch (e) { document.documentElement.setAttribute("data-theme", "bone"); }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Martian+Mono:wght@500;600&display=swap" rel="stylesheet" />
+
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; display: flex; }
-    aside { width: 320px; padding: 1rem; border-right: 1px solid #e5e7eb; }
-    main { flex: 1; padding: 1rem; }
-    label { display: block; margin: .5rem 0 .15rem; font-size: .85rem; font-weight: 600; }
-    input, select { width: 100%; padding: .35rem; box-sizing: border-box; }
-    button { margin-top: 1rem; padding: .5rem 1rem; background: #2563eb; color: white;
-             border: 0; border-radius: 4px; cursor: pointer; width: 100%; }
-    .error { color: #b91c1c; }
+    :root[data-theme="bone"] {
+      --bg:#e9e4d6; --panel:#ded8c7; --inset:#efe9db;
+      --ink:#1c1b16; --muted:#6f6a5c; --line:#c7bfa9; --line-strong:#1c1b16;
+      --up:#1f7a3d; --down:#b3261e; --accent:#c8852f; --accent-ink:#1c1b16;
+      --field:#f1ecdf;
+    }
+    :root[data-theme="night"] {
+      --bg:#121110; --panel:#1a1815; --inset:#171511;
+      --ink:#e8e2d4; --muted:#8a8478; --line:#34302a; --line-strong:#4a463e;
+      --up:#3fbf6b; --down:#e5534b; --accent:#d39a4f; --accent-ink:#121110;
+      --field:#100f0d;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+      font-size: 13px; line-height: 1.5;
+      display: flex; flex-direction: column; height: 100vh;
+      transition: background .18s ease, color .18s ease;
+    }
+    .label, .m-label, .brand, .seg, .console-head, .rail h2 {
+      font-family: "Martian Mono", "JetBrains Mono", monospace;
+      text-transform: uppercase; letter-spacing: .12em;
+    }
+
+    /* ── top bar ───────────────────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; gap: 14px;
+      padding: 11px 18px; border-bottom: 1px solid var(--line-strong);
+    }
+    .brand { font-size: 14px; font-weight: 600; letter-spacing: .18em; }
+    .topbar .crumb { font-size: 10px; color: var(--muted); letter-spacing: .18em; }
+    .topbar .spacer { flex: 1; }
+
+    .toggle { display: flex; border: 1px solid var(--line-strong); }
+    .toggle button {
+      font-family: "Martian Mono", monospace; font-size: 9px; letter-spacing: .14em;
+      background: transparent; color: var(--muted); border: 0; padding: 6px 11px;
+      cursor: pointer; text-transform: uppercase;
+    }
+    .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+    /* ── body grid ─────────────────────────────────────────── */
+    .body { flex: 1; display: flex; min-height: 0; }
+    .rail {
+      width: 286px; flex-shrink: 0; padding: 16px; overflow-y: auto;
+      border-right: 1px solid var(--line-strong); background: var(--panel);
+    }
+    .rail h2 { font-size: 10px; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .results { flex: 1; overflow-y: auto; padding: 18px; }
+
+    /* ── form ──────────────────────────────────────────────── */
+    label { display: block; font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+            color: var(--muted); margin: 12px 0 4px; font-family: "Martian Mono", monospace; }
+    input, select {
+      width: 100%; padding: 7px 8px; font: inherit; font-size: 12px;
+      background: var(--field); color: var(--ink);
+      border: 1px solid var(--line); border-radius: 0;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .run-btn {
+      margin-top: 18px; width: 100%; padding: 10px; cursor: pointer;
+      font-family: "Martian Mono", monospace; font-size: 11px; letter-spacing: .14em;
+      text-transform: uppercase; font-weight: 600;
+      background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent);
+    }
+    .run-btn:hover { filter: brightness(1.06); }
+    .htmx-indicator { display: none; margin-top: 10px; font-size: 10px; color: var(--muted);
+                      letter-spacing: .14em; text-transform: uppercase; }
+    .htmx-request .htmx-indicator { display: block; }
+    .htmx-request .run-btn { opacity: .6; }
+
+    /* ── results ───────────────────────────────────────────── */
+    .results > .placeholder { color: var(--muted); font-size: 12px; }
+    .run-head h2 { font-size: 17px; margin: 0 0 14px; font-weight: 500; }
+    .run-head .sym { color: var(--accent); margin-left: 6px; }
+
+    .metric-strip { display: grid; grid-template-columns: repeat(4, 1fr);
+                    border: 1px solid var(--line-strong); }
+    .metric { padding: 12px 14px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .m-label { font-size: 8.5px; color: var(--muted); margin-bottom: 5px; }
+    .m-value { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+    .m-value.up { color: var(--up); }
+    .m-value.down { color: var(--down); }
+
+    .secondary { display: flex; flex-wrap: wrap; gap: 18px; padding: 10px 2px 0;
+                 font-size: 11px; color: var(--muted); }
+    .secondary b { color: var(--ink); font-weight: 500; }
+    .secondary b { margin-right: 5px; }
+
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+    .chart { border: 1px solid var(--line); padding: 6px; min-width: 0; }
+    .chart[data-chart="equity"], .chart[data-chart="trades_table"] { grid-column: 1 / -1; }
+
+    /* ── assistant console ─────────────────────────────────── */
+    .console { border-top: 1px solid var(--line-strong); background: var(--inset);
+               display: flex; flex-direction: column; max-height: 42vh; }
+    .console-head { font-size: 9px; color: var(--accent); letter-spacing: .16em;
+                    padding: 9px 16px; border-bottom: 1px solid var(--line);
+                    display: flex; align-items: center; gap: 8px; }
+    .console-head::before { content: "▸"; }
+    .transcript { flex: 1; overflow-y: auto; padding: 12px 16px; font-size: 12px;
+                  display: flex; flex-direction: column; gap: 8px; min-height: 64px; }
+    .transcript .empty { color: var(--muted); }
+    .line.user { color: var(--ink); }
+    .line.user::before { content: "> "; color: var(--accent); }
+    .line.tool { color: var(--muted); font-size: 11px; }
+    .line.bot { color: var(--ink); white-space: pre-wrap; }
+    .line.bot .interim { color: var(--muted); }
+    .composer { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
+    .composer input { flex: 1; }
+    .composer button {
+      padding: 0 16px; cursor: pointer; border: 1px solid var(--line-strong);
+      background: var(--ink); color: var(--bg); font: inherit;
+    }
+    .composer button:disabled { opacity: .5; cursor: default; }
   </style>
 </head>
 <body>
-  <aside>
-    <h2>Configuration</h2>
-    <form hx-post="/run" hx-target="#results" hx-indicator="#spin">
-      <label>Model</label>
-      <select name="model_id">
+  <header class="topbar">
+    <span class="brand">TRADING·MODELS</span>
+    <span class="crumb">/ WORKBENCH</span>
+    <span class="spacer"></span>
+    <div class="toggle" id="theme-toggle">
+      <button type="button" data-theme-set="bone">Bone</button>
+      <button type="button" data-theme-set="night">Night</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="rail">
+      <h2>Configuration</h2>
+      <form hx-post="/run" hx-target="#results" hx-indicator="#spin"
+            hx-on::after-request="document.body.classList.remove('htmx-request')">
+        <label>Model</label>
+        <select name="model_id" id="model-select">
+          {% for s in specs %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+
+        <label>Ticker</label>
+        <input name="symbol" value="SPY" />
+
+        <label>Start</label>
+        <input type="date" name="start" value="2022-01-01" />
+        <label>End</label>
+        <input type="date" name="end" value="2024-12-31" />
+
+        {# One param group per model; JS shows only the selected model's. #}
         {% for s in specs %}
-        <option value="{{ s.id }}">{{ s.name }}</option>
+        <div class="param-group" data-model-params="{{ s.id }}" hidden>
+          {% for p in s.params %}
+          <label>{{ p.label }}</label>
+          <input name="{{ p.name }}" type="number" value="{{ p.default }}"
+                 min="{{ p.min }}" max="{{ p.max }}"
+                 step="{{ '1' if p.type == 'int' else 'any' }}" />
+          {% endfor %}
+        </div>
         {% endfor %}
-      </select>
 
-      <label>Ticker</label>
-      <input name="symbol" value="SPY" />
+        <button type="submit" class="run-btn">&#9654; Run backtest</button>
+        <span id="spin" class="htmx-indicator">Running&#8230;</span>
+      </form>
+    </aside>
 
-      <label>Start</label>
-      <input type="date" name="start" value="2022-01-01" />
-      <label>End</label>
-      <input type="date" name="end" value="2024-12-31" />
+    <main class="main">
+      <section id="results" class="results">
+        <p class="placeholder">Configure a backtest in the left rail and press Run.</p>
+      </section>
 
-      {# Param widgets for EVERY model; the form only sends the selected model's. #}
-      {% for s in specs %}
-        {% for p in s.params %}
-        <label>{{ p.label }}</label>
-        <input name="{{ p.name }}" type="number" value="{{ p.default }}"
-               min="{{ p.min }}" max="{{ p.max }}"
-               step="{{ '1' if p.type == 'int' else 'any' }}" />
-        {% endfor %}
-      {% endfor %}
+      <section class="console">
+        <div class="console-head">Assistant</div>
+        <div class="transcript" id="transcript">
+          <div class="empty">Run a backtest, then ask about it — e.g. &ldquo;explain the worst month&rdquo; or &ldquo;how would a longer lookback change this?&rdquo;</div>
+        </div>
+        <form class="composer" id="composer">
+          <input id="chat-input" autocomplete="off" placeholder="_ ask the assistant" />
+          <button type="submit" id="chat-send">Send</button>
+        </form>
+      </section>
+    </main>
+  </div>
 
-      <button type="submit">&#9654; Run backtest</button>
-      <span id="spin" class="htmx-indicator">Running&#8230;</span>
-    </form>
-  </aside>
-  <main>
-    <h1>Trading Models — Workbench</h1>
-    <div id="results"><p>Configure a backtest and press Run.</p></div>
-  </main>
+  <script>
+    // ── theme toggle ───────────────────────────────────────
+    (function () {
+      var root = document.documentElement, toggle = document.getElementById("theme-toggle");
+      function paint() {
+        var t = root.getAttribute("data-theme");
+        toggle.querySelectorAll("button").forEach(function (b) {
+          b.setAttribute("aria-pressed", String(b.dataset.themeSet === t));
+        });
+      }
+      toggle.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-theme-set]"); if (!b) return;
+        root.setAttribute("data-theme", b.dataset.themeSet);
+        try { localStorage.setItem("tm-theme", b.dataset.themeSet); } catch (_) {}
+        paint();
+      });
+      paint();
+    })();
+
+    // ── show only the selected model's params ──────────────
+    (function () {
+      var sel = document.getElementById("model-select");
+      function sync() {
+        document.querySelectorAll("[data-model-params]").forEach(function (g) {
+          var on = g.dataset.modelParams === sel.value;
+          g.hidden = !on;
+          // disable the other models' inputs so they don't submit — distinct
+          // models can share a param name and would otherwise collide.
+          g.querySelectorAll("input").forEach(function (i) { i.disabled = !on; });
+        });
+      }
+      sel.addEventListener("change", sync); sync();
+    })();
+
+    // keep the run button's pending state in sync with htmx
+    document.body.addEventListener("htmx:beforeRequest", function () {
+      document.body.classList.add("htmx-request");
+    });
+
+    // ── assistant console (POST + SSE over fetch) ──────────
+    (function () {
+      var form = document.getElementById("composer"),
+          input = document.getElementById("chat-input"),
+          sendBtn = document.getElementById("chat-send"),
+          transcript = document.getElementById("transcript");
+
+      function add(cls, text) {
+        var el = document.createElement("div");
+        el.className = "line " + cls; el.textContent = text || "";
+        transcript.appendChild(el); transcript.scrollTop = transcript.scrollHeight;
+        return el;
+      }
+      function currentContext() {
+        var el = document.getElementById("run-context");
+        if (!el) return null;
+        try { return JSON.parse(el.textContent); } catch (_) { return null; }
+      }
+
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var msg = input.value.trim(); if (!msg) return;
+        var empty = transcript.querySelector(".empty"); if (empty) empty.remove();
+        add("user", msg);
+        input.value = ""; input.disabled = sendBtn.disabled = true;
+
+        var bot = add("bot", ""), interim = null;
+        try {
+          var resp = await fetch("/api/v1/chat", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: msg, context: currentContext() })
+          });
+          var reader = resp.body.getReader(), dec = new TextDecoder(), buf = "";
+          while (true) {
+            var r = await reader.read(); if (r.done) break;
+            buf += dec.decode(r.value, { stream: true });
+            var i;
+            while ((i = buf.indexOf("\n\n")) >= 0) {
+              var frame = buf.slice(0, i); buf = buf.slice(i + 2);
+              var dl = frame.split("\n").find(function (l) { return l.startsWith("data:"); });
+              if (!dl) continue;
+              var evt; try { evt = JSON.parse(dl.slice(5).trim()); } catch (_) { continue; }
+              if (evt.type === "text") {
+                if (!interim) { interim = document.createElement("span"); interim.className = "interim"; bot.appendChild(interim); }
+                interim.textContent += evt.text + " ";
+              } else if (evt.type === "tool_call") {
+                add("tool", "⚙ " + evt.name + "(" + JSON.stringify(evt.input) + ")");
+              } else if (evt.type === "tool_result") {
+                add("tool", (evt.is_error ? "✗ " : "✓ ") + evt.name);
+              } else if (evt.type === "final") {
+                if (interim) { interim.remove(); interim = null; }
+                bot.textContent = evt.text;
+              }
+              transcript.scrollTop = transcript.scrollHeight;
+            }
+          }
+          if (!bot.textContent) bot.textContent = "(no response)";
+        } catch (err) {
+          bot.textContent = "Assistant is unavailable right now.";
+        } finally {
+          input.disabled = sendBtn.disabled = false; input.focus();
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -10,17 +10,98 @@ Run locally with::
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
+from tradinglib.assistant import Budget, RateLimiter, run_chat
+from tradinglib.assistant import provider as _assistant_provider
 from tradinglib.service import RequestError, list_specs, model_spec, run, run_to_dict
 from webapp.charts import build_all
 from webapp.forms import request_from_payload
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+_CHAT_LIMITER = RateLimiter(max_per_window=30)
+
+
+# (key, label, kind, tone) — kind drives formatting, tone drives colour.
+#   kind: "pct" → percent, "ratio" → 2dp, "int" → integer
+#   tone: "signed" → green/red by sign, "down" → always red, "neutral" → ink
+_HERO_METRICS = [
+    ("sharpe", "Sharpe", "ratio", "signed"),
+    ("annualized_return", "Ann. Return", "pct", "signed"),
+    ("max_drawdown", "Max Drawdown", "pct", "down"),
+    ("hit_rate", "Hit Rate", "pct", "neutral"),
+]
+_SECONDARY_METRICS = [
+    ("sortino", "Sortino", "ratio"),
+    ("probabilistic_sharpe", "Prob. Sharpe", "pct"),
+    ("deflated_sharpe", "Deflated Sharpe", "pct"),
+    ("n_bars", "Bars", "int"),
+]
+
+
+def _fmt(value: Any, kind: str, signed: bool = False) -> str:
+    if not isinstance(value, (int, float)):
+        return str(value)
+    if kind == "pct":
+        s = f"{value * 100:.1f}%"
+        return f"+{s}" if signed and value > 0 else s
+    if kind == "int":
+        return f"{int(value)}"
+    s = f"{value:.2f}"
+    return f"+{s}" if signed and value > 0 else s
+
+
+def _tone(value: Any, tone: str) -> str:
+    if tone == "down":
+        return "down"
+    if tone == "signed" and isinstance(value, (int, float)):
+        return "up" if value > 0 else "down" if value < 0 else "neutral"
+    return "neutral"
+
+
+def _metric_view(metrics: dict[str, Any]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    hero = [
+        {
+            "label": label,
+            "value": _fmt(metrics[k], kind, tone == "signed"),
+            "tone": _tone(metrics[k], tone),
+        }
+        for k, label, kind, tone in _HERO_METRICS
+        if k in metrics
+    ]
+    secondary = [
+        {"label": label, "value": _fmt(metrics[k], kind)}
+        for k, label, kind in _SECONDARY_METRICS
+        if k in metrics
+    ]
+    return hero, secondary
+
+
+def _chat_context(raw: Any) -> str | None:
+    """Format the frontend's on-screen run descriptor into a plain-text summary.
+
+    Expects a dict like ``{"model": ..., "symbol": ..., "start": ..., "end": ...,
+    "metrics": {name: value}}``. Returns ``None`` for anything malformed so the
+    assistant simply falls back to standalone mode.
+    """
+    if not isinstance(raw, dict):
+        return None
+    lines: list[str] = []
+    head = " · ".join(str(raw[k]) for k in ("model", "symbol") if raw.get(k) not in (None, ""))
+    window = " to ".join(str(raw[k]) for k in ("start", "end") if raw.get(k) not in (None, ""))
+    if head:
+        lines.append(f"Backtest: {head}" + (f" ({window})" if window else ""))
+    metrics = raw.get("metrics")
+    if isinstance(metrics, dict) and metrics:
+        rendered = ", ".join(f"{name}={value}" for name, value in metrics.items())
+        lines.append(f"Metrics: {rendered}")
+    return "\n".join(lines) or None
 
 
 def create_app() -> FastAPI:
@@ -62,16 +143,60 @@ def create_app() -> FastAPI:
             name: fig.to_html(full_html=False, include_plotlyjs=False)
             for name, fig in build_all(br).items()
         }
+        hero, secondary = _metric_view(br.result.metrics)
+        # Compact descriptor the assistant console echoes back with each chat
+        # message, so the agent answers against the run currently on screen.
+        run_context = {
+            "model": spec.name,
+            "symbol": br.symbol,
+            "start": form.get("start"),
+            "end": form.get("end"),
+            "metrics": {c["label"]: c["value"] for c in hero},
+        }
         return _TEMPLATES.TemplateResponse(
             request,
             "_results.html",
             {
                 "symbol": br.symbol,
                 "model_name": spec.name,
-                "metrics": br.result.metrics,
+                "hero": hero,
+                "secondary": secondary,
                 "figures": figures,
+                "run_context_json": json.dumps(run_context),
             },
         )
+
+    @app.post("/api/v1/chat", response_model=None)
+    async def chat(request: Request) -> StreamingResponse | JSONResponse:
+        try:
+            payload = await request.json()
+        except ValueError:
+            return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "body must be a JSON object"}, status_code=400)
+        message = str(payload.get("message", "")).strip()
+        if not message:
+            return JSONResponse({"error": "message is required"}, status_code=400)
+
+        context = _chat_context(payload.get("context"))
+
+        client_ip = request.client.host if request.client else "unknown"
+        if not _CHAT_LIMITER.allow(client_ip):
+            return JSONResponse({"error": "rate limit reached, try later"}, status_code=429)
+
+        def stream() -> Any:
+            try:
+                provider = _assistant_provider.ClaudeProvider()
+                for event in run_chat(message, provider, Budget(), context=context):
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception:  # never break the SSE stream; always end with a final event
+                yield (
+                    "data: "
+                    + json.dumps({"type": "final", "text": "Assistant is unavailable right now."})
+                    + "\n\n"
+                )
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
 
     return app
 
