@@ -23,6 +23,11 @@ dependencies = [
     "joblib>=1.4",
     # Frontend
     "streamlit>=1.40",
+    # Web GUI (FastAPI workbench — runs alongside Streamlit)
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
     # Data loaders the seed models import unconditionally
     "yfinance>=0.2",
     "httpx>=0.27",
