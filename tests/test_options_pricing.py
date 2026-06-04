@@ -6,12 +6,11 @@ import math
 
 import pytest
 
+from tradinglib.options.pricing import bs_greeks, bs_price, crr_price, implied_vol
+
 
 def test_package_imports() -> None:
     import tradinglib.options  # noqa: F401
-
-
-from tradinglib.options.pricing import bs_price
 
 
 def test_bs_call_reference_value() -> None:
@@ -35,9 +34,6 @@ def test_bs_at_expiry_is_intrinsic() -> None:
     assert bs_price("call", 120, 100, 0.0, 0.2, 0.05) == pytest.approx(20.0)
     assert bs_price("put", 80, 100, 0.0, 0.2, 0.05) == pytest.approx(20.0)
     assert bs_price("call", 80, 100, 0.0, 0.2, 0.05) == pytest.approx(0.0)
-
-
-from tradinglib.options.pricing import bs_greeks
 
 
 def test_call_delta_reference() -> None:
@@ -64,9 +60,6 @@ def test_gamma_reference() -> None:
     assert g.gamma == pytest.approx(0.018762, abs=1e-4)
 
 
-from tradinglib.options.pricing import implied_vol
-
-
 def test_implied_vol_round_trips() -> None:
     true_vol = 0.27
     price = bs_price("call", 100, 105, 0.5, true_vol, 0.04)
@@ -77,9 +70,6 @@ def test_implied_vol_put_round_trips() -> None:
     true_vol = 0.18
     price = bs_price("put", 100, 95, 0.75, true_vol, 0.04)
     assert implied_vol(price, "put", 100, 95, 0.75, 0.04) == pytest.approx(true_vol, abs=1e-4)
-
-
-from tradinglib.options.pricing import crr_price
 
 
 def test_crr_european_converges_to_bs() -> None:
