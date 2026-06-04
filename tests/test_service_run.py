@@ -2,6 +2,7 @@
 import json
 from datetime import date
 
+import pandas as pd
 import pytest
 
 from tradinglib.service import BacktestRequest, BacktestRun, run, run_to_dict
@@ -59,3 +60,24 @@ def test_invalid_request_raises_before_dispatch():
     )
     with pytest.raises(RequestError):
         run(bad)
+
+
+def test_series_downsamples_and_keeps_last_point():
+    from tradinglib.service.run import _MAX_POINTS, _series
+
+    idx = pd.date_range("2000-01-01", periods=5000, freq="D")
+    s = pd.Series(range(5000), index=idx, dtype=float)
+    out = _series(s)
+    assert len(out["values"]) <= _MAX_POINTS
+    assert out["values"][-1] == 4999.0  # terminal bar preserved
+    assert out["index"][-1] == idx[-1].isoformat()
+
+
+def test_jsonify_coerces_numpy_scalars():
+    import numpy as np
+
+    from tradinglib.service.run import _jsonify
+
+    out = _jsonify({"a": np.int64(50), "b": np.float64(1.5), "c": "x", "d": [np.int64(7)]})
+    assert out == {"a": 50, "b": 1.5, "c": "x", "d": [7]}
+    json.dumps(out)  # must not raise

@@ -41,6 +41,15 @@ def _load_backtest_module(model_dir: Path) -> ModuleType:
     backtest_file = model_dir / "backtest.py"
     if not backtest_file.exists():
         raise FileNotFoundError(f"no backtest.py at {model_dir}")
+    # Make the model dir importable so backtest.py can import sibling modules
+    # (e.g. the ML model's `from train import ...`). A model's own module-level
+    # sys.path edits would desync a naive pop(0), so snapshot the whole list and
+    # restore it — each run() leaves sys.path exactly as it found it.
+    #
+    # Caveat: sibling modules import under their bare name (e.g. `train`), so two
+    # models that each ship a `train.py` would collide in sys.modules. Acceptable
+    # while only the ML model has one; revisit if a second such model is added.
+    saved_path = sys.path[:]
     sys.path.insert(0, str(model_dir))
     try:
         module_name = f"_model_backtest_{model_dir.name.replace('-', '_')}"
@@ -50,7 +59,7 @@ def _load_backtest_module(model_dir: Path) -> ModuleType:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     finally:
-        sys.path.pop(0)
+        sys.path[:] = saved_path
     return module
 
 
@@ -87,11 +96,37 @@ def run(request: BacktestRequest) -> BacktestRun:
     )
 
 
+def _jsonify(obj: Any) -> Any:
+    """Recursively coerce numpy scalars / timestamps to JSON-native types.
+
+    Keeps ``run_to_dict``'s JSON-safe guarantee robust even if a model returns
+    numpy scalars or date objects in its params/metrics/config.
+    """
+    if obj is None or isinstance(obj, (str, bool, int, float)):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _jsonify(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonify(v) for v in obj]
+    if hasattr(obj, "item"):  # numpy scalar → python scalar
+        return obj.item()
+    if hasattr(obj, "isoformat"):  # date / datetime / Timestamp
+        return obj.isoformat()
+    return str(obj)
+
+
 def _series(s: pd.Series) -> dict[str, list]:
-    """Downsample to <= _MAX_POINTS evenly-spaced points; ISO-format the index."""
+    """Downsample to <= _MAX_POINTS points, always preserving the final bar.
+
+    The terminal value (final equity) is the number users read first, so it is
+    appended if the even-spaced stride would otherwise skip it.
+    """
     if len(s) > _MAX_POINTS:
         step = len(s) // _MAX_POINTS + 1
-        s = s.iloc[::step]
+        sampled = s.iloc[::step]
+        if sampled.index[-1] != s.index[-1]:
+            sampled = pd.concat([sampled, s.iloc[[-1]]])
+        s = sampled
     return {
         "index": [t.isoformat() if hasattr(t, "isoformat") else str(t) for t in s.index],
         "values": [None if pd.isna(v) else float(v) for v in s.values],
@@ -102,16 +137,16 @@ def _iso(t: Any) -> str:
     return t.isoformat() if hasattr(t, "isoformat") else str(t)
 
 
-def run_to_dict(run: BacktestRun) -> dict[str, Any]:
-    res = run.result
-    close = run.data["close"] if "close" in run.data.columns else run.data.iloc[:, 0]
+def run_to_dict(br: BacktestRun) -> dict[str, Any]:
+    res = br.result
+    close = br.data["close"] if "close" in br.data.columns else br.data.iloc[:, 0]
     trades = trades_from_position(res.position, close)
     return {
-        "model_id": run.model_id,
-        "symbol": run.symbol,
-        "params": run.params,
-        "metrics": dict(res.metrics),
-        "config": dict(res.config),
+        "model_id": br.model_id,
+        "symbol": br.symbol,
+        "params": _jsonify(br.params),
+        "metrics": _jsonify(dict(res.metrics)),
+        "config": _jsonify(dict(res.config)),
         "series": {
             "equity": _series(res.equity_curve),
             "returns": _series(res.returns),
