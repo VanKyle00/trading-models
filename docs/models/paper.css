@@ -455,6 +455,7 @@ footer.colophon {
   color: var(--ink);
   margin: 6px 0 6px;
 }
+.toc-item h3::before { content: none; }  /* cards are not document sections; suppress leaked 0.0 counter */
 .toc-item p { margin: 0; font-size: 16px; color: var(--ink-soft); }
 .toc-item .stat {
   font-family: var(--mono);
