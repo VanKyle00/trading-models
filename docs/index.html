@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Models — Research</title>
+<link rel="stylesheet" href="models/paper.css">
+<style>
+  /* hub-only: two-up routing cards */
+  .hub { margin: 22px 0 0; display: grid; gap: 18px; }
+  @media (min-width: 720px) { .hub { grid-template-columns: 1fr 1fr; } }
+  .hub .toc-item { margin: 0; height: 100%; }
+  .hub .toc-item .count {
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); margin-top: 14px;
+  }
+  .hub .toc-item .count b { color: var(--accent); font-weight: 600; }
+  .more {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+    color: var(--ink-faint); margin: 26px 0 0; padding-top: 16px; border-top: 1px solid var(--rule-soft);
+  }
+  .more a { }
+</style>
+</head>
+<body>
+<div class="paper">
+
+  <div class="preprint-bar">
+    <span>trading-models <span class="tag">· research</span></span>
+    <span>Quantitative Research</span>
+  </div>
+
+  <div class="title-block">
+    <h1 class="paper-title">Trading Models — Research</h1>
+    <p class="subtitle">A portfolio of systematic trading models and the theory behind them, in two tracks: empirical model breakdowns, and first-principles concept writeups.</p>
+    <p class="byline"><span class="who">trading-models</span> research notes</p>
+    <p class="dateline">Compiled 2026-06-04 · classical · machine learning · microstructure · alt-data · options</p>
+  </div>
+
+  <div class="abstract">
+    <h2>Overview</h2>
+    <p>This is the reading room for the <a href="https://github.com/VanKyle00/trading-models">trading-models</a> repository. The work is split into two tracks, kept separate on purpose. The <b>model breakdowns</b> are end-to-end empirical papers — one per model, each carrying a hypothesis through a lookahead-safe backtest to a verdict, winners and negative results reported alike. The <b>concept writeups</b> are the theory those models rest on, derived from first principles before any backtest, so that the empirical results are read with the mechanism already in hand.</p>
+    <p>Pick a track below. Shared evaluation conventions live in <a href="methodology.md">methodology.md</a>; shared definitions in the <a href="glossary.md">glossary</a>.</p>
+  </div>
+
+  <h2 class="nonum" style="counter-increment:none">Two Tracks</h2>
+
+  <nav class="hub">
+    <a class="toc-item" href="models/index.html">
+      <span class="no">Track 1 · Empirical</span>
+      <h3>Model Breakdowns</h3>
+      <p class="desc">One self-contained working paper per model — the data, the signal, the backtest, and the
+      result, on a common evaluation protocol so families compare on the same footing. Includes the
+      deliberate negative results.</p>
+      <p class="count"><b>5 papers</b> · classical · ml · microstructure · alt-data · options</p>
+    </a>
+
+    <a class="toc-item" href="concepts/index.html">
+      <span class="no">Track 2 · Theory</span>
+      <h3>Concept Writeups</h3>
+      <p class="desc">First-principles notes on the ideas behind the models — definitions, the equilibrium
+      argument, the testable claim, and where the repository puts it to the test. The "why" that precedes
+      the "does it work".</p>
+      <p class="count"><b>1 note</b> · microstructure &amp; liquidity, with more to come</p>
+    </a>
+  </nav>
+
+  <p class="more">SEE ALSO: <a href="https://github.com/VanKyle00/trading-models">repository</a> · <a href="methodology.md">methodology.md</a> · <a href="glossary.md">glossary.md</a> · <a href="data-sources.md">data-sources.md</a> · <a href="latency-notes.md">latency-notes.md</a></p>
+
+  <footer class="colophon">
+    <p>SOURCE: github.com/VanKyle00/trading-models · BUILT FROM: models/&lt;family&gt;/NN-slug/ + docs/concepts/</p>
+    <p>trading-models · research index · 2026-06-04</p>
+  </footer>
+
+</div>
+</body>
+</html>
