@@ -4,19 +4,31 @@ are comparable. See ``docs/methodology.md`` for assumptions and conventions.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pandas as pd
+from scipy.stats import norm
+
+# Euler-Mascheroni constant, used in the expected-maximum-Sharpe benchmark.
+_EULER_MASCHERONI = 0.5772156649015329
 
 
 def compute_metrics(
     returns: pd.Series,
     equity_curve: pd.Series,
     periods_per_year: int = 252,
+    n_trials: int = 1,
 ) -> dict:
     """Standard performance metrics on a per-bar return series.
 
     Returns a plain dict (JSON-serializable) so each model can dump it to
     ``results/metrics.json`` without further conversion.
+
+    ``n_trials`` is the number of independent strategy configurations tried to
+    arrive at this one; it deflates the Sharpe via the Deflated Sharpe Ratio
+    (Bailey & López de Prado, 2014). ``n_trials=1`` reduces the Deflated Sharpe
+    to the Probabilistic Sharpe Ratio (benchmark 0).
     """
     if len(returns) == 0:
         return _empty_metrics()
@@ -43,14 +55,61 @@ def compute_metrics(
     nonzero = returns[returns != 0.0]
     hit_rate = float((nonzero > 0).mean()) if len(nonzero) > 0 else 0.0
 
+    psr, dsr = _probabilistic_and_deflated_sharpe(returns, std, n_trials)
+
     return {
         "annualized_return": ann_return,
         "sharpe": sharpe,
         "sortino": sortino,
         "max_drawdown": max_drawdown,
         "hit_rate": hit_rate,
+        "probabilistic_sharpe": psr,
+        "deflated_sharpe": dsr,
         "n_bars": len(returns),
     }
+
+
+def _probabilistic_and_deflated_sharpe(
+    returns: pd.Series, std: float, n_trials: int
+) -> tuple[float, float]:
+    """Return (probabilistic_sharpe, deflated_sharpe).
+
+    Both use the *non-annualized* per-bar Sharpe and correct for the skew and
+    kurtosis of the return series (Bailey & López de Prado, 2014). The
+    Probabilistic Sharpe is P(true Sharpe > 0). The Deflated Sharpe raises the
+    benchmark to the expected maximum Sharpe across ``n_trials`` attempts.
+    """
+    n = len(returns)
+    if std <= 0.0 or n < 2:
+        return 0.0, 0.0
+
+    sr = float(returns.mean()) / std  # non-annualized per-bar Sharpe
+
+    skew = float(returns.skew()) if n > 2 else 0.0
+    excess_kurt = float(returns.kurt()) if n > 3 else 0.0
+    if math.isnan(skew):
+        skew = 0.0
+    if math.isnan(excess_kurt):
+        excess_kurt = 0.0
+    kurt = excess_kurt + 3.0  # pandas .kurt() is excess; the formula needs Pearson (normal=3)
+
+    # Variance of the Sharpe estimator (Lo 2002 / Bailey-LdP), per bar.
+    sr_var = (1.0 - skew * sr + ((kurt - 1.0) / 4.0) * sr**2) / (n - 1)
+    if sr_var <= 0.0:
+        return 0.0, 0.0
+    sr_sigma = math.sqrt(sr_var)
+
+    psr = float(norm.cdf(sr / sr_sigma))
+
+    if n_trials <= 1:
+        return psr, psr
+
+    # Expected maximum of n_trials i.i.d. Sharpe estimates ~ N(0, sr_var).
+    z1 = float(norm.ppf(1.0 - 1.0 / n_trials))
+    z2 = float(norm.ppf(1.0 - 1.0 / (n_trials * math.e)))
+    sr_benchmark = sr_sigma * ((1.0 - _EULER_MASCHERONI) * z1 + _EULER_MASCHERONI * z2)
+    dsr = float(norm.cdf((sr - sr_benchmark) / sr_sigma))
+    return psr, dsr
 
 
 def _empty_metrics() -> dict:
@@ -60,5 +119,7 @@ def _empty_metrics() -> dict:
         "sortino": 0.0,
         "max_drawdown": 0.0,
         "hit_rate": 0.0,
+        "probabilistic_sharpe": 0.0,
+        "deflated_sharpe": 0.0,
         "n_bars": 0,
     }
