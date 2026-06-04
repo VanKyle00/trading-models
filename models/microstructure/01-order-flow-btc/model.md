@@ -5,6 +5,12 @@ window: intraday
 assets: [crypto]
 data_sources: [binance_aggTrades]
 tickers: [BTCUSDT]
+supports_costs: false
+supports_sizing: false
+params:
+  - {name: bar_seconds, label: Bar size (seconds), type: int, default: 60, min: 10, max: 300}
+  - {name: smooth_window, label: OFI smoothing window, type: int, default: 5, min: 2, max: 30}
+  - {name: entry_threshold, label: Entry threshold, type: float, default: 0.20, min: 0.01, max: 1.0}
 status: negative-result
 sharpe_oos: -86.37
 max_drawdown: -0.36

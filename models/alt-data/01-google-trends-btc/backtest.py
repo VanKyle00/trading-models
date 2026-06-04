@@ -60,6 +60,10 @@ def run_for_gui(
     *,
     symbol: str = SYMBOL,
     window: int = ZSCORE_WINDOW,
+    fee_bps: float = FEE_BPS,
+    slippage_bps: float = SLIPPAGE_BPS,
+    initial_capital: float = 100_000.0,
+    size_mult: float = 1.0,
 ) -> dict[str, Any]:
     """Trends contrarian backtest on a user-selected sub-window.
 
@@ -89,7 +93,7 @@ def run_for_gui(
     mask = (btc_weekly.index >= start_ts) & (btc_weekly.index <= end_ts)
     btc_weekly = btc_weekly.loc[mask]
     interest = interest.loc[mask]
-    signal = signal_full.loc[mask]
+    signal = signal_full.loc[mask] * size_mult
 
     if len(btc_weekly) < 2:
         raise ValueError(
@@ -106,8 +110,9 @@ def run_for_gui(
         btc_weekly,
         signal,
         execution_prices=weekly_open,
-        fee_bps=FEE_BPS,
-        slippage_bps=SLIPPAGE_BPS,
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        initial_capital=initial_capital,
         periods_per_year=52,
     )
 
@@ -120,6 +125,10 @@ def run_for_gui(
             "start": str(start),
             "end": str(end),
             "zscore_window": window,
+            "fee_bps": fee_bps,
+            "slippage_bps": slippage_bps,
+            "initial_capital": initial_capital,
+            "size_mult": size_mult,
         },
     }
 

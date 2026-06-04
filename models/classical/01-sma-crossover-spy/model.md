@@ -6,6 +6,9 @@ assets: [equities]
 data_sources: [yfinance_daily_bars]
 tickers: any
 default_ticker: SPY
+params:
+  - {name: fast, label: Fast SMA, type: int, default: 50, min: 5, max: 150}
+  - {name: slow, label: Slow SMA, type: int, default: 200, min: 50, max: 400}
 status: working
 sharpe_oos: 0.75
 max_drawdown: -0.34

@@ -5,6 +5,8 @@ window: swing
 assets: [crypto]
 data_sources: [google_trends_bitcoin, yfinance_daily_bars]
 tickers: [BTC-USD]
+params:
+  - {name: window, label: Z-score window (weeks), type: int, default: 4, min: 2, max: 12}
 status: negative-result
 sharpe_oos: -0.30
 max_drawdown: -0.80
