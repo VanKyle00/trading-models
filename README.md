@@ -1,5 +1,7 @@
 # Trading Models
 
+📄 **[Read the working papers →](https://vankyle00.github.io/trading-models/)** — in-depth research write-ups, one self-contained paper per model.
+
 A growing portfolio of trading models spanning classical quant, machine
 learning, market microstructure, and alternative data — across US equities
 and crypto.
