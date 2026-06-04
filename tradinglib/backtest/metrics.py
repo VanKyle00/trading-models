@@ -30,6 +30,8 @@ def compute_metrics(
     (Bailey & López de Prado, 2014). ``n_trials=1`` reduces the Deflated Sharpe
     to the Probabilistic Sharpe Ratio (benchmark 0).
     """
+    if n_trials < 1:
+        raise ValueError(f"n_trials must be >= 1, got {n_trials}")
     if len(returns) == 0:
         return _empty_metrics()
 
@@ -55,7 +57,7 @@ def compute_metrics(
     nonzero = returns[returns != 0.0]
     hit_rate = float((nonzero > 0).mean()) if len(nonzero) > 0 else 0.0
 
-    psr, dsr = _probabilistic_and_deflated_sharpe(returns, std, n_trials)
+    psr, dsr = _probabilistic_and_deflated_sharpe(returns, mean, std, n_trials)
 
     return {
         "annualized_return": ann_return,
@@ -70,7 +72,7 @@ def compute_metrics(
 
 
 def _probabilistic_and_deflated_sharpe(
-    returns: pd.Series, std: float, n_trials: int
+    returns: pd.Series, mean: float, std: float, n_trials: int
 ) -> tuple[float, float]:
     """Return (probabilistic_sharpe, deflated_sharpe).
 
@@ -83,7 +85,7 @@ def _probabilistic_and_deflated_sharpe(
     if std <= 0.0 or n < 2:
         return 0.0, 0.0
 
-    sr = float(returns.mean()) / std  # non-annualized per-bar Sharpe
+    sr = mean / std  # non-annualized per-bar Sharpe
 
     skew = float(returns.skew()) if n > 2 else 0.0
     excess_kurt = float(returns.kurt()) if n > 3 else 0.0
@@ -95,6 +97,9 @@ def _probabilistic_and_deflated_sharpe(
 
     # Variance of the Sharpe estimator (Lo 2002 / Bailey-LdP), per bar.
     sr_var = (1.0 - skew * sr + ((kurt - 1.0) / 4.0) * sr**2) / (n - 1)
+    # The Lo approximation's variance can go negative for extreme skew/kurtosis
+    # combinations (outside its valid domain). Return 0 as a conservative
+    # sentinel rather than a spurious probability.
     if sr_var <= 0.0:
         return 0.0, 0.0
     sr_sigma = math.sqrt(sr_var)

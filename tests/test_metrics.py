@@ -59,3 +59,18 @@ def test_empty_metrics_has_new_keys() -> None:
     metrics = compute_metrics(pd.Series([], dtype=float), pd.Series([], dtype=float))
     assert metrics["probabilistic_sharpe"] == 0.0
     assert metrics["deflated_sharpe"] == 0.0
+
+
+def test_n_trials_below_one_raises() -> None:
+    returns = pd.Series([0.01, -0.01] * 30)
+    with pytest.raises(ValueError, match="n_trials must be >= 1"):
+        compute_metrics(returns, _equity(returns), n_trials=0)
+
+
+def test_n_trials_two_deflates_below_psr() -> None:
+    # First call through the full benchmark formula (no short-circuit). With a
+    # positive-mean series the deflated Sharpe must drop below the PSR.
+    rng = np.random.default_rng(2)
+    returns = pd.Series(rng.normal(0.001, 0.01, size=250))
+    metrics = compute_metrics(returns, _equity(returns), n_trials=2)
+    assert metrics["deflated_sharpe"] < metrics["probabilistic_sharpe"]
