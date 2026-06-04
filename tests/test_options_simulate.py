@@ -39,14 +39,13 @@ def test_seed_is_deterministic() -> None:
     assert np.array_equal(a, b)
 
 
-def _long_call_factory(expiry_index: int):
-    """Return a strategy-factory that buys one ATM call at bar 0."""
+def _long_call_factory():
+    """Return a strategy-factory that buys one ATM call at bar 0 with a 30-day expiry."""
 
     def factory():
         class BuyCall:
             def __init__(self) -> None:
                 self.opened = False
-                self.expiry_index = expiry_index
 
             def on_bar(self, engine: OptionsEngine, t, spot) -> None:
                 if not self.opened:
@@ -61,7 +60,7 @@ def _long_call_factory(expiry_index: int):
 
 def test_run_simulation_returns_distribution() -> None:
     result = run_simulation(
-        _long_call_factory(20),
+        _long_call_factory(),
         spot=100.0,
         vol=0.2,
         rate=0.04,
@@ -74,11 +73,15 @@ def test_run_simulation_returns_distribution() -> None:
     assert 0.0 <= result.prob_of_profit <= 1.0
     assert set(result.percentiles) == {5, 25, 50, 75, 95}
     assert result.percentiles[5] <= result.percentiles[95]
+    assert result.truncated is False
+    assert result.expected_shortfall <= result.percentiles[5]
+    assert result.percentiles[5] <= result.percentiles[50] <= result.percentiles[95]
+    assert math.isfinite(result.mean) and result.std >= 0.0
 
 
 def test_simulation_respects_max_paths_cap() -> None:
     result = run_simulation(
-        _long_call_factory(10),
+        _long_call_factory(),
         spot=100.0,
         vol=0.2,
         rate=0.04,

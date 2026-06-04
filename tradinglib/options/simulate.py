@@ -63,7 +63,7 @@ class SimulationResult:
     expected_shortfall: float             # mean P&L of the worst 5% of paths
     mean: float
     std: float
-    sample_paths: np.ndarray              # a handful of underlying paths for plotting
+    sample_paths: np.ndarray              # up to n_sample_paths underlying paths for plotting
     truncated: bool                       # True if n_paths was clamped to max_paths
 
 
@@ -112,7 +112,7 @@ def run_simulation(
     pct_values = np.percentile(pnl, pct_levels)
     percentiles = {lvl: float(v) for lvl, v in zip(pct_levels, pct_values, strict=True)}
     worst_5pct = pnl[pnl <= percentiles[5]]
-    expected_shortfall = float(worst_5pct.mean()) if worst_5pct.size else float(pnl.min())
+    expected_shortfall = float(worst_5pct.mean())
 
     return SimulationResult(
         pnl_distribution=pnl,
@@ -121,6 +121,6 @@ def run_simulation(
         expected_shortfall=expected_shortfall,
         mean=float(pnl.mean()),
         std=float(pnl.std(ddof=0)),
-        sample_paths=paths[:n_sample_paths],
+        sample_paths=paths[: min(n_sample_paths, n_paths)],
         truncated=truncated,
     )
