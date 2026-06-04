@@ -14,26 +14,26 @@ table below are directly comparable.
 
 ## Live demo
 
-There's an interactive Streamlit app at **[trading-models.streamlit.app](https://trading-models-swqny2mhsqftylrq8hj3w9.streamlit.app/)**
-where you can pick a model, see its input data, and run a backtest over
-any date range or canonical regime window (COVID crash, 2022 bear, BTC
-2024-08-05 crash, etc.) without installing anything locally.
+**▶ [Open the workbench →](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run)**
+— the interactive test area, deployed on [Modal](https://modal.com). Pick a
+model, jump straight to a notable **market event** (COVID crash, 2022 bear,
+GFC 2008, FTX collapse, … — the list adapts to the model's asset class), and
+run a backtest over any window. Results render as rich Plotly charts with a
+hero metric strip, and a built-in **LLM assistant** answers questions grounded
+in the run you're looking at. Bone / night themes, nothing to install.
 
-To run the app yourself:
+> First load can take a few seconds — the app scales to zero when idle.
+
+There's also the original **[Streamlit app](https://trading-models-swqny2mhsqftylrq8hj3w9.streamlit.app/)**,
+which serves the same backtests via the shared `tradinglib.service` layer.
+
+### Run the workbench locally
 
 ```bash
 uv sync
-uv run streamlit run app/streamlit_app.py
+uv run uvicorn webapp.main:app --reload    # FastAPI workbench → http://localhost:8000
+uv run streamlit run app/streamlit_app.py  # original Streamlit app
 ```
-
-### Run the FastAPI workbench locally
-
-The new workbench (richer charts, runs alongside the Streamlit bench) starts with:
-
-    uv run uvicorn webapp.main:app --reload
-
-Then open http://localhost:8000. It serves the same backtests as the Streamlit
-app via the shared `tradinglib.service` layer.
 
 The chat assistant uses the Anthropic API — set `ANTHROPIC_API_KEY` in the
 environment to enable `/api/v1/chat`. The model defaults to Claude Haiku 4.5;
@@ -98,7 +98,9 @@ auto-generated from each model's `model.md` frontmatter.
 
 | Directory | What lives there |
 | --- | --- |
+| `webapp/` | FastAPI workbench (the live demo) — themed UI, Plotly charts, market-event presets, LLM chat console |
 | `app/` | Streamlit GUI for browsing models + running backtests interactively |
+| `deploy/` | `modal_app.py` — Modal deployment of the workbench (see [`docs/DEPLOY.md`](docs/DEPLOY.md)) |
 | `tradinglib/` | Shared package — data, features, backtest engine, metrics, viz |
 | `tradinglib/loaders/` | Data loaders, one subpackage per asset class |
 | `data/ingestion/` | Documentation of each data source |
@@ -112,7 +114,7 @@ auto-generated from each model's `model.md` frontmatter.
 | `docs/models/` | Working papers — one empirical breakdown per model (the model catalogue) |
 | `docs/concepts/` | Concept writeups — first-principles theory behind the signals |
 | `scripts/` | Maintenance scripts (e.g., regenerating `MODELS.md`) |
-| `tests/` | Unit tests for `tradinglib` |
+| `tests/` | Unit tests for `tradinglib`, the `webapp`, and the LLM assistant |
 
 ## Quick start
 
