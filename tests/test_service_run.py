@@ -102,3 +102,24 @@ def test_every_model_runs_and_serializes(spec):
         pytest.skip(f"{spec.family}: data unavailable in this environment ({exc})")
     assert set(result) >= BASELINE_KEYS
     json.dumps(result)
+
+
+def test_run_to_dict_baseline_value_types(classical_run):
+    # Additive contract: baseline keys must keep their value TYPES, not just exist.
+    d = run_to_dict(classical_run)
+    assert isinstance(d["model_id"], str)
+    assert isinstance(d["symbol"], str)
+    assert isinstance(d["params"], dict)
+    assert isinstance(d["metrics"], dict)
+    assert isinstance(d["config"], dict)
+    assert isinstance(d["series"], dict)
+    assert isinstance(d["trades"], list)
+
+
+def test_backtest_request_optional_fields_construct_with_defaults():
+    # Additive contract: every non-core field must stay optional.
+    req = BacktestRequest(model_id=CLASSICAL, start=date(2022, 1, 1), end=date(2022, 6, 1))
+    assert req.symbol is None
+    assert req.fee_bps is None and req.slippage_bps is None
+    assert req.initial_capital is None and req.size_mult is None
+    assert req.params == {}

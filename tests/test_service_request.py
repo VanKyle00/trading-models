@@ -99,3 +99,27 @@ def test_initial_capital_override_rejected_on_incapable_model():
 
 def test_sizing_and_capital_override_ok_on_capable_model():
     validate(_req(size_mult=2.0, initial_capital=50_000.0), model_spec(CLASSICAL))  # no raise
+
+
+def test_negative_fee_rejected():
+    with pytest.raises(RequestError, match="fee_bps"):
+        validate(_req(fee_bps=-1.0), model_spec(CLASSICAL))
+
+
+def test_nonpositive_initial_capital_rejected():
+    with pytest.raises(RequestError, match="initial_capital"):
+        validate(_req(initial_capital=0.0), model_spec(CLASSICAL))
+
+
+def test_size_mult_out_of_bounds_rejected():
+    with pytest.raises(RequestError, match="size_mult"):
+        validate(_req(size_mult=0.0), model_spec(CLASSICAL))
+    with pytest.raises(RequestError, match="size_mult"):
+        validate(_req(size_mult=100.0), model_spec(CLASSICAL))
+
+
+def test_reasonable_overrides_pass():
+    validate(
+        _req(fee_bps=2.0, slippage_bps=1.0, initial_capital=250_000.0, size_mult=2.0),
+        model_spec(CLASSICAL),
+    )

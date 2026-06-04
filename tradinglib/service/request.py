@@ -51,6 +51,7 @@ def validate(request: BacktestRequest, spec: ModelSpec) -> None:
         raise RequestError(
             f"model {spec.name!r} does not support position sizing or capital overrides"
         )
+    _validate_override_bounds(request)
 
 
 def _validate_symbol(symbol: str | None, spec: ModelSpec) -> None:
@@ -83,3 +84,21 @@ def _validate_params(params: dict[str, Any], spec: ModelSpec) -> None:
             raise RequestError(f"param {name!r} must be type float, got {type(value).__name__}")
         if not (p.min <= value <= p.max):
             raise RequestError(f"param {name!r}={value} out of range [{p.min}, {p.max}]")
+
+
+def _validate_override_bounds(request: BacktestRequest) -> None:
+    """Sanity bounds on cost/sizing overrides.
+
+    These are correctness invariants (negative costs, non-positive capital, and
+    absurd leverage are nonsensical), not UX limits — the GUI/LLM declare their
+    own widget ranges. ``validate`` is the single gate both consumers reuse, so a
+    model-generated request can never reach the engine with a degenerate value.
+    """
+    if request.fee_bps is not None and not (0.0 <= request.fee_bps <= 10_000.0):
+        raise RequestError(f"fee_bps {request.fee_bps} out of range [0, 10000]")
+    if request.slippage_bps is not None and not (0.0 <= request.slippage_bps <= 10_000.0):
+        raise RequestError(f"slippage_bps {request.slippage_bps} out of range [0, 10000]")
+    if request.initial_capital is not None and request.initial_capital <= 0.0:
+        raise RequestError(f"initial_capital must be > 0, got {request.initial_capital}")
+    if request.size_mult is not None and not (0.0 < request.size_mult <= 10.0):
+        raise RequestError(f"size_mult {request.size_mult} out of range (0, 10]")
