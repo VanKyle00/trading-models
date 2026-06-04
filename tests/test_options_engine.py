@@ -79,6 +79,33 @@ def test_expired_leg_settles_to_intrinsic() -> None:
     assert result.equity_curve.iloc[-1] == pytest.approx(result.equity_curve.iloc[-2], abs=1e-6)
 
 
+def test_negative_equity_yields_nan_diagnostics() -> None:
+    # Short a naked call into a large up-move so equity goes negative.
+    idx = pd.date_range("2024-01-01", periods=5, freq="B")
+    prices = pd.Series([100.0, 100.0, 5000.0, 5000.0, 5000.0], index=idx)
+    expiry = idx[-1] + pd.Timedelta(days=30)
+
+    class ShortCall:
+        def __init__(self) -> None:
+            self.opened = False
+
+        def on_bar(self, engine: OptionsEngine, t, spot) -> None:
+            if not self.opened:
+                # Tiny capital, large short position -> guaranteed blow-up on the jump.
+                engine.add_leg(OptionLeg("call", strike=100.0, expiry=expiry, quantity=-50.0))
+                self.opened = True
+
+    result = run_options_backtest(
+        prices, ShortCall(), vol=0.2, rate=0.04, initial_capital=1_000.0,
+        fee_bps=0, slippage_bps=0,
+    )
+    assert (result.equity_curve < 0).any()  # confirm the blow-up actually happened
+    # On the blown-up bars, diagnostics are NaN rather than sign-flipped numbers.
+    blown = result.equity_curve < 0
+    assert np.isnan(result.position[blown]).all()
+    assert np.isnan(result.turnover[blown]).all()
+
+
 def test_delta_hedged_position_is_insensitive_to_small_moves() -> None:
     idx = pd.date_range("2024-01-01", periods=3, freq="B")
     prices = pd.Series([100.0, 100.5, 100.5], index=idx)

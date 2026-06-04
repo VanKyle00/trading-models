@@ -31,6 +31,8 @@ class OptionsStrategy(Protocol):
 
 
 def _years_between(now: pd.Timestamp, expiry: pd.Timestamp) -> float:
+    # Actual/365 calendar-day convention — standard for option pricing and
+    # independent of the returns-annualization `periods_per_year=252` used elsewhere.
     return max((expiry - now).days, 0) / 365.0
 
 
@@ -65,6 +67,9 @@ class OptionsEngine:
         return bs_price(leg.right, self.spot, leg.strike, t_yrs, self.vol, self.rate)
 
     def _leg_delta(self, leg: OptionLeg) -> float:
+        # Uses BSM delta for ALL legs, including American-style ones — a known
+        # phase-1 limitation.  The European seed model is unaffected; revisit
+        # when adding American-style hedged strategies.
         assert self.t is not None
         t_yrs = _years_between(self.t, leg.expiry)
         return bs_greeks(leg.right, self.spot, leg.strike, t_yrs, self.vol, self.rate).delta
@@ -116,6 +121,7 @@ class OptionsEngine:
         assert self.t is not None
         survivors: list[OptionLeg] = []
         for leg in self.position.legs:
+            # `<= 0` (not `== 0`) also settles any leg whose expiry has already passed.
             if (leg.expiry - self.t).days <= 0:
                 self.position.cash += leg.quantity * intrinsic_value(leg, self.spot) * CONTRACT_MULTIPLIER
             else:
@@ -152,8 +158,8 @@ def run_options_backtest(
 
         eq = engine.equity()
         equities.append(eq)
-        deltas.append(engine.net_delta_shares() * engine.spot / eq if eq != 0 else 0.0)
-        turnovers.append(engine._bar_notional / eq if eq != 0 else 0.0)
+        deltas.append(engine.net_delta_shares() * engine.spot / eq if eq > 0 else float("nan"))
+        turnovers.append(engine._bar_notional / eq if eq > 0 else float("nan"))
 
     equity_curve = pd.Series(equities, index=prices.index, name="equity")
     returns = equity_curve.pct_change().fillna(0.0)
