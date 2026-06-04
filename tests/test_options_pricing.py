@@ -35,3 +35,30 @@ def test_bs_at_expiry_is_intrinsic() -> None:
     assert bs_price("call", 120, 100, 0.0, 0.2, 0.05) == pytest.approx(20.0)
     assert bs_price("put", 80, 100, 0.0, 0.2, 0.05) == pytest.approx(20.0)
     assert bs_price("call", 80, 100, 0.0, 0.2, 0.05) == pytest.approx(0.0)
+
+
+from tradinglib.options.pricing import bs_greeks
+
+
+def test_call_delta_reference() -> None:
+    g = bs_greeks("call", 100, 100, 1.0, 0.20, 0.05)
+    assert g.delta == pytest.approx(0.6368, abs=1e-3)
+
+
+def test_put_delta_is_call_delta_minus_one() -> None:
+    c = bs_greeks("call", 100, 100, 1.0, 0.20, 0.05)
+    p = bs_greeks("put", 100, 100, 1.0, 0.20, 0.05)
+    assert p.delta == pytest.approx(c.delta - 1.0, abs=1e-9)
+
+
+def test_delta_matches_finite_difference() -> None:
+    eps = 1e-4
+    up = bs_price("call", 100 + eps, 100, 1.0, 0.20, 0.05)
+    dn = bs_price("call", 100 - eps, 100, 1.0, 0.20, 0.05)
+    fd_delta = (up - dn) / (2 * eps)
+    assert bs_greeks("call", 100, 100, 1.0, 0.20, 0.05).delta == pytest.approx(fd_delta, abs=1e-4)
+
+
+def test_gamma_reference() -> None:
+    g = bs_greeks("call", 100, 100, 1.0, 0.20, 0.05)
+    assert g.gamma == pytest.approx(0.018762, abs=1e-4)
