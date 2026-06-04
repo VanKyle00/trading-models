@@ -109,3 +109,20 @@ def test_run_partial_bad_request_shows_error():
     )
     assert resp.status_code == 400
     assert "before end" in resp.text or "error" in resp.text.lower()
+
+
+def test_run_partial_bad_ticker_shows_error_not_500():
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    resp = client.post(
+        "/run",
+        data={
+            "model_id": "models/classical/01-sma-crossover-spy",
+            "symbol": "NOTAREALTICKER_ZZZ",
+            "start": "2022-01-01",
+            "end": "2023-01-01",
+            "fast": "20",
+            "slow": "50",
+        },
+    )
+    assert resp.status_code == 400
+    assert "could not run" in resp.text.lower()

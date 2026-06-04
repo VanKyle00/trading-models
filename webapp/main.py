@@ -56,7 +56,7 @@ def create_app() -> FastAPI:
             spec = model_spec(str(form.get("model_id", "")))
             req = request_from_payload(form, spec)
             br = run(req)
-        except (RequestError, KeyError) as exc:
+        except (RequestError, KeyError, ValueError) as exc:
             return HTMLResponse(f'<p class="error">Could not run: {exc}</p>', status_code=400)
         figures = {
             name: fig.to_html(full_html=False, include_plotlyjs=False)
