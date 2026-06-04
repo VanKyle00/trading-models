@@ -89,3 +89,40 @@ def test_american_put_at_least_european_put() -> None:
     amer = crr_price("put", 100, 100, 1.0, 0.20, 0.05, style="american", steps=1000)
     assert amer >= euro - 1e-9
     assert amer > euro  # early exercise has positive value for an ATM put here
+
+
+# ---------------------------------------------------------------------------
+# New tests (TDD — written before the fixes, expected to fail until guards land)
+# ---------------------------------------------------------------------------
+
+
+def test_bs_price_raises_on_nonpositive_strike() -> None:
+    with pytest.raises(ValueError):
+        bs_price("call", 100, 0, 1.0, 0.2, 0.05)
+
+
+def test_implied_vol_raises_below_min() -> None:
+    # price=-0.01 is below the minimum BS price (always non-negative) for an OTM call
+    with pytest.raises(ValueError):
+        implied_vol(-0.01, "call", 100, 110, 0.5, 0.04)
+
+
+def test_implied_vol_raises_above_max() -> None:
+    # price=99.0 is absurdly above the max BS price for this call
+    with pytest.raises(ValueError):
+        implied_vol(99.0, "call", 100, 110, 0.5, 0.04)
+
+
+def test_crr_raises_on_nonpositive_steps() -> None:
+    with pytest.raises(ValueError):
+        crr_price("call", 100, 100, 1.0, 0.2, 0.05, steps=0)
+
+
+def test_vega_finite_difference() -> None:
+    eps = 1e-4
+    spot, strike, t, vol, rate = 100.0, 100.0, 1.0, 0.20, 0.05
+    fd_vega = (
+        bs_price("call", spot, strike, t, vol + eps, rate)
+        - bs_price("call", spot, strike, t, vol - eps, rate)
+    ) / (2 * eps)
+    assert bs_greeks("call", spot, strike, t, vol, rate).vega == pytest.approx(fd_vega, abs=1e-2)

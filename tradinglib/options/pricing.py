@@ -32,9 +32,18 @@ def _intrinsic(right: Right, spot: float, strike: float) -> float:
     return max(strike - spot, 0.0)
 
 
-def _d1_d2(spot: float, strike: float, t: float, vol: float, rate: float, div: float) -> tuple[float, float]:
-    d1 = (math.log(spot / strike) + (rate - div + 0.5 * vol * vol) * t) / (vol * math.sqrt(t))
-    d2 = d1 - vol * math.sqrt(t)
+def _d1_d2(
+    spot: float,
+    strike: float,
+    t: float,
+    vol: float,
+    rate: float,
+    div: float,
+) -> tuple[float, float]:
+    sqrt_t = math.sqrt(t)
+    vol_sqrt_t = vol * sqrt_t
+    d1 = (math.log(spot / strike) + (rate - div + 0.5 * vol * vol) * t) / vol_sqrt_t
+    d2 = d1 - vol_sqrt_t
     return d1, d2
 
 
@@ -48,6 +57,10 @@ def bs_price(
     div: float = 0.0,
 ) -> float:
     """Black-Scholes-Merton price of a European option."""
+    if spot <= 0 or strike <= 0:
+        raise ValueError(
+            f"spot and strike must be positive; got spot={spot}, strike={strike}"
+        )
     if t <= 0 or vol <= 0:
         return _intrinsic(right, spot, strike)
     d1, d2 = _d1_d2(spot, strike, t, vol, rate, div)
@@ -64,6 +77,9 @@ class Greeks:
 
     Divide by 100 for per-1%-move conventions. ``theta`` is per YEAR; divide by
     365 for per-calendar-day.
+
+    Example: ``vega=37.5`` means the option gains $0.375 for each +1% rise in
+    implied vol (i.e. ``+0.01 * vega``).
     """
 
     delta: float
@@ -83,6 +99,10 @@ def bs_greeks(
     div: float = 0.0,
 ) -> Greeks:
     """First-order Black-Scholes Greeks for a European option."""
+    if spot <= 0 or strike <= 0:
+        raise ValueError(
+            f"spot and strike must be positive; got spot={spot}, strike={strike}"
+        )
     if t <= 0 or vol <= 0:
         # At/after expiry: delta is a step function, other Greeks vanish.
         if right == "call":
@@ -135,8 +155,18 @@ def implied_vol(
     Uses Brent's method on ``[lo, hi]``. Raises ``ValueError`` if the price is
     below intrinsic (no real implied vol exists).
     """
-    if price < _intrinsic(right, spot, strike) - 1e-9:
-        raise ValueError(f"price {price} is below intrinsic value")
+    min_price = bs_price(right, spot, strike, t, lo, rate, div)
+    max_price = bs_price(right, spot, strike, t, hi, rate, div)
+    if price < min_price:
+        raise ValueError(
+            f"price {price} is below the minimum BS price {min_price:.6g} at vol={lo};"
+            " implied vol is not well-defined"
+        )
+    if price > max_price:
+        raise ValueError(
+            f"price {price} exceeds the maximum BS price {max_price:.6g} at vol={hi};"
+            " increase hi or inspect the data"
+        )
 
     def objective(vol: float) -> float:
         return bs_price(right, spot, strike, t, vol, rate, div) - price
@@ -156,6 +186,12 @@ def crr_price(
     steps: int = 512,
 ) -> float:
     """Cox-Ross-Rubinstein binomial price. American style checks early exercise."""
+    if steps < 1:
+        raise ValueError(f"steps must be >= 1, got {steps}")
+    if spot <= 0 or strike <= 0:
+        raise ValueError(
+            f"spot and strike must be positive; got spot={spot}, strike={strike}"
+        )
     if t <= 0 or vol <= 0:
         return _intrinsic(right, spot, strike)
 
@@ -177,8 +213,8 @@ def crr_price(
     for step in range(steps, 0, -1):
         values = disc * (p * values[1:step + 1] + (1 - p) * values[0:step])
         if style == "american":
-            j = np.arange(step)
-            spot_nodes = spot * u**j * d ** (step - 1 - j)
+            node_idx = np.arange(step)
+            spot_nodes = spot * u**node_idx * d ** (step - 1 - node_idx)
             if right == "call":
                 exercise = np.maximum(spot_nodes - strike, 0.0)
             else:
