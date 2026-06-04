@@ -8,11 +8,15 @@ modules that already exist so the package imports cleanly at every stage.
 
 from __future__ import annotations
 
+from tradinglib.service.request import BacktestRequest, RequestError, validate
 from tradinglib.service.spec import ModelSpec, ParamSpec, list_specs, model_spec
 
 __all__ = [
+    "BacktestRequest",
     "ModelSpec",
     "ParamSpec",
+    "RequestError",
     "list_specs",
     "model_spec",
+    "validate",
 ]
