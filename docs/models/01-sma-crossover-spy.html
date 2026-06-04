@@ -36,7 +36,7 @@
 
   <div class="abstract">
     <h2>Abstract</h2>
-    <p>We study the canonical 50/200-day simple-moving-average (SMA) crossover applied to SPY daily adjusted bars over 2010–2024 (3,774 bars). We treat the rule not as folklore but as a linear filtering problem: each SMA is a finite-impulse-response (FIR) low-pass filter whose Dirichlet-kernel frequency response carries a constant <em>group delay</em> of \((n-1)/2\) samples, and the crossover difference \(D_t=\mathrm{SMA}_{50}-\mathrm{SMA}_{200}\) is a difference-of-low-pass — i.e. a band-pass — estimator of local trend. From this lens we derive the rule's two structural costs: turnover-driven whipsaw in ranging regimes, and lag-induced drawdown because the exit signal inherits the slow filter's ~100-day delay. The backtest, executed one bar lagged with a 1.5 bp round-trip cost, returns +9.5% annualized, Sharpe 0.73, Sortino 1.08, hit rate 55.9%, and a deep −33.7% maximum drawdown. We show the Sharpe carries a standard error near 0.29 (\(t\approx2.5\)); but with the usual in-sample, single-asset, single-rule caveats, the apparent edge is statistically fragile and economically consistent with simply harvesting the trend risk premium rather than beating it.</p>
+    <p>We study the canonical 50/200-day simple-moving-average (SMA) crossover applied to SPY daily adjusted bars over 2010–2024 (3,774 bars). We treat the rule not as folklore but as a linear filtering problem: each SMA is a finite-impulse-response (FIR) low-pass filter whose Dirichlet-kernel frequency response carries a constant <em>group delay</em> of \((n-1)/2\) samples, and the crossover difference \(D_t=\mathrm{SMA}_{50}-\mathrm{SMA}_{200}\) is a difference-of-low-pass — i.e. a band-pass — estimator of local trend. From this lens we derive the rule's two structural costs: turnover-driven whipsaw in ranging regimes, and lag-induced drawdown because the exit signal inherits the slow filter's ~100-day delay. The backtest, executed one bar lagged with a 1.5 bp round-trip cost, returns +9.7% annualized, Sharpe 0.75, Sortino 1.10, hit rate 55.9%, and a deep −33.7% maximum drawdown. We show the Sharpe carries a standard error near 0.29 (\(t\approx2.6\)); but with the usual in-sample, single-asset, single-rule caveats, the apparent edge is statistically fragile and economically consistent with simply harvesting the trend risk premium rather than beating it.</p>
     <p class="keywords"><b>Keywords.</b> trend following, moving-average crossover, FIR filter, group delay, Sharpe ratio inference, time-series momentum, transaction costs.</p>
   </div>
 
@@ -75,7 +75,7 @@
   <h2>Backtest Protocol and Performance Metrics</h2>
   <p>We adopt the catalogue's shared evaluation battery (full definitions in <code>methodology.md</code>); here we state only what we report. Execution is lagged one bar — a signal observed at the close of \(t\) is realized over \(t\to t+1\) — so the net per-bar strategy return is</p>
   \begin{equation} r^s_t = w_{t-1}R_t - c\,\lvert w_t - w_{t-1}\rvert, \end{equation}
-  <p>where \(c\) is the per-unit round-trip cost. We charge \(c=1\,\text{bp}\) commission \(+\,0.5\,\text{bp}\) slippage \(=1.5\,\text{bp}=1.5\times10^{-4}\) per unit of turnover. Compounded equity is</p>
+  <p>where \(c\) is the per-unit round-trip cost. We charge \(c=1\,\text{bp}\) commission \(+\,0.5\,\text{bp}\) slippage \(=1.5\,\text{bp}=1.5\times10^{-4}\) per unit of turnover. On bars where the position changes, the fill is taken at that bar's open rather than the prior close, so the entry bar earns its open-to-close return in place of \(R_t\); this is the catalogue-wide convention and avoids crediting the rule with the move from which its own signal was formed. Compounded equity is</p>
   \begin{equation} E_t = E_0\prod_{\tau\le t}\bigl(1+r^s_\tau\bigr). \end{equation}
   <p>With the risk-free rate set to zero, \(P=252\) periods per year and \(N\) bars, we report: the annualized return \(\bigl(\prod_t(1+r^s_t)\bigr)^{P/N}-1\); the annualized Sharpe \(\widehat{SR}=(\bar r^s/s)\sqrt P\) with sample mean \(\bar r^s\) and sample standard deviation \(s\); the Sortino ratio \((\bar r^s/\sigma_d)\sqrt P\) using downside deviation</p>
   \begin{equation} \sigma_d=\sqrt{\tfrac1N\sum_t \min(r^s_t,0)^2}; \end{equation}
@@ -99,9 +99,9 @@
     <table class="data">
       <thead><tr><th>Metric</th><th class="r">Value</th></tr></thead>
       <tbody>
-        <tr><td>Annualized return</td><td class="r pos">+9.5%</td></tr>
-        <tr><td>Sharpe ratio (annualized)</td><td class="r">0.7336</td></tr>
-        <tr><td>Sortino ratio (annualized)</td><td class="r">1.0830</td></tr>
+        <tr><td>Annualized return</td><td class="r pos">+9.7%</td></tr>
+        <tr><td>Sharpe ratio (annualized)</td><td class="r">0.7451</td></tr>
+        <tr><td>Sortino ratio (annualized)</td><td class="r">1.1003</td></tr>
         <tr><td>Maximum drawdown</td><td class="r neg">−33.7%</td></tr>
         <tr><td>Hit rate (active bars)</td><td class="r">55.9%</td></tr>
         <tr><td>Bars</td><td class="r">3,774</td></tr>
@@ -109,7 +109,7 @@
     </table>
   </div>
 
-  <p>The strategy compounds at +9.5% per year with an annualized Sharpe of 0.73 and a Sortino of 1.08, the latter exceeding the former because the downside-only deviation \(\sigma_d\) is smaller than the full standard deviation — the rule clips some left-tail bars by sitting in cash. The hit rate of 55.9% on active bars is a thin majority, as one expects from a trend filter that earns its keep from a few large directional moves rather than from being right often. The equity curve rides SPY's long post-2010 bull legs while flattening out during the intervals when \(D_t<0\). The headline tension is the −33.7% maximum drawdown sitting beside a respectable Sharpe; the next section shows these are two faces of the same delay.</p>
+  <p>The strategy compounds at +9.7% per year with an annualized Sharpe of 0.75 and a Sortino of 1.10, the latter exceeding the former because the downside-only deviation \(\sigma_d\) is smaller than the full standard deviation — the rule clips some left-tail bars by sitting in cash. The hit rate of 55.9% on active bars is a thin majority, as one expects from a trend filter that earns its keep from a few large directional moves rather than from being right often. The equity curve rides SPY's long post-2010 bull legs while flattening out during the intervals when \(D_t<0\). The headline tension is the −33.7% maximum drawdown sitting beside a respectable Sharpe; the next section shows these are two faces of the same delay.</p>
 
   <h2>Discussion</h2>
 
@@ -120,15 +120,15 @@
   <p>The exit signal — the death cross — depends on the 200-day SMA, which by Eq.&nbsp;(2) carries a group delay of \(\approx 100\) bars. In a sharp drawdown the price peaks and rolls over long before the slow average does, so the death cross fires roughly a quarter after the top. The strategy therefore <em>structurally</em> participates in the early leg of every crash; it cannot do otherwise without a faster (and noisier, more whipsaw-prone) exit. This is the direct cause of the −33.7% maximum drawdown. Crucially, the same delay that produces deep drawdowns is what produces the positive Sharpe: the filter rides the right side of large, persistent trends precisely because it is slow enough not to be shaken out by them. Delay buys trend capture and pays for it in late exits — one knob, two consequences.</p>
 
   <h3>Statistical significance of the Sharpe</h3>
-  <p>Is a Sharpe of 0.73 real? Under the iid approximation of Lo (2002), the standard error of an annualized Sharpe is \(\mathrm{SE}(\widehat{SR})\approx\sqrt{(1+\tfrac12 SR^2)/T}\) with \(T\) the sample length in years. With \(SR=0.7336\) and \(T\approx15\),</p>
-  \begin{equation} \mathrm{SE}(\widehat{SR})\approx\sqrt{\frac{1+0.5\cdot 0.7336^2}{15}}=\sqrt{\frac{1.269}{15}}\approx 0.29, \end{equation}
+  <p>Is a Sharpe of 0.75 real? Under the iid approximation of Lo (2002), the standard error of an annualized Sharpe is \(\mathrm{SE}(\widehat{SR})\approx\sqrt{(1+\tfrac12 SR^2)/T}\) with \(T\) the sample length in years. With \(SR=0.7451\) and \(T\approx15\),</p>
+  \begin{equation} \mathrm{SE}(\widehat{SR})\approx\sqrt{\frac{1+0.5\cdot 0.7451^2}{15}}=\sqrt{\frac{1.278}{15}}\approx 0.29, \end{equation}
   <p>so the implied \(t\)-statistic is</p>
-  \begin{equation} t=\frac{\widehat{SR}}{\mathrm{SE}(\widehat{SR})}\approx\frac{0.7336}{0.29}\approx 2.5, \end{equation}
-  <p>a one-sided \(p\approx 0.01\). Taken at face value this looks decisively non-zero. It is not, and the caveats are not cosmetic.</p>
+  \begin{equation} t=\frac{\widehat{SR}}{\mathrm{SE}(\widehat{SR})}\approx\frac{0.7451}{0.29}\approx 2.6, \end{equation}
+  <p>a one-sided \(p\approx 0.005\). Taken at face value this looks decisively non-zero. It is not, and the caveats are not cosmetic.</p>
 
-  <div class="remark"><span class="lab">Result.</span> The crossover's Sharpe is nominally significant (\(t\approx2.5\)), but the estimate is in-sample, on a single asset, for a single textbook rule whose window lengths are themselves chosen from a small, heavily data-mined family. Adjusting for those degrees of freedom, the edge is effectively indistinguishable from passively bearing the trend / equity risk premium — consistent with the literature that crossover rules do not beat buy-and-hold net of costs over long horizons.</div>
+  <div class="remark"><span class="lab">Result.</span> The crossover's Sharpe is nominally significant (\(t\approx2.6\)), but the estimate is in-sample, on a single asset, for a single textbook rule whose window lengths are themselves chosen from a small, heavily data-mined family. Adjusting for those degrees of freedom, the edge is effectively indistinguishable from passively bearing the trend / equity risk premium — consistent with the literature that crossover rules do not beat buy-and-hold net of costs over long horizons.</div>
 
-  <p>The deeper point is that the iid SE ignores both the autocorrelation in strategy returns (which inflates the true SE) and, more importantly, the selection over rules and parameters that the number 0.73 already reflects. The 50/200 pair is not a hypothesis drawn before seeing the data; it is the survivor of a century of practitioner search. A defensible reading is that the strategy harvests the same risk premium an investor would earn by holding SPY, repackaged with a different drawdown profile, and that the cost \(c\Upsilon\) plus the lagged exits leave little or no genuine alpha on top.<sup>1</sup></p>
+  <p>The deeper point is that the iid SE ignores both the autocorrelation in strategy returns (which inflates the true SE) and, more importantly, the selection over rules and parameters that the number 0.75 already reflects. The 50/200 pair is not a hypothesis drawn before seeing the data; it is the survivor of a century of practitioner search. A defensible reading is that the strategy harvests the same risk premium an investor would earn by holding SPY, repackaged with a different drawdown profile, and that the cost \(c\Upsilon\) plus the lagged exits leave little or no genuine alpha on top.<sup>1</sup></p>
 
   <h2>Limitations and Extensions</h2>
   <p>Several limitations bound the result and point to natural extensions.</p>
