@@ -1,0 +1,9 @@
+<h2>{{ symbol }} — {{ model_name }}</h2>
+<table>
+  {% for k, v in metrics.items() %}
+  <tr><td><strong>{{ k }}</strong></td><td>{{ "%.4f"|format(v) if v is number else v }}</td></tr>
+  {% endfor %}
+</table>
+{% for name, html in figures.items() %}
+<div class="chart">{{ html|safe }}</div>
+{% endfor %}

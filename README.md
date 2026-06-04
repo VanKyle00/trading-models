@@ -26,6 +26,15 @@ uv sync
 uv run streamlit run app/streamlit_app.py
 ```
 
+### Run the FastAPI workbench locally
+
+The new workbench (richer charts, runs alongside the Streamlit bench) starts with:
+
+    uv run uvicorn webapp.main:app --reload
+
+Then open http://localhost:8000. It serves the same backtests as the Streamlit
+app via the shared `tradinglib.service` layer.
+
 ## Current models
 
 | Model | Family | Window | Assets | OOS Sharpe | Max DD | Status |

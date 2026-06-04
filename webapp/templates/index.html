@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trading Models — Workbench</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; display: flex; }
+    aside { width: 320px; padding: 1rem; border-right: 1px solid #e5e7eb; }
+    main { flex: 1; padding: 1rem; }
+    label { display: block; margin: .5rem 0 .15rem; font-size: .85rem; font-weight: 600; }
+    input, select { width: 100%; padding: .35rem; box-sizing: border-box; }
+    button { margin-top: 1rem; padding: .5rem 1rem; background: #2563eb; color: white;
+             border: 0; border-radius: 4px; cursor: pointer; width: 100%; }
+    .error { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <aside>
+    <h2>Configuration</h2>
+    <form hx-post="/run" hx-target="#results" hx-indicator="#spin">
+      <label>Model</label>
+      <select name="model_id">
+        {% for s in specs %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+      </select>
+
+      <label>Ticker</label>
+      <input name="symbol" value="SPY" />
+
+      <label>Start</label>
+      <input type="date" name="start" value="2022-01-01" />
+      <label>End</label>
+      <input type="date" name="end" value="2024-12-31" />
+
+      {# Param widgets for EVERY model; the form only sends the selected model's. #}
+      {% for s in specs %}
+        {% for p in s.params %}
+        <label>{{ p.label }}</label>
+        <input name="{{ p.name }}" type="number" value="{{ p.default }}"
+               min="{{ p.min }}" max="{{ p.max }}"
+               step="{{ '1' if p.type == 'int' else 'any' }}" />
+        {% endfor %}
+      {% endfor %}
+
+      <button type="submit">&#9654; Run backtest</button>
+      <span id="spin" class="htmx-indicator">Running&#8230;</span>
+    </form>
+  </aside>
+  <main>
+    <h1>Trading Models — Workbench</h1>
+    <div id="results"><p>Configure a backtest and press Run.</p></div>
+  </main>
+</body>
+</html>
