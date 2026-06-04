@@ -10,17 +10,22 @@ Run locally with::
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
+from tradinglib.assistant import Budget, RateLimiter, run_chat
+from tradinglib.assistant import provider as _assistant_provider
 from tradinglib.service import RequestError, list_specs, model_spec, run, run_to_dict
 from webapp.charts import build_all
 from webapp.forms import request_from_payload
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+_CHAT_LIMITER = RateLimiter(max_per_window=30)
 
 
 def create_app() -> FastAPI:
@@ -72,6 +77,29 @@ def create_app() -> FastAPI:
                 "figures": figures,
             },
         )
+
+    @app.post("/api/v1/chat", response_model=None)
+    async def chat(request: Request) -> StreamingResponse | JSONResponse:
+        try:
+            payload = await request.json()
+        except ValueError:
+            return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "body must be a JSON object"}, status_code=400)
+        message = str(payload.get("message", "")).strip()
+        if not message:
+            return JSONResponse({"error": "message is required"}, status_code=400)
+
+        client_ip = request.client.host if request.client else "unknown"
+        if not _CHAT_LIMITER.allow(client_ip):
+            return JSONResponse({"error": "rate limit reached, try later"}, status_code=429)
+
+        def stream() -> Any:
+            provider = _assistant_provider.ClaudeProvider()
+            for event in run_chat(message, provider, Budget()):
+                yield f"data: {json.dumps(event)}\n\n"
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
 
     return app
 
