@@ -12,6 +12,13 @@ captures those assumptions.
   Mechanically, the engine lags the signal series by one bar before
   multiplying by per-bar returns. This is the single most important
   guardrail against look-ahead bias.
+- **Fill price**: When a model supplies `execution_prices` (its open series),
+  trades fill at the **next bar's open** rather than the decision close. The
+  entry bar earns `open → close`; held bars stay close-to-close. This removes
+  the optimism of filling at the very close used to make the decision and is
+  the default for every model in this repo. The vectorized engine without
+  `execution_prices` falls back to close-to-close fills (bit-identical to the
+  previous behavior).
 - **Position units**: Positions are expressed as a fraction of current
   equity. A signal of `1.0` means "be fully invested"; `-1.0` means "be
   fully short"; `0.5` means "deploy half of equity long".
@@ -77,6 +84,15 @@ JSON-serialized to each model's `results/metrics.json`.
 - **Hit rate**: Fraction of *active* bars (returns ≠ 0) that were
   positive. Reported but not used to draw conclusions — high hit rates are
   routinely associated with strategies that lose money on a few big losers.
+- **Probabilistic Sharpe Ratio (PSR)**: Probability that the true (non-
+  annualized) Sharpe is greater than zero, given the track length and the
+  skew and kurtosis of the return series. Fat tails and short tracks lower it.
+- **Deflated Sharpe Ratio (DSR)**: PSR with the benchmark raised to the
+  *expected maximum* Sharpe across `n_trials` independent configurations
+  (Bailey & López de Prado, 2014). It corrects for selection bias from trying
+  many strategies. `n_trials` defaults to 1 (no model in this repo currently
+  performs a hyperparameter search), so DSR equals PSR for every current
+  model; the parameter exists for future searched models.
 
 ## Train / test discipline
 

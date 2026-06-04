@@ -140,3 +140,14 @@ def test_delta_hedged_position_is_insensitive_to_small_moves() -> None:
     hedged_move = abs(hedged.equity_curve.iloc[1] - hedged.equity_curve.iloc[0])
     unhedged_move = abs(unhedged.equity_curve.iloc[1] - unhedged.equity_curve.iloc[0])
     assert hedged_move < unhedged_move
+
+
+def test_options_metrics_include_deflated_sharpe(flat_path: pd.Series) -> None:
+    class DoNothing:
+        def on_bar(self, engine: OptionsEngine, t, spot) -> None:
+            return None
+
+    result = run_options_backtest(flat_path, DoNothing(), vol=0.2, rate=0.04, n_trials=1)
+    assert "probabilistic_sharpe" in result.metrics
+    assert "deflated_sharpe" in result.metrics
+    assert result.config["n_trials"] == 1

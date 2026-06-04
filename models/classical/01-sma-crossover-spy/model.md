@@ -7,7 +7,7 @@ data_sources: [yfinance_daily_bars]
 tickers: any
 default_ticker: SPY
 status: working
-sharpe_oos: 0.73
+sharpe_oos: 0.75
 max_drawdown: -0.34
 ---
 

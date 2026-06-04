@@ -37,8 +37,8 @@
   <div class="abstract">
     <h2>Abstract</h2>
     <p>We ask whether a gradient-boosted regression tree can extract a tradable directional signal from a small panel of standard technical features on the SPY exchange-traded fund. The learner is an XGBoost regressor (300 trees, depth 4, shrinkage 0.03, row/column subsampling 0.8) trained to predict the next day's log return from eight inputs: multi-horizon returns, realized volatilities, the 14-day Wilder RSI, and price deviations from two moving averages. The model is fit on a strictly chronological 80/20 split (no shuffling) to forbid lookahead; the held-out window spans January 2022 through December 2024.</p>
-    <p>In sample the predictor is highly accurate — prediction-to-target correlation 0.712 and sign accuracy 0.649 — but out of sample these collapse to an information coefficient of 0.105 and a sign accuracy of 0.532, barely above a coin flip. Despite this thin edge, a long/flat trading rule earns an annualized 11.5% at a Sharpe of 0.84 and a Sortino of 1.32 over 744 out-of-sample bars, with a maximum drawdown of −13.9% and a hit rate of only 45.2%.</p>
-    <p>We reconcile these numbers analytically. The Fundamental Law of Active Management predicts a maximum information ratio of \(0.105\sqrt{252}\approx 1.67\); the realized 0.84 implies a transfer coefficient near one-half, the price of the long-only, binary, cost-bearing implementation. We then show why a sub-50% hit rate can still be profitable: the relevant quantity is the covariance of the position with the realized return, not the probability of being right, and the long/flat map is a convex, option-like filter on the signal.</p>
+    <p>In sample the predictor is highly accurate — prediction-to-target correlation 0.712 and sign accuracy 0.649 — but out of sample these collapse to an information coefficient of 0.105 and a sign accuracy of 0.532, barely above a coin flip. Despite this thin edge, a long/flat trading rule earns an annualized 13.2% at a Sharpe of 0.96 and a Sortino of 1.52 over 744 out-of-sample bars, with a maximum drawdown of −11.8% and a hit rate of only 45.6%.</p>
+    <p>We reconcile these numbers analytically. The Fundamental Law of Active Management predicts a maximum information ratio of \(0.105\sqrt{252}\approx 1.67\); the realized 0.96 implies a transfer coefficient near 0.57, the price of the long-only, binary, cost-bearing implementation. We then show why a sub-50% hit rate can still be profitable: the relevant quantity is the covariance of the position with the realized return, not the probability of being right, and the long/flat map is a convex, option-like filter on the signal.</p>
     <p class="keywords"><b>Keywords.</b> gradient boosting, XGBoost, supervised forecasting, information coefficient, fundamental law of active management, lookahead bias, transfer coefficient.</p>
   </div>
 
@@ -109,7 +109,7 @@
   \begin{equation}
     r^s_t=w_{t-1}R_t-c\,\lvert w_t-w_{t-1}\rvert,\qquad c=1.5\text{ bp},
   \end{equation}
-  <p>where the cost \(c\) (a 1 bp commission-and-slippage component plus 0.5 bp of impact) is charged per unit of turnover. Equity compounds as \(E_t=E_0\prod_\tau(1+r^s_\tau)\). With the risk-free rate set to zero, \(P=252\) trading days, and \(N\) bars, the performance statistics are</p>
+  <p>where the cost \(c\) (a 1 bp commission-and-slippage component plus 0.5 bp of impact) is charged per unit of turnover. On bars where the position changes, the fill is taken at that bar's <em>open</em> rather than the previous close, so the entry bar earns its open-to-close return in place of \(R_t\); unchanged bars follow the expression above. This avoids crediting the strategy with the very move from which the signal was computed. Equity compounds as \(E_t=E_0\prod_\tau(1+r^s_\tau)\). With the risk-free rate set to zero, \(P=252\) trading days, and \(N\) bars, the performance statistics are</p>
   \begin{equation}
     \text{ann.\ return}=\Bigl(\textstyle\prod_t(1+r^s_t)\Bigr)^{P/N}-1,\qquad
     \widehat{SR}=\frac{\bar r^s}{s}\sqrt P,
@@ -123,7 +123,7 @@
   \begin{equation}
     w_t=\mathbf 1\!\left\{\hat F(x_t)>0\right\}.
   \end{equation}
-  <p>This binary, long-only map is deliberately crude: it discards the predicted magnitude entirely and never shorts. We will see in the discussion that this crudeness is exactly what costs the strategy half of its theoretical signal — and also what caps its drawdown.</p>
+  <p>This binary, long-only map is deliberately crude: it discards the predicted magnitude entirely and never shorts. We will see in the discussion that this crudeness is exactly what costs the strategy roughly two-fifths of its theoretical signal — and also what caps its drawdown.</p>
 
   <h2>Results: Predictive Accuracy and Economic Performance</h2>
   <p>We first read the model's mind through the information coefficient, \(\mathrm{IC}=\mathrm{corr}(\hat y,y)\), and the directional sign accuracy. The contrast between the training window and the held-out window is stark.</p>
@@ -148,11 +148,11 @@
     <table class="data">
       <thead><tr><th>Metric</th><th class="r">Value</th></tr></thead>
       <tbody>
-        <tr><td>Annualized return</td><td class="r pos">+11.5%</td></tr>
-        <tr><td>Sharpe ratio</td><td class="r">0.8388</td></tr>
-        <tr><td>Sortino ratio</td><td class="r">1.3217</td></tr>
-        <tr><td>Maximum drawdown</td><td class="r neg">−13.9%</td></tr>
-        <tr><td>Hit rate (active bars)</td><td class="r">45.2%</td></tr>
+        <tr><td>Annualized return</td><td class="r pos">+13.2%</td></tr>
+        <tr><td>Sharpe ratio</td><td class="r">0.9627</td></tr>
+        <tr><td>Sortino ratio</td><td class="r">1.5223</td></tr>
+        <tr><td>Maximum drawdown</td><td class="r neg">−11.8%</td></tr>
+        <tr><td>Hit rate (active bars)</td><td class="r">45.6%</td></tr>
         <tr><td>Out-of-sample bars</td><td class="r">744</td></tr>
       </tbody>
     </table>
@@ -163,7 +163,7 @@
     <figcaption>Out-of-sample equity curve of the long/flat boosted-tree strategy on SPY over the held-out window. The shallow drawdown relative to buy-and-hold reflects the strategy sitting flat on predicted-negative days during the 2022 decline.</figcaption>
   </figure>
 
-  <p>So a model whose directional accuracy is 53% in sample and 53% out of sample — and which is right on fewer than half its <em>active</em> bars — nonetheless compounds at 11.5% with a Sortino above 1.3. The Sortino exceeding the Sharpe tells us the downside deviation is smaller than the total deviation: the realized losses are milder than the realized variance would suggest. The remainder of the paper explains why none of this is contradictory.</p>
+  <p>So a model whose directional accuracy is 53% in sample and 53% out of sample — and which is right on fewer than half its <em>active</em> bars — nonetheless compounds at 13.2% with a Sortino above 1.5. The Sortino exceeding the Sharpe tells us the downside deviation is smaller than the total deviation: the realized losses are milder than the realized variance would suggest. The remainder of the paper explains why none of this is contradictory.</p>
 
   <h2>Discussion</h2>
   <h3>From information coefficient to Sharpe: the Fundamental Law</h3>
@@ -173,19 +173,19 @@
   \end{equation}
   <p>where breadth \(\mathrm{BR}\) is the number of independent bets taken per year. A daily strategy on one asset makes roughly \(\mathrm{BR}\approx252\) approximately independent directional bets per year. With the out-of-sample IC of 0.105 this implies a theoretical ceiling</p>
   \[ \mathrm{IR}_{\max}\approx 0.105\sqrt{252}\approx 1.67. \]
-  <p>The realized out-of-sample Sharpe is 0.84. The ratio of realized to attainable information ratio defines the <em>transfer coefficient</em>,</p>
+  <p>The realized out-of-sample Sharpe is 0.96. The ratio of realized to attainable information ratio defines the <em>transfer coefficient</em>,</p>
   \begin{equation}
-    \mathrm{TC}=\frac{\mathrm{IR}_{\text{realized}}}{\mathrm{IC}\sqrt{\mathrm{BR}}}\approx\frac{0.84}{1.67}\approx 0.50.
+    \mathrm{TC}=\frac{\mathrm{IR}_{\text{realized}}}{\mathrm{IC}\sqrt{\mathrm{BR}}}\approx\frac{0.96}{1.67}\approx 0.57.
   \end{equation}
 
-  <div class="remark"><span class="lab">Result.</span> Only about half of the theoretically available signal reaches the bottom line. The leakage is fully accounted for by the implementation: the long-only constraint forbids profiting from predicted-down days by shorting; the binary \(w\in\{0,1\}\) position throws away the predicted magnitude, so a weak buy and a strong buy are sized identically; and turnover costs erode the rest. A magnitude-aware, long–short sizing rule would, in principle, recover much of the missing \(\mathrm{TC}\) — at the cost of larger drawdowns.</div>
+  <div class="remark"><span class="lab">Result.</span> A little under three-fifths of the theoretically available signal reaches the bottom line. The leakage is fully accounted for by the implementation: the long-only constraint forbids profiting from predicted-down days by shorting; the binary \(w\in\{0,1\}\) position throws away the predicted magnitude, so a weak buy and a strong buy are sized identically; and turnover costs erode the rest. A magnitude-aware, long–short sizing rule would, in principle, recover much of the missing \(\mathrm{TC}\) — at the cost of larger drawdowns.</div>
 
   <h3>Why a losing hit rate still makes money</h3>
-  <p>The hit rate of 45.2% says the strategy loses on most of the days it is invested, yet it is profitable. The resolution is that the regression targets the conditional <em>mean</em> return, not the sign, and the relevant quantity for profit is a covariance, not a probability. Decompose the expected strategy return (ignoring costs) into a covariance term and a market-exposure term:</p>
+  <p>The hit rate of 45.6% says the strategy loses on most of the days it is invested, yet it is profitable. The resolution is that the regression targets the conditional <em>mean</em> return, not the sign, and the relevant quantity for profit is a covariance, not a probability. Decompose the expected strategy return (ignoring costs) into a covariance term and a market-exposure term:</p>
   \begin{equation}
     \mathbb E[r^s_t]=\mathbb E[w_{t-1}R_t]=\mathrm{Cov}(w_{t-1},R_t)+\mathbb E[w_{t-1}]\,\mathbb E[R_t].
   \end{equation}
-  <p>Profit requires \(\mathrm{Cov}(w,R)>0\) — the position must be positive more often when the return is large and positive — but this can hold even when \(\Pr(R>0\mid w=1)<\tfrac12\). Two mechanisms make it work here. First, magnitude asymmetry: the long-and-up days carry larger absolute returns than the more numerous long-and-down days, so a minority of correct, large bets outweighs a majority of small wrong ones. Second, convexity: the long/flat map \(w=\max(0,\mathbf 1\{\hat F>0\})\) is a convex, option-like filter that truncates the left tail by sitting out predicted-negative days. By standing flat through the worst forecasts, the strategy clips its losses — which is exactly why its maximum drawdown of −13.9% is shallow relative to a passive long position and why the Sortino comfortably exceeds the Sharpe.</p>
+  <p>Profit requires \(\mathrm{Cov}(w,R)>0\) — the position must be positive more often when the return is large and positive — but this can hold even when \(\Pr(R>0\mid w=1)<\tfrac12\). Two mechanisms make it work here. First, magnitude asymmetry: the long-and-up days carry larger absolute returns than the more numerous long-and-down days, so a minority of correct, large bets outweighs a majority of small wrong ones. Second, convexity: the long/flat map \(w=\max(0,\mathbf 1\{\hat F>0\})\) is a convex, option-like filter that truncates the left tail by sitting out predicted-negative days. By standing flat through the worst forecasts, the strategy clips its losses — which is exactly why its maximum drawdown of −11.8% is shallow relative to a passive long position and why the Sortino comfortably exceeds the Sharpe.</p>
 
   <h2>Limitations and Extensions</h2>
   <p>The out-of-sample evidence rests on 743 daily samples — roughly three calendar years — which is a thin and regime-specific basis: the window happens to contain both the 2022 drawdown and the 2023–2024 recovery, and the IC may not be stable across other regimes. A single asset offers no cross-sectional breadth, so the \(\mathrm{BR}\approx252\) figure is generous. We did not perform purged, embargoed \(k\)-fold cross-validation; a single chronological split gives one realization of the test statistic and no estimate of its sampling variance. Because boosted-tree pipelines invite many configuration choices, the reported Sharpe is also exposed to multiple-testing inflation, and a Deflated Sharpe Ratio adjustment (López de Prado, 2018) would discount it for the number of trials implicitly run. On the modeling side, the binary position is the clearest lever: a magnitude-aware sizing rule, possibly with a short leg, should raise the transfer coefficient toward unity, and richer feature sets or volatility-targeted position sizing are natural next steps. The honest summary is that the model demonstrates a small, real, and fragile edge — and that the value of the exercise lies in measuring its fragility precisely.</p>

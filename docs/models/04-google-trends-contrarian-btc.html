@@ -35,7 +35,7 @@
 
   <div class="abstract">
     <h2>Abstract</h2>
-    <p>We test whether retail search attention, proxied by Google Trends interest in the query <em>bitcoin</em>, carries a tradeable contrarian signal at weekly resolution. The premise is standard in the attention-and-sentiment literature: extreme search interest may flag a crowded, mean-reverting regime, so a spike in attention should precede a near-term price decline (short) and a trough should precede a recovery (long). We standardize the attention series with a four-week rolling <em>z</em>-score and trade the contrarian rule on BTC-USD over 2021–2024 (209 weekly bars). The strategy loses money: annualized return −20.5%, Sharpe −0.30, Sortino −0.42, maximum drawdown −79.8%, hit rate 26.4%. We argue this is not bad luck but a structural artefact. Because attention is a near-monotone function of price, the positive scale factor cancels under standardization and the <em>z</em>-score of attention collapses, to first order, onto the <em>z</em>-score of price — the contrarian rule is a price-based mean-reversion rule in alt-data costume. The signal is <em>coincident</em>, not leading: attention and the return realize together, leaving no exploitable sign at the tradeable horizon \(k\ge 1\). With \(\widehat{SR}=-0.30\pm0.51\) the result is statistically indistinguishable from zero, and none of the three rule variants survives a multiple-testing haircut. We ship the negative result in full.</p>
+    <p>We test whether retail search attention, proxied by Google Trends interest in the query <em>bitcoin</em>, carries a tradeable contrarian signal at weekly resolution. The premise is standard in the attention-and-sentiment literature: extreme search interest may flag a crowded, mean-reverting regime, so a spike in attention should precede a near-term price decline (short) and a trough should precede a recovery (long). We standardize the attention series with a four-week rolling <em>z</em>-score and trade the contrarian rule on BTC-USD over 2021–2024 (209 weekly bars). The strategy loses money: annualized return −20.4%, Sharpe −0.30, Sortino −0.42, maximum drawdown −79.8%, hit rate 26.4%. We argue this is not bad luck but a structural artefact. Because attention is a near-monotone function of price, the positive scale factor cancels under standardization and the <em>z</em>-score of attention collapses, to first order, onto the <em>z</em>-score of price — the contrarian rule is a price-based mean-reversion rule in alt-data costume. The signal is <em>coincident</em>, not leading: attention and the return realize together, leaving no exploitable sign at the tradeable horizon \(k\ge 1\). With \(\widehat{SR}=-0.30\pm0.51\) the result is statistically indistinguishable from zero, and none of the three rule variants survives a multiple-testing haircut. We ship the negative result in full.</p>
     <p class="keywords"><b>Keywords.</b> attention, Google Trends, alternative data, Bitcoin, contrarian, mean reversion, coincident indicator, Sharpe ratio, multiple testing, negative result.</p>
   </div>
 
@@ -128,7 +128,7 @@
     <table class="data">
       <thead><tr><th>Metric</th><th class="r">Value</th></tr></thead>
       <tbody>
-        <tr><td>Annualized return</td><td class="r neg">−20.5%</td></tr>
+        <tr><td>Annualized return</td><td class="r neg">−20.4%</td></tr>
         <tr><td>Sharpe ratio</td><td class="r neg">−0.30</td></tr>
         <tr><td>Sortino ratio</td><td class="r neg">−0.42</td></tr>
         <tr><td>Max drawdown</td><td class="r neg">−79.8%</td></tr>
@@ -147,7 +147,7 @@
     <table class="data">
       <thead><tr><th>Variant</th><th class="r">Sharpe</th><th class="r">Ann. return</th><th class="r">Max drawdown</th></tr></thead>
       <tbody>
-        <tr><td>Contrarian (this model)</td><td class="r neg">−0.30</td><td class="r neg">−20.5%</td><td class="r neg">−79.8%</td></tr>
+        <tr><td>Contrarian (this model)</td><td class="r neg">−0.30</td><td class="r neg">−20.4%</td><td class="r neg">−79.8%</td></tr>
         <tr><td>Momentum (long/short, inverse rule)</td><td class="r pos">+0.24</td><td class="r pos">+0.8%</td><td class="r neg">−73.6%</td></tr>
         <tr><td>Momentum (long-only)</td><td class="r pos">+0.44</td><td class="r pos">+9.9%</td><td class="r neg">−69.5%</td></tr>
       </tbody>

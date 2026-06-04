@@ -125,22 +125,26 @@ def run_event_backtest(
     fee_bps: float = 1.0,
     slippage_bps: float = 0.5,
     periods_per_year: int = 252,
+    n_trials: int = 1,
 ) -> BacktestResult:
     """Run an event-driven backtest by calling ``strategy.on_bar`` per bar.
 
-    The signal recorded at bar ``t`` is the strategy's target *after*
-    seeing bar ``t``'s close. The vectorized engine then lags it one bar
-    when computing PnL, so the new position applies starting at bar
-    ``t+1`` — same look-ahead-bias guardrail as the vectorized engine.
+    The signal recorded at bar ``t`` is the strategy's target *after* seeing bar
+    ``t``'s close. It is filled at bar ``t+1``'s open: the vectorized engine
+    lags the signal one bar and uses the bar opens as execution prices, so the
+    new position applies from the next open — the same look-ahead guardrail as
+    before, now without the optimism of filling at the decision close.
     """
     engine = EventEngine()
     timestamps: list[pd.Timestamp] = []
     closes: list[float] = []
+    opens: list[float] = []
     signals: list[float] = []
 
     for bar in bars:
         timestamps.append(bar.timestamp)
         closes.append(bar.close)
+        opens.append(bar.open)
         strategy.on_bar(engine, bar)
         signals.append(engine.position_fraction)
 
@@ -149,15 +153,18 @@ def run_event_backtest(
 
     idx = pd.DatetimeIndex(timestamps)
     prices = pd.Series(closes, index=idx, name="close")
+    open_prices = pd.Series(opens, index=idx, name="open")
     signal_series = pd.Series(signals, index=idx, name="signal")
 
     return run_backtest(
         prices,
         signal_series,
+        execution_prices=open_prices,
         initial_capital=initial_capital,
         fee_bps=fee_bps,
         slippage_bps=slippage_bps,
         periods_per_year=periods_per_year,
+        n_trials=n_trials,
     )
 
 
