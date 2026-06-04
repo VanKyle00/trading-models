@@ -46,6 +46,7 @@ def _render_simulation(sim: Any) -> None:
     if getattr(sim, "truncated", False):
         st.caption("⚠️ path count was capped to bound memory; showing the capped sample.")
 
+    # SimulationResult always populates percentiles {5, 25, 50, 75, 95}.
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Prob. of profit", f"{sim.prob_of_profit:.0%}")
     c2.metric("Median P&L", f"${sim.percentiles[50]:,.0f}")
@@ -55,13 +56,12 @@ def _render_simulation(sim: Any) -> None:
     fig = go.Figure()
     fig.add_trace(go.Histogram(x=sim.pnl_distribution, nbinsx=60, name="P&L"))
     for level in (5, 50, 95):
-        if level in sim.percentiles:
-            fig.add_vline(
-                x=sim.percentiles[level],
-                line_dash="dot",
-                annotation_text=f"p{level}",
-                line_color="gray",
-            )
+        fig.add_vline(
+            x=sim.percentiles[level],
+            line_dash="dot",
+            annotation_text=f"p{level}",
+            line_color="gray",
+        )
     fig.update_layout(
         height=340,
         margin={"t": 30, "b": 30, "l": 0, "r": 0},
