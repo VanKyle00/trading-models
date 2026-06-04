@@ -5,7 +5,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from tradinglib.service import BacktestRequest, BacktestRun, run, run_to_dict
+from tradinglib.service import BacktestRequest, BacktestRun, list_specs, run, run_to_dict
 
 CLASSICAL = "models/classical/01-sma-crossover-spy"
 
@@ -81,3 +81,24 @@ def test_jsonify_coerces_numpy_scalars():
     out = _jsonify({"a": np.int64(50), "b": np.float64(1.5), "c": "x", "d": [np.int64(7)]})
     assert out == {"a": 50, "b": 1.5, "c": "x", "d": [7]}
     json.dumps(out)  # must not raise
+
+
+def _smoke_window(spec):
+    # Each locked model only has data in a specific window; use generous ranges.
+    if spec.family == "microstructure":
+        return date(2024, 8, 4), date(2024, 8, 6)
+    if spec.family == "alt-data":
+        return date(2022, 1, 1), date(2023, 1, 1)
+    return date(2023, 1, 1), date(2024, 1, 1)
+
+
+@pytest.mark.parametrize("spec", list_specs(), ids=lambda s: s.family)
+def test_every_model_runs_and_serializes(spec):
+    start, end = _smoke_window(spec)
+    req = BacktestRequest(model_id=spec.id, start=start, end=end)  # symbol=None → default
+    try:
+        result = run_to_dict(run(req))
+    except (FileNotFoundError, ConnectionError, OSError) as exc:
+        pytest.skip(f"{spec.family}: data unavailable in this environment ({exc})")
+    assert set(result) >= BASELINE_KEYS
+    json.dumps(result)
