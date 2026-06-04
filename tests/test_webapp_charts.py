@@ -30,3 +30,22 @@ def test_unknown_builder_raises():
 
     with pytest.raises(KeyError):
         build("does-not-exist", synthetic_run())
+
+
+def test_all_expected_builders_registered():
+    expected = {
+        "equity",
+        "drawdown",
+        "rolling_sharpe",
+        "returns_hist",
+        "monthly_heatmap",
+        "exposure",
+        "trades_table",
+    }
+    assert expected <= set(BUILDERS)
+
+
+def test_each_builder_produces_a_figure():
+    run = synthetic_run()
+    for name in BUILDERS:
+        assert isinstance(build(name, run), go.Figure), name
