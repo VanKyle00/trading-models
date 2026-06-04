@@ -26,12 +26,16 @@ def create_app() -> FastAPI:
 
     @app.post("/api/v1/run")
     async def api_run(request: Request) -> JSONResponse:
-        payload = await request.json()
         try:
+            payload = await request.json()
+            if not isinstance(payload, dict):
+                return JSONResponse(
+                    {"error": "request body must be a JSON object"}, status_code=400
+                )
             spec = model_spec(str(payload.get("model_id", "")))
             req = request_from_payload(payload, spec)
             result = run_to_dict(run(req))
-        except (RequestError, KeyError) as exc:
+        except (RequestError, KeyError, ValueError) as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
         return JSONResponse(result)
 

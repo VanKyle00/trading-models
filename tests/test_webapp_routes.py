@@ -54,3 +54,17 @@ def test_api_run_success_returns_baseline_keys():
     assert resp.status_code == 200
     body = resp.json()
     assert {"model_id", "symbol", "metrics", "series", "trades"} <= set(body)
+
+
+def test_api_run_non_object_json_is_400():
+    client = TestClient(create_app())
+    resp = client.post("/api/v1/run", json=[1, 2, 3])
+    assert resp.status_code == 400
+
+
+def test_api_run_invalid_json_is_400():
+    client = TestClient(create_app())
+    resp = client.post(
+        "/api/v1/run", content=b"not json", headers={"content-type": "application/json"}
+    )
+    assert resp.status_code == 400
