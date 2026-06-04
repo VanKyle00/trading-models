@@ -27,8 +27,9 @@ ROOT = Path(__file__).resolve().parent.parent  # repo root (has pyproject.toml)
 _IGNORE = [
     ".git/**",
     ".venv/**",
-    "data/raw/**",
-    "data/processed/**",
+    # ALL of data/ — the Volume mounts at /app/data and Modal refuses to mount
+    # over a non-empty path, so the image must not ship any data/ files.
+    "data/**",
     "notebooks/**",
     "**/__pycache__/**",
     "*.pyc",
