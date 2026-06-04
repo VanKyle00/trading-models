@@ -62,3 +62,18 @@ def test_delta_matches_finite_difference() -> None:
 def test_gamma_reference() -> None:
     g = bs_greeks("call", 100, 100, 1.0, 0.20, 0.05)
     assert g.gamma == pytest.approx(0.018762, abs=1e-4)
+
+
+from tradinglib.options.pricing import implied_vol
+
+
+def test_implied_vol_round_trips() -> None:
+    true_vol = 0.27
+    price = bs_price("call", 100, 105, 0.5, true_vol, 0.04)
+    assert implied_vol(price, "call", 100, 105, 0.5, 0.04) == pytest.approx(true_vol, abs=1e-4)
+
+
+def test_implied_vol_put_round_trips() -> None:
+    true_vol = 0.18
+    price = bs_price("put", 100, 95, 0.75, true_vol, 0.04)
+    assert implied_vol(price, "put", 100, 95, 0.75, 0.04) == pytest.approx(true_vol, abs=1e-4)
