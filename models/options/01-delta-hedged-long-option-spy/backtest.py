@@ -8,7 +8,7 @@ volatility we priced the option at — the cleanest exercise of the pricing +
 Greeks machinery.
 
 European exercise is used for the clean vol story; the American CRR pricer is
-validated separately in the test suite and the notebook.
+validated separately in the test suite.
 """
 
 from __future__ import annotations
@@ -102,9 +102,12 @@ def run_for_gui(
         spot=spot0,
         vol=implied_vol,
         rate=RATE,
-        # Clamp the simulated horizon to the historical window length. When it is
-        # shorter than tenor_days the simulated option doesn't expire within the
-        # path, so the final equity is the BSM mark rather than the settlement value.
+        # Simulate a fixed horizon of `tenor_days` business-day bars (capped by the
+        # historical window length). The option's expiry is tenor_days CALENDAR days
+        # out (~21 business days for 30), so within the path it expires, settles to
+        # intrinsic, and a fresh option is opened — the MC reflects the same rolling,
+        # delta-hedged strategy as the historical backtest, not a single option held
+        # to expiry.
         days=min(tenor_days, len(prices)),
         n_paths=n_paths,
         fee_bps=FEE_BPS,

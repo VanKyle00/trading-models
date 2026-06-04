@@ -38,7 +38,10 @@ Rows 3 and 4 are intentional negative results: hypotheses were tested
 honestly and the data rejected them. Each model's README documents
 what was tested, the inverse direction where applicable, and what the
 result implies. Negative results are first-class citizens here — the
-alternative is a portfolio of overfit "winners".
+alternative is a portfolio of overfit "winners". Row 5 (the delta-hedged
+options model) also posts a negative Sharpe by design — it is the
+options-pipeline demonstrator (hence status `working`), and its loss is
+expected long-volatility theta bleed from pricing above realized vol, not a bug.
 
 Note on the microstructure Sharpe: the -86.5 number is annualized
 assuming 525,600 minute-bars per year. The *direction* (clearly

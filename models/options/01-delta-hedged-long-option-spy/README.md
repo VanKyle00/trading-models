@@ -20,7 +20,10 @@ Over 2023-2024 the strategy posts a negative Sharpe: it consistently bleeds
 theta because the 18% implied-vol pricing assumption sat above SPY's realized
 vol for most of the window. That is the expected behavior for long-vol — and
 exactly why the model is useful as a clean, interpretable demonstrator rather
-than a money-maker.
+than a money-maker. The Monte Carlo mean is also mildly negative, but for a
+different reason: the GBM paths are drawn at the implied vol, so realized ≈
+implied by construction and there is no vol gap — the drag there comes from
+hedging costs and discretization, not an IV-vs-realized mismatch.
 
 ## Caveats
 
