@@ -58,7 +58,9 @@ def run_for_gui(
     slow_ma = prices.rolling(slow).mean()
     signal = (fast_ma > slow_ma).astype(float)
 
-    result = run_backtest(prices, signal, fee_bps=FEE_BPS, slippage_bps=SLIPPAGE_BPS)
+    result = run_backtest(
+        prices, signal, execution_prices=bars["open"], fee_bps=FEE_BPS, slippage_bps=SLIPPAGE_BPS
+    )
 
     data = pd.DataFrame({"close": prices, "fast_ma": fast_ma, "slow_ma": slow_ma, "signal": signal})
     return {

@@ -88,7 +88,14 @@ def run_for_gui(
     signal = (pred > 0).astype(float)
 
     user_prices = prices.loc[signal.index]
-    result = run_backtest(user_prices, signal, fee_bps=FEE_BPS, slippage_bps=SLIPPAGE_BPS)
+    user_opens = bars["open"].loc[signal.index]
+    result = run_backtest(
+        user_prices,
+        signal,
+        execution_prices=user_opens,
+        fee_bps=FEE_BPS,
+        slippage_bps=SLIPPAGE_BPS,
+    )
 
     data = pd.DataFrame({"close": user_prices, "predicted_return": pred, "signal": signal})
     return {
@@ -117,7 +124,14 @@ def main() -> None:
     pred = pd.Series(model.predict(x_oos), index=x_oos.index)
     signal = (pred > 0).astype(float)
     oos_prices = prices.loc[signal.index]
-    result = run_backtest(oos_prices, signal, fee_bps=FEE_BPS, slippage_bps=SLIPPAGE_BPS)
+    oos_opens = bars["open"].loc[signal.index]
+    result = run_backtest(
+        oos_prices,
+        signal,
+        execution_prices=oos_opens,
+        fee_bps=FEE_BPS,
+        slippage_bps=SLIPPAGE_BPS,
+    )
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     metrics_path = RESULTS / "metrics.json"
