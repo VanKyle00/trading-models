@@ -66,6 +66,11 @@ def run_backtest(
     periods_per_year:
         Bars per year — used by :func:`compute_metrics` to annualize Sharpe /
         Sortino. 252 for daily, ~98 280 for 1-minute US-equity bars.
+    n_trials:
+        Number of independent strategy configurations tried to arrive at this
+        one. Forwarded to :func:`compute_metrics` to deflate the Sharpe; ``1``
+        (the default) leaves the Deflated Sharpe equal to the Probabilistic
+        Sharpe.
     """
     if not prices.index.equals(signals.index):
         raise ValueError("prices and signals must share the same index")
