@@ -10,6 +10,8 @@ Conventions
 - A signal at bar ``t`` is executed at the close of bar ``t`` — PnL on that
   decision accrues over the bar ``t → t+1``. This is enforced by lagging the
   signal one bar before multiplying by returns, which prevents look-ahead bias.
+  Pass ``execution_prices`` (e.g. the open series) to instead fill at the next
+  bar's open; see that parameter on :func:`run_backtest`.
 - A position of ``1.0`` means fully invested in the asset; ``-1.0`` means
   fully short; ``0.0`` means flat. Fractional values for partial sizing.
 - Transaction costs are linear in turnover, expressed in basis points
