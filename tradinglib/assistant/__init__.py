@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tradinglib.assistant.agent import run_chat
 from tradinglib.assistant.budget import Budget, BudgetExceeded, RateLimiter
 from tradinglib.assistant.provider import ClaudeProvider, LLMProvider, StubProvider
 from tradinglib.assistant.types import AssistantTurn, ToolCall, Usage
@@ -16,4 +17,5 @@ __all__ = [
     "StubProvider",
     "ToolCall",
     "Usage",
+    "run_chat",
 ]
