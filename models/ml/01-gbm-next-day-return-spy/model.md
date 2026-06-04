@@ -5,6 +5,7 @@ window: swing
 assets: [equities]
 data_sources: [yfinance_daily_bars]
 tickers: [SPY]
+params: []
 status: working
 sharpe_oos: 0.96
 max_drawdown: -0.12
