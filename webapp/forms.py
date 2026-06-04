@@ -43,8 +43,11 @@ def request_from_payload(payload: dict[str, Any], spec: ModelSpec) -> BacktestRe
         except (ValueError, TypeError) as exc:
             raise RequestError(f"param {p.name!r} must be {p.type}, got {raw!r}") from exc
 
-    symbol = payload.get("symbol")
-    symbol = symbol if (symbol is None or str(symbol).strip() != "") else None
+    raw_symbol = payload.get("symbol")
+    if isinstance(raw_symbol, (list, tuple)):
+        raw_symbol = raw_symbol[0] if raw_symbol else None
+    symbol = str(raw_symbol).strip() if raw_symbol is not None else None
+    symbol = symbol or None  # blank → None
 
     return BacktestRequest(
         model_id=str(payload["model_id"]),

@@ -57,3 +57,19 @@ def test_bad_date_raises_request_error():
     payload = {"model_id": CLASSICAL, "start": "not-a-date", "end": "2023-01-01"}
     with pytest.raises(RequestError, match="date"):
         request_from_payload(payload, model_spec(CLASSICAL))
+
+
+def test_blank_symbol_becomes_none():
+    payload = {"model_id": CLASSICAL, "symbol": "", "start": "2022-01-01", "end": "2023-01-01"}
+    req = request_from_payload(payload, model_spec(CLASSICAL))
+    assert req.symbol is None
+
+
+def test_list_symbol_is_coerced_to_str_not_crashing_validate():
+    from tradinglib.service import validate
+
+    payload = {"model_id": CLASSICAL, "symbol": ["SPY"], "start": "2022-01-01", "end": "2023-01-01"}
+    req = request_from_payload(payload, model_spec(CLASSICAL))
+    assert req.symbol == "SPY"
+    assert isinstance(req.symbol, str)
+    validate(req, model_spec(CLASSICAL))  # must not raise AttributeError
