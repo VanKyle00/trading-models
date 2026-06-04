@@ -96,7 +96,12 @@ def run_for_gui(
             f"only {len(btc_weekly)} weekly bars in [{start}, {end}] — pick a wider window"
         )
 
+    # Every weekly close has a same-week open from the same daily frame, so the
+    # reindex should never introduce a NaN. Assert it: a NaN open would be
+    # silently zeroed by the engine's fill, masking a data gap.
     weekly_open = btc_weekly_open.reindex(btc_weekly.index)
+    if weekly_open.isna().any():
+        raise ValueError("weekly open series has gaps vs the weekly close index")
     result = run_backtest(
         btc_weekly,
         signal,
