@@ -24,6 +24,8 @@ def test_plain_answer_no_tools():
     kinds = [e["type"] for e in events]
     assert kinds[-1] == "final"
     assert "baseline" in events[-1]["text"]
+    assert kinds.count("text") == 0  # terminal answer goes only in 'final', not duplicated
+    assert kinds.count("final") == 1
 
 
 def test_runs_a_tool_then_answers():

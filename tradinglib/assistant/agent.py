@@ -36,12 +36,13 @@ def run_chat(user_message: str, provider: LLMProvider, budget: Budget) -> Iterat
             yield {"type": "final", "text": "Session limit reached — start a new chat to continue."}
             return
 
-        if turn.text:
-            yield {"type": "text", "text": turn.text}
-
         if turn.stop_reason != "tool_use" or not turn.tool_calls:
             yield {"type": "final", "text": turn.text}
             return
+
+        # interim narration the model wrote before its tool calls
+        if turn.text:
+            yield {"type": "text", "text": turn.text}
 
         conversation.append(AssistantMsg(turn))
 
