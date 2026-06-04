@@ -4,5 +4,7 @@
   "sortino": -10.372312297558798,
   "max_drawdown": -0.0781134522884096,
   "hit_rate": 0.16367265469061876,
+  "probabilistic_sharpe": 1.978210904562038e-10,
+  "deflated_sharpe": 1.978210904562038e-10,
   "n_bars": 502
 }

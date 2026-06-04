@@ -1,8 +1,10 @@
 {
   "annualized_return": -1.0,
-  "sharpe": -86.51183175235305,
-  "sortino": -140.13084616213672,
-  "max_drawdown": -0.36114761656489136,
+  "sharpe": -86.36653168666861,
+  "sortino": -139.9869730404282,
+  "max_drawdown": -0.3606057901611436,
   "hit_rate": 0.2968868640850418,
+  "probabilistic_sharpe": 2.1310292010310197e-05,
+  "deflated_sharpe": 2.1310292010310197e-05,
   "n_bars": 4320
 }

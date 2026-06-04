@@ -5,7 +5,7 @@
 | Name | Family | Window | Assets | Data sources | Sharpe (OOS) | Max DD | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | [Google Trends Contrarian on BTC](models/alt-data/01-google-trends-btc/) | alt-data | swing | crypto | google_trends_bitcoin, yfinance_daily_bars | -0.30 | -0.80 | negative-result |
-| [SMA Crossover on SPY](models/classical/01-sma-crossover-spy/) | classical | swing | equities | yfinance_daily_bars | 0.73 | -0.34 | working |
-| [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | binance_aggTrades | -86.50 | -0.36 | negative-result |
-| [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | yfinance_daily_bars | 0.84 | -0.14 | working |
+| [SMA Crossover on SPY](models/classical/01-sma-crossover-spy/) | classical | swing | equities | yfinance_daily_bars | 0.75 | -0.34 | working |
+| [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | binance_aggTrades | -86.37 | -0.36 | negative-result |
+| [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | yfinance_daily_bars | 0.96 | -0.12 | working |
 | [Delta-Hedged Long Option on SPY](models/options/01-delta-hedged-long-option-spy/) | options | swing | equities | yfinance_daily_bars | -6.94 | -0.08 | working |
