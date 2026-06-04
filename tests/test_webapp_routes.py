@@ -68,3 +68,44 @@ def test_api_run_invalid_json_is_400():
         "/api/v1/run", content=b"not json", headers={"content-type": "application/json"}
     )
     assert resp.status_code == 400
+
+
+def test_index_lists_models_and_params():
+    client = TestClient(create_app())
+    resp = client.get("/")
+    assert resp.status_code == 200
+    html = resp.text
+    assert "SMA Crossover on SPY" in html  # a model name from ModelSpec
+    assert "Fast SMA" in html  # a param label from ModelSpec
+
+
+def test_run_partial_renders_results():
+    client = TestClient(create_app())
+    resp = client.post(
+        "/run",
+        data={
+            "model_id": "models/classical/01-sma-crossover-spy",
+            "symbol": "SPY",
+            "start": "2022-01-01",
+            "end": "2023-01-01",
+            "fast": "20",
+            "slow": "50",
+        },
+    )
+    assert resp.status_code == 200
+    assert "plotly" in resp.text.lower()  # an embedded figure
+    assert "sharpe" in resp.text.lower()  # a metric
+
+
+def test_run_partial_bad_request_shows_error():
+    client = TestClient(create_app())
+    resp = client.post(
+        "/run",
+        data={
+            "model_id": "models/classical/01-sma-crossover-spy",
+            "start": "2023-01-01",
+            "end": "2022-01-01",
+        },
+    )
+    assert resp.status_code == 400
+    assert "before end" in resp.text or "error" in resp.text.lower()
