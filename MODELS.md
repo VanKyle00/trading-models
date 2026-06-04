@@ -8,3 +8,4 @@
 | [SMA Crossover on SPY](models/classical/01-sma-crossover-spy/) | classical | swing | equities | yfinance_daily_bars | 0.73 | -0.34 | working |
 | [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | binance_aggTrades | -86.50 | -0.36 | negative-result |
 | [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | yfinance_daily_bars | 0.84 | -0.14 | working |
+| [Delta-Hedged Long Option on SPY](models/options/01-delta-hedged-long-option-spy/) | options | swing | equities | yfinance_daily_bars | -6.94 | -0.08 | working |

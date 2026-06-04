@@ -32,12 +32,16 @@ uv run streamlit run app/streamlit_app.py
 | [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | 0.84 | -0.14 | working |
 | [Google Trends Contrarian on BTC](models/alt-data/01-google-trends-btc/) | alt-data | swing | crypto | -0.30 | -0.80 | negative-result |
 | [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | -86.5 | -0.36 | negative-result |
+| [Delta-Hedged Long Option on SPY](models/options/01-delta-hedged-long-option-spy/) | options | swing | equities | -6.94 | -0.08 | working |
 
 Rows 3 and 4 are intentional negative results: hypotheses were tested
 honestly and the data rejected them. Each model's README documents
 what was tested, the inverse direction where applicable, and what the
 result implies. Negative results are first-class citizens here — the
-alternative is a portfolio of overfit "winners".
+alternative is a portfolio of overfit "winners". Row 5 (the delta-hedged
+options model) also posts a negative Sharpe by design — it is the
+options-pipeline demonstrator (hence status `working`), and its loss is
+expected long-volatility theta bleed from pricing above realized vol, not a bug.
 
 Note on the microstructure Sharpe: the -86.5 number is annualized
 assuming 525,600 minute-bars per year. The *direction* (clearly
@@ -71,6 +75,7 @@ auto-generated from each model's `model.md` frontmatter.
 | `models/classical/` | Mean reversion, momentum, pairs trading, statistical arbitrage |
 | `models/ml/` | Gradient boosting, LSTMs, transformers |
 | `models/microstructure/` | Orderbook imbalance, microprice, queue dynamics (empty for now) |
+| `models/options/` | Options pricing, Greeks, multi-leg payoffs, vol strategies |
 | `models/alt-data/` | Sentiment, news, alternative signals (empty for now) |
 | `notebooks/eda/` | Exploratory analyses not tied to a single model |
 | `docs/` | Glossary, data sources, backtest methodology, latency notes |

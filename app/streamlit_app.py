@@ -10,6 +10,7 @@ Or open the deployed app on Streamlit Cloud (URL in the repo README).
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 import streamlit as st
 
@@ -17,7 +18,7 @@ from app.adapters import run
 from app.model_config import default_ticker, ticker_choices, ticker_mode
 from app.models_registry import list_models
 from app.presets import presets_for_assets
-from app.ui import data_details, data_view, results_view
+from app.ui import data_details, data_view, options_view, results_view
 
 st.set_page_config(
     page_title="Trading Models",
@@ -124,6 +125,33 @@ with st.sidebar:
                 use_container_width=True,
             )
 
+    extra_params: dict[str, Any] = {}
+    if selected.get("family") == "options":
+        st.divider()
+        st.caption("Options parameters")
+        extra_params["implied_vol"] = st.slider(
+            "Implied volatility",
+            min_value=0.05,
+            max_value=0.80,
+            value=0.18,
+            step=0.01,
+            help="Annualized IV used to price and delta-hedge the option each bar.",
+        )
+        extra_params["tenor_days"] = st.slider(
+            "Option tenor (days)",
+            min_value=7,
+            max_value=90,
+            value=30,
+            step=1,
+            help="Calendar days to expiry; a fresh option is rolled at each expiry.",
+        )
+        extra_params["n_paths"] = st.select_slider(
+            "Monte Carlo paths",
+            options=[200, 500, 1000, 2000, 5000, 10000],
+            value=2000,
+            help="Number of simulated GBM paths for the P&L distribution.",
+        )
+
     st.divider()
 
     run_clicked = st.button("▶ Run backtest", type="primary", use_container_width=True)
@@ -172,7 +200,7 @@ if not symbol:
 
 with st.spinner(f"Running {selected['name']} on {symbol}, {start} → {end} ..."):
     try:
-        out = run(selected, str(start), str(end), symbol=symbol)
+        out = run(selected, str(start), str(end), symbol=symbol, **extra_params)
     except ValueError as e:
         st.error(f"Couldn't run the backtest: {e}")
         st.stop()
@@ -189,3 +217,4 @@ with st.spinner(f"Running {selected['name']} on {symbol}, {start} → {end} ..."
 data_details.render(selected, out)
 data_view.render(selected, out)
 results_view.render(out)
+options_view.render(out)  # no-op unless the model returned payoff/simulation
