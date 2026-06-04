@@ -66,7 +66,7 @@
       <h1 class="paper-title">Trading Models — Research</h1>
       <p class="subtitle">A portfolio of systematic trading models and the theory behind them — empirical model breakdowns and first-principles concept writeups, side by side.</p>
       <p class="byline"><span class="who">trading-models</span> research notes</p>
-      <p class="dateline">Compiled 2026-06-04 · classical · machine learning · microstructure · alt-data</p>
+      <p class="dateline">Compiled 2026-06-04 · classical · machine learning · microstructure · alt-data · options</p>
     </div>
 
     <div class="abstract">
@@ -79,7 +79,7 @@
 
     <section class="track">
       <div class="track-head">
-        <span class="ttl"><span class="eyebrow">Track 1 · Empirical</span>Model Breakdowns<span class="count">4 papers</span></span>
+        <span class="ttl"><span class="eyebrow">Track 1 · Empirical</span>Model Breakdowns<span class="count">5 papers</span></span>
         <a class="more" href="models/index.html">filter &amp; sort →</a>
       </div>
 
@@ -88,7 +88,7 @@
         <h3>The Moving-Average Crossover as a Lagged Trend Filter</h3>
         <p>The 50/200-day golden-cross rule on SPY, framed as a finite-impulse-response filter with
         explicit group delay. Why it earns a positive Sharpe yet cannot avoid a deep drawdown.</p>
-        <p class="stat">SPY daily, 2010–2024 · Sharpe <span class="pos">+0.73</span> · Max DD <span class="neg">−34%</span> · <b>working</b></p>
+        <p class="stat">SPY daily, 2010–2024 · Sharpe <span class="pos">+0.75</span> · Max DD <span class="neg">−34%</span> · <b>working</b></p>
       </a>
 
       <a class="toc-item" href="models/02-xgboost-next-day-return-spy.html">
@@ -97,7 +97,7 @@
         <p>A second-order boosted-tree regressor on eight technical features. The information
         coefficient collapses out-of-sample; we reconcile a sub-50% hit rate with a positive Sharpe
         through the Fundamental Law of Active Management.</p>
-        <p class="stat">SPY daily, OOS 2022–2024 · Sharpe <span class="pos">+0.84</span> · Max DD <span class="neg">−14%</span> · <b>working</b></p>
+        <p class="stat">SPY daily, OOS 2022–2024 · Sharpe <span class="pos">+0.96</span> · Max DD <span class="neg">−12%</span> · <b>working</b></p>
       </a>
 
       <a class="toc-item" href="models/03-order-flow-imbalance-btc.html">
@@ -117,6 +117,15 @@
         inverse is untradeable once drawdown is accounted for.</p>
         <p class="stat">Weekly BTC, 2021–2024 · Sharpe <span class="neg">−0.30</span> · Max DD <span class="neg">−80%</span> · <b>negative result</b></p>
       </a>
+      <a class="toc-item" href="models/05-delta-hedged-long-option-spy.html">
+        <span class="no">Paper V · Options · Volatility Trading</span>
+        <h3>Delta-Hedging and the Price of Realized Variance</h3>
+        <p>A continuously delta-hedged long SPY call, priced at 18% implied vol. Its P&amp;L is the
+        dollar-gamma-weighted gap between realized and implied variance; it bleeds steadily through
+        2023–2024 because realized sat below implied — a loss the theory predicts before any backtest.</p>
+        <p class="stat">SPY daily, 2023–2024 · Sharpe <span class="neg">−6.94</span> · Max DD <span class="neg">−8%</span> · <b>demonstrator</b></p>
+      </a>
+
     </section>
 
     <section class="track">

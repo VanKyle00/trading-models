@@ -5,6 +5,66 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trading Models — Working Papers</title>
 <link rel="stylesheet" href="paper.css">
+<style>
+  /* ===== index-only controls (filtering / sorting / density) ===== */
+  .controls { margin: 10px 0 0; }
+  .controls .row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+    padding: 14px 0; border-bottom: 1px solid var(--rule-soft);
+  }
+  .facet { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .facet .flab {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 600; margin-right: 2px;
+  }
+  .chip {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+    color: var(--ink-soft); border: 1px solid var(--rule); background: var(--paper-edge);
+    padding: 4px 10px; border-radius: 2px; cursor: pointer; user-select: none;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .chip:hover { border-color: var(--accent-dim); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.clear { color: var(--ink-faint); background: transparent; }
+  .chip.clear:hover { color: var(--accent); }
+  .controls .spacer { flex: 1 1 auto; }
+  .controls .ctl {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+  }
+  .controls select {
+    font-family: var(--mono); font-size: 11px; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 2px; padding: 5px 8px; cursor: pointer;
+  }
+  .toggle-view { display: inline-flex; border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; }
+  .toggle-view button {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+    padding: 5px 12px; border: none; background: var(--paper-edge); color: var(--ink-soft); cursor: pointer;
+  }
+  .toggle-view button + button { border-left: 1px solid var(--rule); }
+  .toggle-view button.active { background: var(--accent); color: #fff; }
+  .result-count {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+    color: var(--ink-faint); margin: 16px 0 0;
+  }
+  .toc-item.hide { display: none; }
+  .no-results { font-family: var(--serif); font-style: italic; color: var(--ink-faint); padding: 26px 4px; display: none; }
+
+  /* per-card filterable tag pills */
+  .toc-item .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .toc-item .tags span {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em;
+    color: var(--ink-faint); border: 1px solid var(--rule-soft);
+    background: var(--paper-edge); padding: 2px 7px; border-radius: 2px;
+  }
+
+  /* ===== compact density ===== */
+  .toc.compact .toc-item { padding: 13px 20px; margin: 8px 0; }
+  .toc.compact .toc-item > p.desc { display: none; }
+  .toc.compact .toc-item .tags { display: none; }
+  .toc.compact .toc-item h3 { font-size: 18px; margin: 4px 0 5px; }
+  .toc.compact .toc-item .stat { margin-top: 4px; }
+</style>
 </head>
 <body>
 <div class="paper">
@@ -16,9 +76,9 @@
 
   <div class="title-block">
     <h1 class="paper-title">A Catalogue of Systematic Trading Models</h1>
-    <p class="subtitle">Four hypotheses, four families, evaluated end-to-end — winners and negative results reported alike.</p>
+    <p class="subtitle">Five models across five families, evaluated end-to-end — winners and negative results reported alike.</p>
     <p class="byline"><span class="who">trading-models</span> research notes</p>
-    <p class="dateline">Compiled 2026-05-28 · one self-contained paper per model</p>
+    <p class="dateline">Compiled 2026-06-04 · one self-contained paper per model</p>
   </div>
 
   <div class="abstract">
@@ -27,9 +87,10 @@
     share a common evaluation protocol — lookahead-safe signal construction, one-bar execution
     lag, explicit transaction costs, and a fixed battery of risk-adjusted performance metrics —
     so that results across families are read on the same footing.</p>
-    <p>Two of the four hypotheses fail. They are written up with the same rigour as the two that
-    work, because a catalogue that reports only winners is, statistically, a catalogue that has
-    been overfit. Negative results here are evidence, not omissions.</p>
+    <p>Two of the five hypotheses fail outright, and the options paper is a deliberate
+    negative-result demonstrator. They are written up with the same rigour as the winners,
+    because a catalogue that reports only winners is, statistically, one that has been overfit.
+    Negative results here are evidence, not omissions.</p>
     <p class="keywords"><b>Conventions.</b> Returns are simple unless noted; the risk-free rate is
     taken as zero; the Sharpe ratio is annualized by <span class="mono">√(periods/year)</span>
     with the period count stated per paper. See <a href="../methodology.md">methodology.md</a>
@@ -38,49 +99,212 @@
 
   <h2 class="nonum" style="counter-increment:none">The Papers</h2>
 
-  <nav class="toc">
-    <a class="toc-item" href="01-sma-crossover-spy.html">
+  <p class="result-count" style="margin:0 0 -6px"><a href="../index.html">↑ research index</a> &nbsp;·&nbsp; <a href="../concepts/index.html">concept writeups →</a></p>
+
+  <div class="controls" id="controls">
+    <div class="row">
+      <div class="facet">
+        <span class="flab">Family</span>
+        <button class="chip" data-facet="family" data-value="classical">classical</button>
+        <button class="chip" data-facet="family" data-value="ml">ml</button>
+        <button class="chip" data-facet="family" data-value="microstructure">microstructure</button>
+        <button class="chip" data-facet="family" data-value="alt-data">alt-data</button>
+        <button class="chip" data-facet="family" data-value="options">options</button>
+      </div>
+      <div class="facet">
+        <span class="flab">Assets</span>
+        <button class="chip" data-facet="assets" data-value="equities">equities</button>
+        <button class="chip" data-facet="assets" data-value="crypto">crypto</button>
+      </div>
+      <div class="facet">
+        <span class="flab">Window</span>
+        <button class="chip" data-facet="window" data-value="swing">swing</button>
+        <button class="chip" data-facet="window" data-value="intraday">intraday</button>
+      </div>
+      <div class="facet">
+        <span class="flab">Status</span>
+        <button class="chip" data-facet="status" data-value="working">working</button>
+        <button class="chip" data-facet="status" data-value="negative-result">negative-result</button>
+        <button class="chip" data-facet="status" data-value="demonstrator">demonstrator</button>
+      </div>
+      <button class="chip clear" id="clearFilters" hidden>✕ clear filters</button>
+    </div>
+    <div class="row">
+      <span class="ctl">Sort</span>
+      <select id="sortSelect">
+        <option value="order">Paper order</option>
+        <option value="sharpe-desc">Sharpe (high → low)</option>
+        <option value="maxdd-desc">Max drawdown (shallow → deep)</option>
+        <option value="title">Title (A → Z)</option>
+      </select>
+      <span class="spacer"></span>
+      <span class="ctl">View</span>
+      <div class="toggle-view" id="viewToggle">
+        <button data-view="expanded" class="active">Expanded</button>
+        <button data-view="compact">Compact</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="result-count" id="resultCount"></p>
+
+  <nav class="toc" id="toc">
+    <a class="toc-item" href="01-sma-crossover-spy.html"
+       data-family="classical" data-assets="equities" data-window="swing" data-status="working"
+       data-sharpe="0.75" data-maxdd="-0.34" data-order="1"
+       data-title="The Moving-Average Crossover as a Lagged Trend Filter">
       <span class="no">Paper I · Classical · Trend Following</span>
       <h3>The Moving-Average Crossover as a Lagged Trend Filter</h3>
-      <p>The 50/200-day golden-cross rule on SPY, framed as a finite-impulse-response filter with
+      <p class="desc">The 50/200-day golden-cross rule on SPY, framed as a finite-impulse-response filter with
       explicit group delay. Why it earns a positive Sharpe yet cannot avoid a deep drawdown.</p>
-      <p class="stat">SPY daily, 2010–2024 · Sharpe <span class="pos">+0.73</span> · Max DD <span class="neg">−34%</span> · <b>working</b></p>
+      <p class="stat">SPY daily, 2010–2024 · Sharpe <span class="pos">+0.75</span> · Max DD <span class="neg">−34%</span> · <b>working</b></p>
+      <div class="tags"><span>classical</span><span>equities</span><span>swing</span><span>working</span></div>
     </a>
 
-    <a class="toc-item" href="02-xgboost-next-day-return-spy.html">
+    <a class="toc-item" href="02-xgboost-next-day-return-spy.html"
+       data-family="ml" data-assets="equities" data-window="swing" data-status="working"
+       data-sharpe="0.96" data-maxdd="-0.12" data-order="2"
+       data-title="Gradient-Boosted Forecasts of Next-Day Equity Returns">
       <span class="no">Paper II · Machine Learning · Supervised Forecasting</span>
       <h3>Gradient-Boosted Forecasts of Next-Day Equity Returns</h3>
-      <p>A second-order boosted-tree regressor on eight technical features. The information
+      <p class="desc">A second-order boosted-tree regressor on eight technical features. The information
       coefficient collapses out-of-sample; we reconcile a sub-50% hit rate with a positive Sharpe
       through the Fundamental Law of Active Management.</p>
-      <p class="stat">SPY daily, OOS 2022–2024 · Sharpe <span class="pos">+0.84</span> · Max DD <span class="neg">−14%</span> · <b>working</b></p>
+      <p class="stat">SPY daily, OOS 2022–2024 · Sharpe <span class="pos">+0.96</span> · Max DD <span class="neg">−12%</span> · <b>working</b></p>
+      <div class="tags"><span>ml</span><span>equities</span><span>swing</span><span>working</span></div>
     </a>
 
-    <a class="toc-item" href="03-order-flow-imbalance-btc.html">
+    <a class="toc-item" href="03-order-flow-imbalance-btc.html"
+       data-family="microstructure" data-assets="crypto" data-window="intraday" data-status="negative-result"
+       data-sharpe="-86.37" data-maxdd="-0.36" data-order="3"
+       data-title="Order-Flow Imbalance and the Decay of Price Impact">
       <span class="no">Paper III · Microstructure · Order Flow</span>
       <h3>Order-Flow Imbalance and the Decay of Price Impact</h3>
-      <p>Trade-signed order-flow imbalance on minute-bar BTCUSDT across the 2024-08-05 crash. The
+      <p class="desc">Trade-signed order-flow imbalance on minute-bar BTCUSDT across the 2024-08-05 crash. The
       continuation hypothesis is rejected; we derive why minute-frequency Sharpe is not comparable
       to the daily-bar papers and what the scale-invariant metrics say instead.</p>
       <p class="stat">BTCUSDT 1-min, Aug 2024 · Hit rate <span class="neg">29.7%</span> · Max DD <span class="neg">−36%</span> · <b>negative result</b></p>
+      <div class="tags"><span>microstructure</span><span>crypto</span><span>intraday</span><span>negative-result</span></div>
     </a>
 
-    <a class="toc-item" href="04-google-trends-contrarian-btc.html">
+    <a class="toc-item" href="04-google-trends-contrarian-btc.html"
+       data-family="alt-data" data-assets="crypto" data-window="swing" data-status="negative-result"
+       data-sharpe="-0.30" data-maxdd="-0.80" data-order="4"
+       data-title="Search Attention as a Contrarian Signal for Bitcoin">
       <span class="no">Paper IV · Alternative Data · Attention</span>
       <h3>Search Attention as a Contrarian Signal for Bitcoin</h3>
-      <p>A rolling z-score of "bitcoin" search interest, traded contrarian. We show the z-transform
+      <p class="desc">A rolling z-score of "bitcoin" search interest, traded contrarian. We show the z-transform
       fails to strip the price-coincident component at weekly resolution, and that even the momentum
       inverse is untradeable once drawdown is accounted for.</p>
       <p class="stat">Weekly BTC, 2021–2024 · Sharpe <span class="neg">−0.30</span> · Max DD <span class="neg">−80%</span> · <b>negative result</b></p>
+      <div class="tags"><span>alt-data</span><span>crypto</span><span>swing</span><span>negative-result</span></div>
+    </a>
+
+    <a class="toc-item" href="05-delta-hedged-long-option-spy.html"
+       data-family="options" data-assets="equities" data-window="swing" data-status="demonstrator"
+       data-sharpe="-6.94" data-maxdd="-0.08" data-order="5"
+       data-title="Delta-Hedging and the Price of Realized Variance">
+      <span class="no">Paper V · Options · Volatility Trading</span>
+      <h3>Delta-Hedging and the Price of Realized Variance</h3>
+      <p class="desc">A continuously delta-hedged long SPY call, priced at 18% implied vol. We derive that its
+      P&amp;L is the dollar-gamma-weighted gap between realized and implied variance, then show it
+      bleeds steadily through 2023–2024 because realized sat below implied — a loss the theory
+      predicts before any backtest.</p>
+      <p class="stat">SPY daily, 2023–2024 · Sharpe <span class="neg">−6.94</span> · Max DD <span class="neg">−8%</span> · <b>demonstrator</b></p>
+      <div class="tags"><span>options</span><span>equities</span><span>swing</span><span>demonstrator</span></div>
     </a>
   </nav>
+
+  <p class="no-results" id="noResults">No papers match the selected tags.</p>
 
   <footer class="colophon">
     <p>SOURCE: models/&lt;family&gt;/NN-slug/ &nbsp;·&nbsp; REPRODUCE: uv run python models/&lt;family&gt;/&lt;slug&gt;/backtest.py</p>
     <p>SEE ALSO: <a href="../index.html">research index</a> · <a href="../concepts/index.html">concept writeups</a> · <a href="../methodology.md">methodology.md</a> · <a href="../glossary.md">glossary.md</a> · <a href="../data-sources.md">data-sources.md</a> · <a href="../../MODELS.md">MODELS.md</a></p>
-    <p>trading-models · working papers · 2026-05-28</p>
+    <p>trading-models · working papers · 2026-06-04</p>
   </footer>
 
 </div>
+
+<script>
+(function () {
+  var toc = document.getElementById('toc');
+  var items = Array.prototype.slice.call(toc.querySelectorAll('.toc-item'));
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip[data-facet]'));
+  var clearBtn = document.getElementById('clearFilters');
+  var sortSelect = document.getElementById('sortSelect');
+  var viewToggle = document.getElementById('viewToggle');
+  var resultCount = document.getElementById('resultCount');
+  var noResults = document.getElementById('noResults');
+  var facets = ['family', 'assets', 'window', 'status'];
+  var active = { family: {}, assets: {}, window: {}, status: {} };
+
+  function activeCount(f) { return Object.keys(active[f]).length; }
+
+  function applyFilters() {
+    var shown = 0;
+    items.forEach(function (it) {
+      var ok = facets.every(function (f) {
+        return activeCount(f) === 0 || active[f][it.dataset[f]] === true;
+      });
+      it.classList.toggle('hide', !ok);
+      if (ok) shown++;
+    });
+    resultCount.textContent = 'Showing ' + shown + ' of ' + items.length + ' papers';
+    noResults.style.display = shown === 0 ? 'block' : 'none';
+    clearBtn.hidden = !facets.some(function (f) { return activeCount(f) > 0; });
+  }
+
+  function applySort() {
+    var v = sortSelect.value;
+    var sorted = items.slice().sort(function (a, b) {
+      if (v === 'order') return (+a.dataset.order) - (+b.dataset.order);
+      if (v === 'sharpe-desc') return (+b.dataset.sharpe) - (+a.dataset.sharpe);
+      if (v === 'maxdd-desc') return (+b.dataset.maxdd) - (+a.dataset.maxdd);
+      if (v === 'title') return a.dataset.title.localeCompare(b.dataset.title);
+      return 0;
+    });
+    sorted.forEach(function (it) { toc.appendChild(it); });
+  }
+
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var f = chip.dataset.facet, val = chip.dataset.value;
+      if (active[f][val]) { delete active[f][val]; chip.classList.remove('active'); }
+      else { active[f][val] = true; chip.classList.add('active'); }
+      applyFilters();
+    });
+  });
+
+  clearBtn.addEventListener('click', function () {
+    facets.forEach(function (f) { active[f] = {}; });
+    chips.forEach(function (c) { c.classList.remove('active'); });
+    applyFilters();
+  });
+
+  sortSelect.addEventListener('change', applySort);
+
+  viewToggle.querySelectorAll('button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var view = btn.dataset.view;
+      viewToggle.querySelectorAll('button').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      toc.classList.toggle('compact', view === 'compact');
+      try { localStorage.setItem('tm-view', view); } catch (e) {}
+    });
+  });
+
+  // restore saved density preference
+  try {
+    var saved = localStorage.getItem('tm-view');
+    if (saved === 'compact') {
+      var b = viewToggle.querySelector('button[data-view="compact"]');
+      if (b) b.click();
+    }
+  } catch (e) {}
+
+  applyFilters();
+})();
+</script>
 </body>
 </html>

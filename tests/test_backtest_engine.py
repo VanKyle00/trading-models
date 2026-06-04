@@ -111,3 +111,51 @@ def test_max_drawdown_is_nonpositive(rising_prices: pd.Series) -> None:
     signals = pd.Series(1.0, index=rising_prices.index)
     result = run_backtest(rising_prices, signals, fee_bps=0, slippage_bps=0)
     assert result.metrics["max_drawdown"] <= 0.0
+
+
+def test_n_trials_lowers_deflated_sharpe(rising_prices: pd.Series) -> None:
+    # A noisy signal so returns have non-zero variance and a positive mean.
+    rng = np.random.default_rng(3)
+    signals = pd.Series(
+        rng.integers(0, 2, size=len(rising_prices)).astype(float), index=rising_prices.index
+    )
+    one = run_backtest(rising_prices, signals, n_trials=1)
+    many = run_backtest(rising_prices, signals, n_trials=50)
+    assert many.metrics["deflated_sharpe"] <= one.metrics["deflated_sharpe"]
+    assert "n_trials" in many.config and many.config["n_trials"] == 50
+
+
+def test_execution_prices_use_open_on_entry_bar() -> None:
+    idx = pd.date_range("2020-01-01", periods=3, freq="D")
+    close = pd.Series([100.0, 110.0, 121.0], index=idx)
+    opens = pd.Series([100.0, 105.0, 121.0], index=idx)
+    signals = pd.Series([1.0, 1.0, 1.0], index=idx)
+
+    base = run_backtest(close, signals, fee_bps=0, slippage_bps=0)
+    nextopen = run_backtest(close, signals, execution_prices=opens, fee_bps=0, slippage_bps=0)
+
+    # Entry happens at bar 1 (position 0->1). Next-open fills earn close/open-1
+    # on that bar instead of the full close-to-close move.
+    assert nextopen.returns.iloc[1] == pytest.approx(110.0 / 105.0 - 1.0)
+    assert base.returns.iloc[1] == pytest.approx(110.0 / 100.0 - 1.0)
+    # Held bar 2 (no position change) is close-to-close in both.
+    assert nextopen.returns.iloc[2] == pytest.approx(121.0 / 110.0 - 1.0)
+    # Next-open is strictly more conservative here.
+    assert nextopen.equity_curve.iloc[-1] < base.equity_curve.iloc[-1]
+
+
+def test_execution_prices_none_is_unchanged(rising_prices: pd.Series) -> None:
+    signals = pd.Series(1.0, index=rising_prices.index)
+    a = run_backtest(rising_prices, signals, fee_bps=1.0, slippage_bps=0.5)
+    b = run_backtest(rising_prices, signals, execution_prices=None, fee_bps=1.0, slippage_bps=0.5)
+    pd.testing.assert_series_equal(a.equity_curve, b.equity_curve)
+    pd.testing.assert_series_equal(a.returns, b.returns)
+
+
+def test_execution_prices_index_mismatch_raises(rising_prices: pd.Series) -> None:
+    signals = pd.Series(1.0, index=rising_prices.index)
+    bad_opens = pd.Series(
+        1.0, index=pd.date_range("2099-01-01", periods=len(rising_prices), freq="D")
+    )
+    with pytest.raises(ValueError, match="execution_prices"):
+        run_backtest(rising_prices, signals, execution_prices=bad_opens)

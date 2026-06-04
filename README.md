@@ -30,18 +30,22 @@ uv run streamlit run app/streamlit_app.py
 
 | Model | Family | Window | Assets | OOS Sharpe | Max DD | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| [SMA Crossover on SPY](models/classical/01-sma-crossover-spy/) | classical | swing | equities | 0.73 | -0.34 | working |
-| [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | 0.84 | -0.14 | working |
-| [Google Trends Contrarian on BTC](models/alt-data/01-google-trends-btc/) | alt-data | swing | crypto | -0.30 | -0.80 | negative-result |
-| [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | -86.5 | -0.36 | negative-result |
+| [SMA Crossover on SPY](https://vankyle00.github.io/trading-models/docs/models/01-sma-crossover-spy.html) | classical | swing | equities | 0.75 | -0.34 | working |
+| [XGBoost Next-Day Return on SPY](https://vankyle00.github.io/trading-models/docs/models/02-xgboost-next-day-return-spy.html) | ml | swing | equities | 0.96 | -0.12 | working |
+| [Google Trends Contrarian on BTC](https://vankyle00.github.io/trading-models/docs/models/04-google-trends-contrarian-btc.html) | alt-data | swing | crypto | -0.30 | -0.80 | negative-result |
+| [Order Flow Imbalance on BTC](https://vankyle00.github.io/trading-models/docs/models/03-order-flow-imbalance-btc.html) | microstructure | intraday | crypto | -86.37 | -0.36 | negative-result |
+| [Delta-Hedged Long Option on SPY](https://vankyle00.github.io/trading-models/docs/models/05-delta-hedged-long-option-spy.html) | options | swing | equities | -6.94 | -0.08 | working |
 
 Rows 3 and 4 are intentional negative results: hypotheses were tested
 honestly and the data rejected them. Each model's README documents
 what was tested, the inverse direction where applicable, and what the
 result implies. Negative results are first-class citizens here — the
-alternative is a portfolio of overfit "winners".
+alternative is a portfolio of overfit "winners". Row 5 (the delta-hedged
+options model) also posts a negative Sharpe by design — it is the
+options-pipeline demonstrator (hence status `working`), and its loss is
+expected long-volatility theta bleed from pricing above realized vol, not a bug.
 
-Note on the microstructure Sharpe: the -86.5 number is annualized
+Note on the microstructure Sharpe: the -86.37 number is annualized
 assuming 525,600 minute-bars per year. The *direction* (clearly
 losing) and the scale-invariant metrics (hit rate 29.7%, drawdown
 -36%) are what matter for cross-model comparison; see the model's
@@ -73,6 +77,7 @@ auto-generated from each model's `model.md` frontmatter.
 | `models/classical/` | Mean reversion, momentum, pairs trading, statistical arbitrage |
 | `models/ml/` | Gradient boosting, LSTMs, transformers |
 | `models/microstructure/` | Orderbook imbalance, microprice, queue dynamics (empty for now) |
+| `models/options/` | Options pricing, Greeks, multi-leg payoffs, vol strategies |
 | `models/alt-data/` | Sentiment, news, alternative signals (empty for now) |
 | `notebooks/eda/` | Exploratory analyses not tied to a single model |
 | `docs/` | Research hub (`docs/index.html`), glossary, data sources, backtest methodology, latency notes |
