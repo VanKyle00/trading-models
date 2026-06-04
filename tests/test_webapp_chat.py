@@ -39,3 +39,19 @@ def test_chat_rejects_empty_message():
     client = TestClient(create_app())
     resp = client.post("/api/v1/chat", json={"message": ""})
     assert resp.status_code == 400
+
+
+def test_chat_provider_failure_still_emits_final(monkeypatch):
+    from tradinglib.assistant import provider as provider_mod
+
+    def boom(*a, **k):
+        raise RuntimeError("no API key configured")
+
+    monkeypatch.setattr(provider_mod, "ClaudeProvider", boom)
+
+    client = TestClient(create_app())
+    resp = client.post("/api/v1/chat", json={"message": "hello"})
+    assert resp.status_code == 200  # stream already opened
+    events = _sse_events(resp.text)
+    assert events[-1]["type"] == "final"  # graceful terminal event, not a truncated stream
+    assert "unavailable" in events[-1]["text"].lower()

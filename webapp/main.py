@@ -95,9 +95,16 @@ def create_app() -> FastAPI:
             return JSONResponse({"error": "rate limit reached, try later"}, status_code=429)
 
         def stream() -> Any:
-            provider = _assistant_provider.ClaudeProvider()
-            for event in run_chat(message, provider, Budget()):
-                yield f"data: {json.dumps(event)}\n\n"
+            try:
+                provider = _assistant_provider.ClaudeProvider()
+                for event in run_chat(message, provider, Budget()):
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception:  # never break the SSE stream; always end with a final event
+                yield (
+                    "data: "
+                    + json.dumps({"type": "final", "text": "Assistant is unavailable right now."})
+                    + "\n\n"
+                )
 
         return StreamingResponse(stream(), media_type="text/event-stream")
 
