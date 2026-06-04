@@ -50,3 +50,34 @@ def test_run_backtest_invalid_config_is_error_not_crash():
 def test_unknown_tool_is_error():
     _out, is_error = dispatch("frobnicate", {})
     assert is_error is True
+
+
+def test_run_backtest_happy_path_returns_compact_summary():
+    out, is_error = dispatch(
+        "run_backtest",
+        {
+            "model_id": "models/classical/01-sma-crossover-spy",
+            "symbol": "SPY",
+            "start": "2022-01-01",
+            "end": "2023-01-01",
+            "params": {"fast": 20, "slow": 50},
+        },
+    )
+    assert is_error is False
+    payload = json.loads(out)
+    assert "metrics" in payload and "series" not in payload  # compact, no full series
+    assert isinstance(payload["n_trades"], int)
+
+
+def test_dispatch_never_raises_on_internal_error(monkeypatch):
+    # Force an unexpected (non-Request/Key/Value) error inside a handler and
+    # confirm dispatch converts it to an is_error result instead of propagating.
+    import tradinglib.assistant.tools as tools_mod
+
+    def boom(*a, **k):
+        raise ConnectionError("network down")
+
+    monkeypatch.setattr(tools_mod, "list_specs", boom)
+    out, is_error = dispatch("list_models", {})
+    assert is_error is True
+    assert "list_models" in out

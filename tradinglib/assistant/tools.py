@@ -122,26 +122,31 @@ def _run_backtest(args: dict[str, Any]) -> tuple[str, bool]:
             params=args.get("params") or {},
         )
         result = run_to_dict(run(req))
+        equity = result["series"]["equity"]["values"]
+        return _ok(
+            {
+                "model_id": result["model_id"],
+                "symbol": result["symbol"],
+                "params": result["params"],
+                "metrics": result["metrics"],
+                "n_trades": len(result["trades"]),
+                "final_equity": equity[-1] if equity else None,
+            }
+        )
     except (RequestError, KeyError, ValueError) as exc:
         return _err(f"could not run: {exc}")
-    equity = result["series"]["equity"]["values"]
-    return _ok(
-        {
-            "model_id": result["model_id"],
-            "symbol": result["symbol"],
-            "params": result["params"],
-            "metrics": result["metrics"],
-            "n_trades": len(result["trades"]),
-            "final_equity": equity[-1] if equity else None,
-        }
-    )
 
 
 def dispatch(name: str, args: dict[str, Any]) -> tuple[str, bool]:
-    if name == "list_models":
-        return _list_models()
-    if name == "get_model_spec":
-        return _get_model_spec(args)
-    if name == "run_backtest":
-        return _run_backtest(args)
-    return _err(f"unknown tool {name!r}")
+    """Run a tool. Guarantees it never raises — any failure becomes (msg, is_error)
+    so the agent loop and the public SSE stream can't be broken by a tool error."""
+    try:
+        if name == "list_models":
+            return _list_models()
+        if name == "get_model_spec":
+            return _get_model_spec(args)
+        if name == "run_backtest":
+            return _run_backtest(args)
+        return _err(f"unknown tool {name!r}")
+    except Exception as exc:  # tool boundary must never raise into the agent
+        return _err(f"tool {name!r} failed: {type(exc).__name__}: {exc}")
