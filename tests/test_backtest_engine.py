@@ -111,3 +111,15 @@ def test_max_drawdown_is_nonpositive(rising_prices: pd.Series) -> None:
     signals = pd.Series(1.0, index=rising_prices.index)
     result = run_backtest(rising_prices, signals, fee_bps=0, slippage_bps=0)
     assert result.metrics["max_drawdown"] <= 0.0
+
+
+def test_n_trials_lowers_deflated_sharpe(rising_prices: pd.Series) -> None:
+    # A noisy signal so returns have non-zero variance and a positive mean.
+    rng = np.random.default_rng(3)
+    signals = pd.Series(
+        rng.integers(0, 2, size=len(rising_prices)).astype(float), index=rising_prices.index
+    )
+    one = run_backtest(rising_prices, signals, n_trials=1)
+    many = run_backtest(rising_prices, signals, n_trials=50)
+    assert many.metrics["deflated_sharpe"] <= one.metrics["deflated_sharpe"]
+    assert "n_trials" in many.config and many.config["n_trials"] == 50

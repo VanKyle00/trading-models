@@ -47,6 +47,7 @@ def run_backtest(
     fee_bps: float = 1.0,
     slippage_bps: float = 0.5,
     periods_per_year: int = 252,
+    n_trials: int = 1,
 ) -> BacktestResult:
     """Run a vectorized backtest of a single-asset strategy.
 
@@ -88,7 +89,9 @@ def run_backtest(
     net_returns = gross_returns - cost_drag
     equity_curve = (1.0 + net_returns).cumprod() * initial_capital
 
-    metrics = compute_metrics(net_returns, equity_curve, periods_per_year=periods_per_year)
+    metrics = compute_metrics(
+        net_returns, equity_curve, periods_per_year=periods_per_year, n_trials=n_trials
+    )
 
     return BacktestResult(
         equity_curve=equity_curve,
@@ -101,5 +104,6 @@ def run_backtest(
             "fee_bps": fee_bps,
             "slippage_bps": slippage_bps,
             "periods_per_year": periods_per_year,
+            "n_trials": n_trials,
         },
     )
