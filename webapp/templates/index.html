@@ -121,7 +121,14 @@
 
     /* ── assistant console ─────────────────────────────────── */
     .console { border-top: 1px solid var(--line-strong); background: var(--inset);
-               display: flex; flex-direction: column; max-height: 42vh; }
+               display: flex; flex-direction: column;
+               height: 300px; min-height: 96px; max-height: 85vh; }
+    /* drag the top edge up/down to resize */
+    .console-resize { flex-shrink: 0; height: 8px; cursor: ns-resize; touch-action: none;
+                      display: flex; align-items: center; justify-content: center; }
+    .console-resize::before { content: ""; width: 38px; height: 3px; border-radius: 2px;
+                              background: var(--line); transition: background .12s; }
+    .console-resize:hover::before, .console-resize.dragging::before { background: var(--accent); }
     .console-head { font-size: 9px; color: var(--accent); letter-spacing: .16em;
                     padding: 9px 16px; border-bottom: 1px solid var(--line);
                     display: flex; align-items: center; gap: 8px; }
@@ -210,7 +217,8 @@
         <p class="placeholder">Configure a backtest in the left rail and press Run.</p>
       </section>
 
-      <section class="console">
+      <section class="console" id="console">
+        <div class="console-resize" id="console-resize" title="Drag to resize"></div>
         <div class="console-head">Assistant</div>
         <div class="transcript" id="transcript">
           <div class="empty">Run a backtest, then ask about it — e.g. &ldquo;explain the worst month&rdquo; or &ldquo;how would a longer lookback change this?&rdquo;</div>
@@ -274,6 +282,30 @@
     document.body.addEventListener("htmx:beforeRequest", function () {
       document.body.classList.add("htmx-request");
     });
+
+    // ── drag-to-resize the assistant console ──────────────
+    (function () {
+      var handle = document.getElementById("console-resize"),
+          consoleEl = document.getElementById("console"), dragging = false;
+      function clamp(h) { return Math.max(96, Math.min(h, window.innerHeight * 0.85)); }
+      function setHeight(h) {
+        h = clamp(h); consoleEl.style.height = h + "px";
+        try { localStorage.setItem("tm-console-h", h); } catch (_) {}
+      }
+      var saved = parseFloat((function () { try { return localStorage.getItem("tm-console-h"); } catch (_) { return null; } })());
+      if (saved) consoleEl.style.height = clamp(saved) + "px";
+      handle.addEventListener("pointerdown", function (e) {
+        dragging = true; handle.classList.add("dragging");
+        handle.setPointerCapture(e.pointerId); e.preventDefault();
+      });
+      handle.addEventListener("pointermove", function (e) {
+        if (dragging) setHeight(window.innerHeight - e.clientY);
+      });
+      handle.addEventListener("pointerup", function (e) {
+        dragging = false; handle.classList.remove("dragging");
+        try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+      });
+    })();
 
     // ── assistant console (POST + SSE over fetch) ──────────
     (function () {
