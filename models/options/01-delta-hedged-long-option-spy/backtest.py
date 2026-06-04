@@ -48,7 +48,7 @@ class DeltaHedgedLongOption:
     def on_bar(self, engine: OptionsEngine, t: pd.Timestamp, spot: float) -> None:
         if not engine.position.legs:
             expiry = t + pd.Timedelta(days=self.tenor_days)
-            engine.add_leg(OptionLeg(self.right, strike=round(spot), expiry=expiry, quantity=1.0))
+            engine.add_leg(OptionLeg(self.right, strike=float(round(spot)), expiry=expiry, quantity=1.0))
         engine.hedge_to_delta(0.0)
 
 
@@ -102,6 +102,9 @@ def run_for_gui(
         spot=spot0,
         vol=implied_vol,
         rate=RATE,
+        # Clamp the simulated horizon to the historical window length. When it is
+        # shorter than tenor_days the simulated option doesn't expire within the
+        # path, so the final equity is the BSM mark rather than the settlement value.
         days=min(tenor_days, len(prices)),
         n_paths=n_paths,
         fee_bps=FEE_BPS,

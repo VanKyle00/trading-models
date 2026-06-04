@@ -23,5 +23,7 @@ def test_run_for_gui_returns_expected_keys() -> None:
     assert "close" in out["data"].columns
     assert out["simulation"].pnl_distribution.shape[0] <= 200
     assert "payoff" in out
-    assert {"spots", "values"} <= set(out["payoff"])
+    assert {"spots", "values", "expiry_values", "strike"} <= set(out["payoff"])
+    assert out["params"]["symbol"] == "SPY"
+    assert len(out["result"].equity_curve) == len(out["data"])
     assert out["symbol"] == "SPY"
