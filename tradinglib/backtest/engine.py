@@ -48,6 +48,7 @@ def run_backtest(
     slippage_bps: float = 0.5,
     periods_per_year: int = 252,
     n_trials: int = 1,
+    execution_prices: pd.Series | None = None,
 ) -> BacktestResult:
     """Run a vectorized backtest of a single-asset strategy.
 
@@ -71,11 +72,19 @@ def run_backtest(
         one. Forwarded to :func:`compute_metrics` to deflate the Sharpe; ``1``
         (the default) leaves the Deflated Sharpe equal to the Probabilistic
         Sharpe.
+    execution_prices:
+        Optional per-bar fill prices (e.g. the open series). When provided, a
+        position change is filled at this bar's value rather than the prior
+        close, so the entry bar earns ``execution_price -> close``. ``None``
+        (default) keeps close-to-close fills, bit-identical to prior behavior.
     """
     if not prices.index.equals(signals.index):
         raise ValueError("prices and signals must share the same index")
     if len(prices) < 2:
         raise ValueError("need at least 2 bars to compute a return")
+
+    if execution_prices is not None and not prices.index.equals(execution_prices.index):
+        raise ValueError("prices and execution_prices must share the same index")
 
     price_returns = prices.pct_change().fillna(0.0)
 
@@ -84,10 +93,21 @@ def run_backtest(
     # look-ahead bugs in backtests — keep it explicit.
     position = signals.shift(1).fillna(0.0)
 
-    gross_returns = position * price_returns
-
     prev_position = position.shift(1).fillna(0.0)
     turnover = (position - prev_position).abs()
+
+    if execution_prices is not None:
+        # A position change in force at bar t was decided at close[t-1] and is
+        # filled at bar t's OPEN. The entry bar therefore earns open[t] ->
+        # close[t], not close[t-1] -> close[t]. Held (unchanged) bars stay
+        # close-to-close. This removes the optimism of filling at the very close
+        # used to make the decision.
+        entered = turnover > 0.0
+        entry_returns = (prices / execution_prices - 1.0).fillna(0.0)
+        price_returns = price_returns.where(~entered, entry_returns)
+
+    gross_returns = position * price_returns
+
     cost_per_unit_turnover = (fee_bps + slippage_bps) / 10_000.0
     cost_drag = turnover * cost_per_unit_turnover
 
@@ -110,5 +130,6 @@ def run_backtest(
             "slippage_bps": slippage_bps,
             "periods_per_year": periods_per_year,
             "n_trials": n_trials,
+            "execution": "next_open" if execution_prices is not None else "decision_close",
         },
     )
