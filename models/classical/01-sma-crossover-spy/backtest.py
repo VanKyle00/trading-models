@@ -42,6 +42,10 @@ def run_for_gui(
     symbol: str = SYMBOL,
     fast: int = FAST_WINDOW,
     slow: int = SLOW_WINDOW,
+    fee_bps: float = FEE_BPS,
+    slippage_bps: float = SLIPPAGE_BPS,
+    initial_capital: float = 100_000.0,
+    size_mult: float = 1.0,
 ) -> dict[str, Any]:
     """Run the SMA crossover end-to-end without writing to disk.
 
@@ -56,10 +60,15 @@ def run_for_gui(
     prices = bars["close"]
     fast_ma = prices.rolling(fast).mean()
     slow_ma = prices.rolling(slow).mean()
-    signal = (fast_ma > slow_ma).astype(float)
+    signal = (fast_ma > slow_ma).astype(float) * size_mult
 
     result = run_backtest(
-        prices, signal, execution_prices=bars["open"], fee_bps=FEE_BPS, slippage_bps=SLIPPAGE_BPS
+        prices,
+        signal,
+        execution_prices=bars["open"],
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        initial_capital=initial_capital,
     )
 
     data = pd.DataFrame({"close": prices, "fast_ma": fast_ma, "slow_ma": slow_ma, "signal": signal})
@@ -73,6 +82,10 @@ def run_for_gui(
             "symbol": symbol,
             "fast": fast,
             "slow": slow,
+            "fee_bps": fee_bps,
+            "slippage_bps": slippage_bps,
+            "initial_capital": initial_capital,
+            "size_mult": size_mult,
         },
     }
 

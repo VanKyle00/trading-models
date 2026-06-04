@@ -52,6 +52,10 @@ def run_for_gui(
     end: str | date | None = None,
     *,
     symbol: str = SYMBOL,
+    fee_bps: float = FEE_BPS,
+    slippage_bps: float = SLIPPAGE_BPS,
+    initial_capital: float = 100_000.0,
+    size_mult: float = 1.0,
 ) -> dict[str, Any]:
     """Predict + backtest on a user-selected window.
 
@@ -85,7 +89,7 @@ def run_for_gui(
             f"OOS slice starts at {split.date()}"
         )
     pred = pd.Series(model.predict(x), index=x.index, name="predicted_return")
-    signal = (pred > 0).astype(float)
+    signal = (pred > 0).astype(float) * size_mult
 
     user_prices = prices.loc[signal.index]
     user_opens = bars["open"].loc[signal.index]
@@ -93,8 +97,9 @@ def run_for_gui(
         user_prices,
         signal,
         execution_prices=user_opens,
-        fee_bps=FEE_BPS,
-        slippage_bps=SLIPPAGE_BPS,
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        initial_capital=initial_capital,
     )
 
     data = pd.DataFrame({"close": user_prices, "predicted_return": pred, "signal": signal})
@@ -106,6 +111,10 @@ def run_for_gui(
             "start": str(start_ts.date()),
             "end": str(end_ts.date()),
             "oos_split": split.date().isoformat(),
+            "fee_bps": fee_bps,
+            "slippage_bps": slippage_bps,
+            "initial_capital": initial_capital,
+            "size_mult": size_mult,
         },
     }
 
