@@ -24,6 +24,8 @@ in the run you're looking at. Bone / night themes, nothing to install.
 
 > First load can take a few seconds — the app scales to zero when idle.
 
+[![The Trading Models workbench: backtest results with the bounded LLM assistant](docs/assets/workbench.png)](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run)
+
 There's also the original **[Streamlit app](https://trading-models-swqny2mhsqftylrq8hj3w9.streamlit.app/)**,
 which serves the same backtests via the shared `tradinglib.service` layer.
 
