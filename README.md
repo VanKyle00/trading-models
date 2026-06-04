@@ -41,6 +41,13 @@ override with `ASSISTANT_MODEL` (e.g. `claude-sonnet-4-6`). The assistant is a
 bounded agent: it can only list models, read a model's spec, and run backtests —
 no code execution — with per-session token/run caps and per-IP rate limiting.
 
+### Deploy the workbench (Render)
+
+The workbench ships with a `Dockerfile` and a `render.yaml` blueprint. In the
+[Render](https://render.com) dashboard: **New > Blueprint**, pick this repo, and
+set the `ANTHROPIC_API_KEY` secret (the chat degrades gracefully without it).
+Pushes to `main` auto-deploy. Full steps in [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
 ## Current models
 
 | Model | Family | Window | Assets | OOS Sharpe | Max DD | Status |

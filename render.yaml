@@ -1,0 +1,18 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# In the Render dashboard: New > Blueprint, pick this repo, then set the
+# ANTHROPIC_API_KEY secret. Pushes to main auto-deploy.
+services:
+  - type: web
+    name: trading-models-workbench
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      # Required for the LLM chat console. Left unset, the assistant degrades
+      # gracefully to "Assistant is unavailable right now." Set in the dashboard.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ASSISTANT_MODEL
+        value: claude-haiku-4-5

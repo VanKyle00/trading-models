@@ -1,0 +1,22 @@
+# Keep the build context (and image) small. The yfinance/data caches are
+# re-fetched on the host, so the local copies never go into the image.
+.git
+.github
+.gitignore
+.venv
+**/__pycache__/
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.superpowers/
+data/raw/
+data/processed/
+notebooks/
+*.ipynb
+docs/
+tests/
+*.png
+.env
+.env.*
+!.env.example
