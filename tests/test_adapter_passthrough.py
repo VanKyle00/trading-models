@@ -14,11 +14,18 @@ def test_run_forwards_extra_params(monkeypatch) -> None:
             def run_for_gui(start, end, **params):
                 captured.update(params)
                 return {"ok": True}
+
         return M
 
     monkeypatch.setattr(adapters, "_load_backtest_module", fake_loader)
-    out = adapters.run({"_path": "models/options/01-delta-hedged-long-option-spy"},
-                       "2023-01-01", "2023-02-01",
-                       symbol="SPY", implied_vol=0.25, tenor_days=21, n_paths=500)
+    out = adapters.run(
+        {"_path": "models/options/01-delta-hedged-long-option-spy"},
+        "2023-01-01",
+        "2023-02-01",
+        symbol="SPY",
+        implied_vol=0.25,
+        tenor_days=21,
+        n_paths=500,
+    )
     assert out == {"ok": True}
     assert captured == {"symbol": "SPY", "implied_vol": 0.25, "tenor_days": 21, "n_paths": 500}

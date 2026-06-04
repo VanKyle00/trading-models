@@ -48,15 +48,21 @@ class DeltaHedgedLongOption:
     def on_bar(self, engine: OptionsEngine, t: pd.Timestamp, spot: float) -> None:
         if not engine.position.legs:
             expiry = t + pd.Timedelta(days=self.tenor_days)
-            engine.add_leg(OptionLeg(self.right, strike=float(round(spot)), expiry=expiry, quantity=1.0))
+            engine.add_leg(
+                OptionLeg(self.right, strike=float(round(spot)), expiry=expiry, quantity=1.0)
+            )
         engine.hedge_to_delta(0.0)
 
 
-def _payoff_curve(spot: float, strike: float, vol: float, rate: float, tenor_days: int) -> dict[str, Any]:
+def _payoff_curve(
+    spot: float, strike: float, vol: float, rate: float, tenor_days: int
+) -> dict[str, Any]:
     """Value of one long call vs spot, today and at expiry — for the GUI plot."""
     spots = np.linspace(spot * 0.8, spot * 1.2, 80)
     t_yrs = tenor_days / 365.0
-    today = np.array([bs_price("call", s, strike, t_yrs, vol, rate) * CONTRACT_MULTIPLIER for s in spots])
+    today = np.array(
+        [bs_price("call", s, strike, t_yrs, vol, rate) * CONTRACT_MULTIPLIER for s in spots]
+    )
     at_expiry = np.maximum(spots - strike, 0.0) * CONTRACT_MULTIPLIER
     return {"spots": spots, "values": today, "expiry_values": at_expiry, "strike": strike}
 

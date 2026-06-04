@@ -50,7 +50,9 @@ def _long_call_factory():
             def on_bar(self, engine: OptionsEngine, t, spot) -> None:
                 if not self.opened:
                     expiry = t + pd.Timedelta(days=30)
-                    engine.add_leg(OptionLeg("call", strike=round(spot), expiry=expiry, quantity=1.0))
+                    engine.add_leg(
+                        OptionLeg("call", strike=round(spot), expiry=expiry, quantity=1.0)
+                    )
                     self.opened = True
 
         return BuyCall()

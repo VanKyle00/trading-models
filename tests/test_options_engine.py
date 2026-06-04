@@ -73,9 +73,7 @@ def test_expired_leg_settles_to_intrinsic() -> None:
                 engine.add_leg(OptionLeg("call", strike=100.0, expiry=expiry, quantity=1.0))
                 self.opened = True
 
-    result = run_options_backtest(
-        prices, BuyOnce(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0
-    )
+    result = run_options_backtest(prices, BuyOnce(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0)
     assert result.equity_curve.iloc[-1] == pytest.approx(result.equity_curve.iloc[-2], abs=1e-6)
 
 
@@ -96,8 +94,13 @@ def test_negative_equity_yields_nan_diagnostics() -> None:
                 self.opened = True
 
     result = run_options_backtest(
-        prices, ShortCall(), vol=0.2, rate=0.04, initial_capital=1_000.0,
-        fee_bps=0, slippage_bps=0,
+        prices,
+        ShortCall(),
+        vol=0.2,
+        rate=0.04,
+        initial_capital=1_000.0,
+        fee_bps=0,
+        slippage_bps=0,
     )
     assert (result.equity_curve < 0).any()  # confirm the blow-up actually happened
     # On the blown-up bars, diagnostics are NaN rather than sign-flipped numbers.
@@ -131,7 +134,9 @@ def test_delta_hedged_position_is_insensitive_to_small_moves() -> None:
                 self.opened = True
 
     hedged = run_options_backtest(prices, Hedged(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0)
-    unhedged = run_options_backtest(prices, Unhedged(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0)
+    unhedged = run_options_backtest(
+        prices, Unhedged(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0
+    )
     hedged_move = abs(hedged.equity_curve.iloc[1] - hedged.equity_curve.iloc[0])
     unhedged_move = abs(unhedged.equity_curve.iloc[1] - unhedged.equity_curve.iloc[0])
     assert hedged_move < unhedged_move

@@ -63,7 +63,9 @@ class OptionsEngine:
         if t_yrs <= 0:
             return intrinsic_value(leg, self.spot)
         if leg.style == "american":
-            return crr_price(leg.right, self.spot, leg.strike, t_yrs, self.vol, self.rate, style="american")
+            return crr_price(
+                leg.right, self.spot, leg.strike, t_yrs, self.vol, self.rate, style="american"
+            )
         return bs_price(leg.right, self.spot, leg.strike, t_yrs, self.vol, self.rate)
 
     def _leg_delta(self, leg: OptionLeg) -> float:
@@ -75,11 +77,15 @@ class OptionsEngine:
         return bs_greeks(leg.right, self.spot, leg.strike, t_yrs, self.vol, self.rate).delta
 
     def option_value(self) -> float:
-        return sum(self._price_leg(leg) * leg.quantity * CONTRACT_MULTIPLIER for leg in self.position.legs)
+        return sum(
+            self._price_leg(leg) * leg.quantity * CONTRACT_MULTIPLIER for leg in self.position.legs
+        )
 
     def net_delta_shares(self) -> float:
         """Net delta expressed in shares of the underlying (incl. hedge shares)."""
-        opt = sum(self._leg_delta(leg) * leg.quantity * CONTRACT_MULTIPLIER for leg in self.position.legs)
+        opt = sum(
+            self._leg_delta(leg) * leg.quantity * CONTRACT_MULTIPLIER for leg in self.position.legs
+        )
         return opt + self.position.shares
 
     def equity(self) -> float:
@@ -123,7 +129,9 @@ class OptionsEngine:
         for leg in self.position.legs:
             # `<= 0` (not `== 0`) also settles any leg whose expiry has already passed.
             if (leg.expiry - self.t).days <= 0:
-                self.position.cash += leg.quantity * intrinsic_value(leg, self.spot) * CONTRACT_MULTIPLIER
+                self.position.cash += (
+                    leg.quantity * intrinsic_value(leg, self.spot) * CONTRACT_MULTIPLIER
+                )
             else:
                 survivors.append(leg)
         self.position.legs = survivors

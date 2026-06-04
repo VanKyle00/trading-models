@@ -130,15 +130,25 @@ with st.sidebar:
         st.divider()
         st.caption("Options parameters")
         extra_params["implied_vol"] = st.slider(
-            "Implied volatility", min_value=0.05, max_value=0.80, value=0.18, step=0.01,
+            "Implied volatility",
+            min_value=0.05,
+            max_value=0.80,
+            value=0.18,
+            step=0.01,
             help="Annualized IV used to price and delta-hedge the option each bar.",
         )
         extra_params["tenor_days"] = st.slider(
-            "Option tenor (days)", min_value=7, max_value=90, value=30, step=1,
+            "Option tenor (days)",
+            min_value=7,
+            max_value=90,
+            value=30,
+            step=1,
             help="Calendar days to expiry; a fresh option is rolled at each expiry.",
         )
         extra_params["n_paths"] = st.select_slider(
-            "Monte Carlo paths", options=[200, 500, 1000, 2000, 5000, 10000], value=2000,
+            "Monte Carlo paths",
+            options=[200, 500, 1000, 2000, 5000, 10000],
+            value=2000,
             help="Number of simulated GBM paths for the P&L distribution.",
         )
 

@@ -57,14 +57,14 @@ def gbm_paths(
 class SimulationResult:
     """Distribution of strategy P&L across simulated paths."""
 
-    pnl_distribution: np.ndarray          # terminal P&L per path (initial capital subtracted)
-    percentiles: dict[int, float]         # {5, 25, 50, 75, 95} -> P&L
+    pnl_distribution: np.ndarray  # terminal P&L per path (initial capital subtracted)
+    percentiles: dict[int, float]  # {5, 25, 50, 75, 95} -> P&L
     prob_of_profit: float
-    expected_shortfall: float             # mean P&L of the worst 5% of paths
+    expected_shortfall: float  # mean P&L of the worst 5% of paths
     mean: float
     std: float
-    sample_paths: np.ndarray              # up to n_sample_paths underlying paths for plotting
-    truncated: bool                       # True if n_paths was clamped to max_paths
+    sample_paths: np.ndarray  # up to n_sample_paths underlying paths for plotting
+    truncated: bool  # True if n_paths was clamped to max_paths
 
 
 def run_simulation(

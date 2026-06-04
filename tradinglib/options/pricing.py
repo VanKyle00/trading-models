@@ -62,9 +62,7 @@ def bs_price(
 ) -> float:
     """Black-Scholes-Merton price of a European option."""
     if spot <= 0 or strike <= 0:
-        raise ValueError(
-            f"spot and strike must be positive; got spot={spot}, strike={strike}"
-        )
+        raise ValueError(f"spot and strike must be positive; got spot={spot}, strike={strike}")
     if t <= 0 or vol <= 0:
         return intrinsic(right, spot, strike)
     d1, d2 = _d1_d2(spot, strike, t, vol, rate, div)
@@ -104,9 +102,7 @@ def bs_greeks(
 ) -> Greeks:
     """First-order Black-Scholes Greeks for a European option."""
     if spot <= 0 or strike <= 0:
-        raise ValueError(
-            f"spot and strike must be positive; got spot={spot}, strike={strike}"
-        )
+        raise ValueError(f"spot and strike must be positive; got spot={spot}, strike={strike}")
     if t <= 0 or vol <= 0:
         # At/after expiry: delta is a step function, other Greeks vanish.
         if right == "call":
@@ -193,9 +189,7 @@ def crr_price(
     if steps < 1:
         raise ValueError(f"steps must be >= 1, got {steps}")
     if spot <= 0 or strike <= 0:
-        raise ValueError(
-            f"spot and strike must be positive; got spot={spot}, strike={strike}"
-        )
+        raise ValueError(f"spot and strike must be positive; got spot={spot}, strike={strike}")
     if t <= 0 or vol <= 0:
         return intrinsic(right, spot, strike)
 
@@ -215,7 +209,7 @@ def crr_price(
 
     # Backward induction.
     for step in range(steps, 0, -1):
-        values = disc * (p * values[1:step + 1] + (1 - p) * values[0:step])
+        values = disc * (p * values[1 : step + 1] + (1 - p) * values[0:step])
         if style == "american":
             node_idx = np.arange(step)
             spot_nodes = spot * u**node_idx * d ** (step - 1 - node_idx)
