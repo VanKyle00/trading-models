@@ -17,7 +17,7 @@ from app.adapters import run
 from app.model_config import default_ticker, ticker_choices, ticker_mode
 from app.models_registry import list_models
 from app.presets import presets_for_assets
-from app.ui import data_details, data_view, results_view
+from app.ui import data_details, data_view, options_view, results_view
 
 st.set_page_config(
     page_title="Trading Models",
@@ -189,3 +189,4 @@ with st.spinner(f"Running {selected['name']} on {symbol}, {start} → {end} ..."
 data_details.render(selected, out)
 data_view.render(selected, out)
 results_view.render(out)
+options_view.render(out)  # no-op unless the model returned payoff/simulation
