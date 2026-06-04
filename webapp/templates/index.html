@@ -169,6 +169,20 @@
         <label>Ticker</label>
         <input name="symbol" value="SPY" />
 
+        {# Market-event presets; JS shows only the selected model's set and #}
+        {# fills the dates below when one is picked. #}
+        {% for s in specs %}
+        <div class="event-group" data-model-events="{{ s.id }}" hidden>
+          <label>Market event</label>
+          <select class="event-select">
+            <option value="">Custom range</option>
+            {% for e in events_by_model[s.id] %}
+            <option data-start="{{ e.start }}" data-end="{{ e.end }}">{{ e.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endfor %}
+
         <label>Start</label>
         <input type="date" name="start" value="2022-01-01" />
         <label>End</label>
@@ -230,7 +244,9 @@
 
     // ── show only the selected model's params ──────────────
     (function () {
-      var sel = document.getElementById("model-select");
+      var sel = document.getElementById("model-select"),
+          startEl = document.querySelector('input[name="start"]'),
+          endEl = document.querySelector('input[name="end"]');
       function sync() {
         document.querySelectorAll("[data-model-params]").forEach(function (g) {
           var on = g.dataset.modelParams === sel.value;
@@ -239,7 +255,18 @@
           // models can share a param name and would otherwise collide.
           g.querySelectorAll("input").forEach(function (i) { i.disabled = !on; });
         });
+        // show only the selected model's market-event presets
+        document.querySelectorAll("[data-model-events]").forEach(function (g) {
+          g.hidden = g.dataset.modelEvents !== sel.value;
+        });
       }
+      // Picking a market-event preset fills the Start/End date range.
+      document.querySelectorAll(".event-select").forEach(function (es) {
+        es.addEventListener("change", function () {
+          var o = es.options[es.selectedIndex];
+          if (o && o.dataset.start) { startEl.value = o.dataset.start; endEl.value = o.dataset.end; }
+        });
+      });
       sel.addEventListener("change", sync); sync();
     })();
 

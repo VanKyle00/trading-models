@@ -87,6 +87,18 @@ def test_index_has_theme_toggle_and_assistant_console():
     assert "/api/v1/chat" in html  # console wired to the SSE endpoint
 
 
+def test_index_has_model_aware_event_presets():
+    client = TestClient(create_app())
+    html = client.get("/").text
+    assert "Market event" in html
+    assert "data-model-events=" in html
+    # equities model surfaces an equity event, crypto model a crypto event
+    assert "GFC 2008" in html
+    assert "FTX Collapse" in html
+    # a preset carries its date range for the JS to apply
+    assert 'data-start="2020-02-19"' in html
+
+
 def test_run_partial_renders_metric_strip_and_run_context():
     client = TestClient(create_app())
     resp = client.post(

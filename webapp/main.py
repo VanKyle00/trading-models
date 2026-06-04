@@ -22,6 +22,7 @@ from tradinglib.assistant import Budget, RateLimiter, run_chat
 from tradinglib.assistant import provider as _assistant_provider
 from tradinglib.service import RequestError, list_specs, model_spec, run, run_to_dict
 from webapp.charts import build_all
+from webapp.events import events_for_assets
 from webapp.forms import request_from_payload
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -128,7 +129,11 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
-        return _TEMPLATES.TemplateResponse(request, "index.html", {"specs": list_specs()})
+        specs = list_specs()
+        events_by_model = {s.id: events_for_assets(s.assets) for s in specs}
+        return _TEMPLATES.TemplateResponse(
+            request, "index.html", {"specs": specs, "events_by_model": events_by_model}
+        )
 
     @app.post("/run", response_class=HTMLResponse)
     async def run_partial(request: Request) -> HTMLResponse:
