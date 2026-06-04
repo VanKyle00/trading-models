@@ -57,7 +57,8 @@ def test_bars_from_dataframe_missing_columns() -> None:
 
 def test_always_long_matches_vectorized(rising_df: pd.DataFrame) -> None:
     """An 'always long' callback must produce identical PnL to the vectorized
-    engine fed a constant +1 signal."""
+    engine fed a constant +1 signal AND the same bar opens as execution prices
+    (the event engine fills at next open, so the vectorized baseline must too)."""
 
     class AlwaysLong:
         def on_bar(self, engine: EventEngine, bar: Bar) -> None:
@@ -67,20 +68,44 @@ def test_always_long_matches_vectorized(rising_df: pd.DataFrame) -> None:
     event_result = run_event_backtest(bars, AlwaysLong(), fee_bps=0, slippage_bps=0)
 
     constant_signal = pd.Series(1.0, index=rising_df.index)
-    vec_result = run_backtest(rising_df["close"], constant_signal, fee_bps=0, slippage_bps=0)
+    vec_result = run_backtest(
+        rising_df["close"],
+        constant_signal,
+        execution_prices=rising_df["open"],
+        fee_bps=0,
+        slippage_bps=0,
+    )
 
     pd.testing.assert_series_equal(
-        event_result.equity_curve,
-        vec_result.equity_curve,
-        check_names=False,
-        check_freq=False,
+        event_result.equity_curve, vec_result.equity_curve, check_names=False, check_freq=False
     )
     pd.testing.assert_series_equal(
-        event_result.returns,
-        vec_result.returns,
-        check_names=False,
-        check_freq=False,
+        event_result.returns, vec_result.returns, check_names=False, check_freq=False
     )
+
+
+def test_event_engine_fills_at_next_open() -> None:
+    """When open != close, the entry bar earns open->close, proving the event
+    engine forwards bar opens as execution prices."""
+    idx = pd.date_range("2024-01-01", periods=3, freq="D")
+    df = pd.DataFrame(
+        {
+            "open": [100.0, 105.0, 121.0],
+            "high": [100.0, 110.0, 121.0],
+            "low": [100.0, 105.0, 121.0],
+            "close": [100.0, 110.0, 121.0],
+            "volume": [1.0, 1.0, 1.0],
+        },
+        index=idx,
+    )
+
+    class AlwaysLong:
+        def on_bar(self, engine: EventEngine, bar: Bar) -> None:
+            engine.set_target_position(1.0)
+
+    result = run_event_backtest(bars_from_dataframe(df), AlwaysLong(), fee_bps=0, slippage_bps=0)
+    # Entry at bar 1 fills at the open (105), not the prior close (100).
+    assert result.returns.iloc[1] == pytest.approx(110.0 / 105.0 - 1.0)
 
 
 def test_flat_strategy_zero_equity_growth(rising_df: pd.DataFrame) -> None:
