@@ -147,6 +147,7 @@ def run_options_backtest(
     fee_bps: float = 1.0,
     slippage_bps: float = 0.5,
     periods_per_year: int = 252,
+    n_trials: int = 1,
 ) -> BacktestResult:
     """Run an options strategy over a price path and return a BacktestResult."""
     if len(prices) < 2:
@@ -173,7 +174,9 @@ def run_options_backtest(
     returns = equity_curve.pct_change().fillna(0.0)
     position = pd.Series(deltas, index=prices.index, name="delta_fraction")
     turnover = pd.Series(turnovers, index=prices.index, name="turnover")
-    metrics = compute_metrics(returns, equity_curve, periods_per_year=periods_per_year)
+    metrics = compute_metrics(
+        returns, equity_curve, periods_per_year=periods_per_year, n_trials=n_trials
+    )
 
     return BacktestResult(
         equity_curve=equity_curve,
@@ -186,6 +189,7 @@ def run_options_backtest(
             "fee_bps": fee_bps,
             "slippage_bps": slippage_bps,
             "periods_per_year": periods_per_year,
+            "n_trials": n_trials,
             "vol": vol,
             "rate": rate,
         },
