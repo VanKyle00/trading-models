@@ -41,12 +41,18 @@ override with `ASSISTANT_MODEL` (e.g. `claude-sonnet-4-6`). The assistant is a
 bounded agent: it can only list models, read a model's spec, and run backtests —
 no code execution — with per-session token/run caps and per-IP rate limiting.
 
-### Deploy the workbench (Render)
+### Deploy the workbench
 
-The workbench ships with a `Dockerfile` and a `render.yaml` blueprint. In the
-[Render](https://render.com) dashboard: **New > Blueprint**, pick this repo, and
-set the `ANTHROPIC_API_KEY` secret (the chat degrades gracefully without it).
-Pushes to `main` auto-deploy. Full steps in [`docs/DEPLOY.md`](docs/DEPLOY.md).
+Primary target is **[Modal](https://modal.com)** (`deploy/modal_app.py`):
+
+    uv sync --extra deploy
+    uv run modal token new
+    uv run modal secret create trading-models-secrets ANTHROPIC_API_KEY=sk-ant-...
+    uv run modal deploy deploy/modal_app.py
+
+A `Dockerfile` (+ `render.yaml` blueprint) is also included for container hosts
+like Render, Railway, or Fly. The chat degrades gracefully without the API key.
+Full steps and the persistent-cache notes are in [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Current models
 

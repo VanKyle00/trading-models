@@ -1,17 +1,50 @@
 # Deploying the FastAPI workbench
 
-The workbench (`webapp.main:app`) is a containerised FastAPI app. It serves
-backtests over `tradinglib.service` and a bounded LLM chat console. This guide
-covers [Render](https://render.com); any container host works with the same
-`Dockerfile`.
+The workbench (`webapp.main:app`) is a FastAPI app serving backtests over
+`tradinglib.service` plus a bounded LLM chat console. The **primary** target is
+[Modal](#modal-primary); a `Dockerfile` is also provided for container hosts
+([Render](#render-or-any-container-host) / Railway / Fly).
 
 ## What's in the repo
 
 | File | Purpose |
 | --- | --- |
-| `Dockerfile` | Builds the image (uv + Python 3.12, installs locked deps, runs uvicorn). |
+| `deploy/modal_app.py` | Modal app: builds the image from `pyproject.toml`, mounts a persistent Volume for the data cache, serves the ASGI app. |
+| `Dockerfile` | Builds an equivalent image (uv + Python 3.12) for any container host. |
 | `render.yaml` | Render Blueprint: a free Docker web service with a `/healthz` health check. |
 | `.dockerignore` | Keeps local data caches, notebooks, and tests out of the image. |
+
+## Modal (primary)
+
+Modal builds and caches the image (no serverless size limit), serves the ASGI
+app via `@modal.asgi_app()` with `@modal.concurrent` so one container handles
+many requests and SSE streams, and persists the market-data cache in a Volume.
+
+```bash
+uv sync --extra deploy                      # installs the modal CLI
+uv run modal token new                      # authenticate this machine (one-time)
+
+# Create the secret holding your Anthropic key (one-time):
+uv run modal secret create trading-models-secrets ANTHROPIC_API_KEY=sk-ant-...
+
+# Deploy (re-run any time to ship changes):
+uv run modal deploy deploy/modal_app.py
+```
+
+Modal prints the public URL on success; the app is at `/`. Notes:
+
+- **Data cache.** `deploy/modal_app.py` mounts a `trading-models-data` Volume at
+  `/app/data`, so downloaded parquet survives deploys. Modal background-commits
+  the Volume; if a write isn't committed before a cold scaledown, the loader
+  just re-fetches from yfinance (the graceful fallback).
+- **Cold starts.** The function scales to zero (`min_containers=0`) and keeps a
+  warm container for 5 min after the last request (`scaledown_window=300`). Set
+  `min_containers=1` in `deploy/modal_app.py` to eliminate cold starts (costs
+  more — a container stays resident).
+- **No key?** Remove the `secrets=[...]` line to deploy without `ANTHROPIC_API_KEY`;
+  the chat console then streams a graceful "Assistant is unavailable" event.
+
+## Render (or any container host)
 
 ## One-time setup on Render
 
