@@ -136,11 +136,11 @@ context needed to follow the rest of the repo. Wondering when you'd need to
 leave Python for C++? See [`docs/latency-notes.md`](docs/latency-notes.md).
 
 Want the theory behind a signal, not just its backtest? The
-[**concept writeups**](docs/concepts/index.html) develop the recurring
+[**concept writeups**](https://vankyle00.github.io/trading-models/docs/concepts/index.html) develop the recurring
 ideas from first principles — the first,
-[*How Order Flow Shapes Liquidity*](docs/concepts/01-order-flow-and-liquidity.html),
+[*How Order Flow Shapes Liquidity*](https://vankyle00.github.io/trading-models/docs/concepts/01-order-flow-and-liquidity.html),
 is the theory behind the microstructure model. Both tracks are reachable
-from the [research index](docs/index.html).
+from the [research index](https://vankyle00.github.io/trading-models/docs/index.html).
 
 ## Status
 
