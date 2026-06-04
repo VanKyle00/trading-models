@@ -30,11 +30,11 @@ uv run streamlit run app/streamlit_app.py
 
 | Model | Family | Window | Assets | OOS Sharpe | Max DD | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| [SMA Crossover on SPY](models/classical/01-sma-crossover-spy/) | classical | swing | equities | 0.73 | -0.34 | working |
-| [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | 0.84 | -0.14 | working |
-| [Google Trends Contrarian on BTC](models/alt-data/01-google-trends-btc/) | alt-data | swing | crypto | -0.30 | -0.80 | negative-result |
-| [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | -86.5 | -0.36 | negative-result |
-| [Delta-Hedged Long Option on SPY](models/options/01-delta-hedged-long-option-spy/) | options | swing | equities | -6.94 | -0.08 | working |
+| [SMA Crossover on SPY](https://vankyle00.github.io/trading-models/docs/models/01-sma-crossover-spy.html) | classical | swing | equities | 0.73 | -0.34 | working |
+| [XGBoost Next-Day Return on SPY](https://vankyle00.github.io/trading-models/docs/models/02-xgboost-next-day-return-spy.html) | ml | swing | equities | 0.84 | -0.14 | working |
+| [Google Trends Contrarian on BTC](https://vankyle00.github.io/trading-models/docs/models/04-google-trends-contrarian-btc.html) | alt-data | swing | crypto | -0.30 | -0.80 | negative-result |
+| [Order Flow Imbalance on BTC](https://vankyle00.github.io/trading-models/docs/models/03-order-flow-imbalance-btc.html) | microstructure | intraday | crypto | -86.5 | -0.36 | negative-result |
+| [Delta-Hedged Long Option on SPY](https://vankyle00.github.io/trading-models/docs/models/05-delta-hedged-long-option-spy.html) | options | swing | equities | -6.94 | -0.08 | working |
 
 Rows 3 and 4 are intentional negative results: hypotheses were tested
 honestly and the data rejected them. Each model's README documents
