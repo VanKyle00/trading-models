@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Models — Concept Writeups</title>
+<link rel="stylesheet" href="../models/paper.css">
+<style>
+  /* ===== index-only controls (filtering / sorting / density) ===== */
+  .controls { margin: 10px 0 0; }
+  .controls .row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+    padding: 14px 0; border-bottom: 1px solid var(--rule-soft);
+  }
+  .facet { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .facet .flab {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 600; margin-right: 2px;
+  }
+  .chip {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+    color: var(--ink-soft); border: 1px solid var(--rule); background: var(--paper-edge);
+    padding: 4px 10px; border-radius: 2px; cursor: pointer; user-select: none;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .chip:hover { border-color: var(--accent-dim); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.clear { color: var(--ink-faint); background: transparent; }
+  .chip.clear:hover { color: var(--accent); }
+  .controls .spacer { flex: 1 1 auto; }
+  .controls .ctl {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+  }
+  .controls select {
+    font-family: var(--mono); font-size: 11px; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 2px; padding: 5px 8px; cursor: pointer;
+  }
+  .toggle-view { display: inline-flex; border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; }
+  .toggle-view button {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+    padding: 5px 12px; border: none; background: var(--paper-edge); color: var(--ink-soft); cursor: pointer;
+  }
+  .toggle-view button + button { border-left: 1px solid var(--rule); }
+  .toggle-view button.active { background: var(--accent); color: #fff; }
+  .result-count {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+    color: var(--ink-faint); margin: 16px 0 0;
+  }
+  .toc-item.hide { display: none; }
+  .no-results { font-family: var(--serif); font-style: italic; color: var(--ink-faint); padding: 26px 4px; display: none; }
+
+  /* per-card filterable tag pills */
+  .toc-item .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .toc-item .tags span {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em;
+    color: var(--ink-faint); border: 1px solid var(--rule-soft);
+    background: var(--paper-edge); padding: 2px 7px; border-radius: 2px;
+  }
+
+  /* ===== compact density ===== */
+  .toc.compact .toc-item { padding: 13px 20px; margin: 8px 0; }
+  .toc.compact .toc-item > p.desc { display: none; }
+  .toc.compact .toc-item .tags { display: none; }
+  .toc.compact .toc-item h3 { font-size: 18px; margin: 4px 0 5px; }
+  .toc.compact .toc-item .stat { margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="paper">
+
+  <div class="preprint-bar">
+    <span>trading-models <span class="tag">· concept writeups</span></span>
+    <span>Quantitative Research</span>
+  </div>
+
+  <div class="title-block">
+    <h1 class="paper-title">Concepts Worth Researching</h1>
+    <p class="subtitle">First-principles writeups of the ideas behind the models — the theory, derived from scratch and held to the same standard as the empirical papers.</p>
+    <p class="byline"><span class="who">trading-models</span> research notes</p>
+    <p class="dateline">Compiled 2026-06-04 · one self-contained note per concept</p>
+  </div>
+
+  <div class="abstract">
+    <h2>Preface</h2>
+    <p>The <a href="../models/index.html">model breakdowns</a> answer "does this signal make money?" The concept notes answer the prior question — "why would it, and through what mechanism?" Each note takes one idea that recurs across the catalogue and develops it from first principles: definitions, the relevant equilibrium argument, the testable claim, and the place where the repository puts it to the test.</p>
+    <p>These are deliberately written before, not after, the urge to trade. A concept understood only through its backtest is a concept half-understood; the failures in the model catalogue are far more legible once the theory says, in advance, where the edge can and cannot live. This series collects that theory.</p>
+    <p class="keywords"><b>Conventions.</b> Notes are self-contained and citation-light — canonical results are named inline rather than surveyed. Shared definitions live in the <a href="../glossary.md">glossary</a>; evaluation conventions in <a href="../methodology.md">methodology.md</a>.</p>
+  </div>
+
+  <h2 class="nonum" style="counter-increment:none">The Notes</h2>
+
+  <div class="controls" id="controls">
+    <div class="row">
+      <div class="facet">
+        <span class="flab">Topic</span>
+        <button class="chip" data-facet="topic" data-value="microstructure">microstructure</button>
+      </div>
+      <div class="facet">
+        <span class="flab">Level</span>
+        <button class="chip" data-facet="level" data-value="foundational">foundational</button>
+      </div>
+      <button class="chip clear" id="clearFilters" hidden>✕ clear filters</button>
+    </div>
+    <div class="row">
+      <span class="ctl">Sort</span>
+      <select id="sortSelect">
+        <option value="order">Note order</option>
+        <option value="title">Title (A → Z)</option>
+      </select>
+      <span class="spacer"></span>
+      <span class="ctl">View</span>
+      <div class="toggle-view" id="viewToggle">
+        <button data-view="expanded" class="active">Expanded</button>
+        <button data-view="compact">Compact</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="result-count" id="resultCount"></p>
+
+  <nav class="toc" id="toc">
+    <a class="toc-item" href="01-order-flow-and-liquidity.html"
+       data-topic="microstructure" data-level="foundational" data-order="1"
+       data-title="How Order Flow Shapes Liquidity">
+      <span class="no">Note I · Microstructure · Liquidity</span>
+      <h3>How Order Flow Shapes Liquidity</h3>
+      <p class="desc">Why trades consume, move, and replenish the liquidity they demand. The three dimensions of
+      liquidity; adverse selection as the source of the spread; Kyle's lambda and depth as its reciprocal;
+      permanent vs transient impact and resiliency; the square-root law; and the feedback that drains
+      liquidity in a crash. The theory behind <a href="../models/03-order-flow-imbalance-btc.html">Paper III</a>.</p>
+      <p class="stat">first-principles primer · companion: Paper III (OFI on BTC) · <b>foundational</b></p>
+      <div class="tags"><span>microstructure</span><span>liquidity</span><span>price impact</span><span>foundational</span></div>
+    </a>
+  </nav>
+
+  <p class="no-results" id="noResults">No notes match the selected tags.</p>
+
+  <footer class="colophon">
+    <p>SOURCE: docs/concepts/ &nbsp;·&nbsp; SERIES: trading-models concept notes</p>
+    <p>SEE ALSO: <a href="../index.html">research index</a> · <a href="../models/index.html">model breakdowns</a> · <a href="../methodology.md">methodology.md</a> · <a href="../glossary.md">glossary.md</a></p>
+    <p>trading-models · concept writeups · 2026-06-04</p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var toc = document.getElementById('toc');
+  var items = Array.prototype.slice.call(toc.querySelectorAll('.toc-item'));
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip[data-facet]'));
+  var clearBtn = document.getElementById('clearFilters');
+  var sortSelect = document.getElementById('sortSelect');
+  var viewToggle = document.getElementById('viewToggle');
+  var resultCount = document.getElementById('resultCount');
+  var noResults = document.getElementById('noResults');
+  var facets = ['topic', 'level'];
+  var active = { topic: {}, level: {} };
+
+  function activeCount(f) { return Object.keys(active[f]).length; }
+
+  function applyFilters() {
+    var shown = 0;
+    items.forEach(function (it) {
+      var ok = facets.every(function (f) {
+        return activeCount(f) === 0 || active[f][it.dataset[f]] === true;
+      });
+      it.classList.toggle('hide', !ok);
+      if (ok) shown++;
+    });
+    resultCount.textContent = 'Showing ' + shown + ' of ' + items.length + ' note' + (items.length === 1 ? '' : 's');
+    noResults.style.display = shown === 0 ? 'block' : 'none';
+    clearBtn.hidden = !facets.some(function (f) { return activeCount(f) > 0; });
+  }
+
+  function applySort() {
+    var v = sortSelect.value;
+    var sorted = items.slice().sort(function (a, b) {
+      if (v === 'order') return (+a.dataset.order) - (+b.dataset.order);
+      if (v === 'title') return a.dataset.title.localeCompare(b.dataset.title);
+      return 0;
+    });
+    sorted.forEach(function (it) { toc.appendChild(it); });
+  }
+
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var f = chip.dataset.facet, val = chip.dataset.value;
+      if (active[f][val]) { delete active[f][val]; chip.classList.remove('active'); }
+      else { active[f][val] = true; chip.classList.add('active'); }
+      applyFilters();
+    });
+  });
+
+  clearBtn.addEventListener('click', function () {
+    facets.forEach(function (f) { active[f] = {}; });
+    chips.forEach(function (c) { c.classList.remove('active'); });
+    applyFilters();
+  });
+
+  sortSelect.addEventListener('change', applySort);
+
+  viewToggle.querySelectorAll('button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var view = btn.dataset.view;
+      viewToggle.querySelectorAll('button').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      toc.classList.toggle('compact', view === 'compact');
+      try { localStorage.setItem('tm-view', view); } catch (e) {}
+    });
+  });
+
+  // restore saved density preference (shared with the model catalogue)
+  try {
+    var saved = localStorage.getItem('tm-view');
+    if (saved === 'compact') {
+      var b = viewToggle.querySelector('button[data-view="compact"]');
+      if (b) b.click();
+    }
+  } catch (e) {}
+
+  applyFilters();
+})();
+</script>
+</body>
+</html>

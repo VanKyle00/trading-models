@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Order Flow Shapes Liquidity — trading-models</title>
+<link rel="stylesheet" href="../models/paper.css">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], tags: 'ams', packages: {'[+]': ['ams']} },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+</head>
+<body>
+<div class="paper">
+
+  <div class="preprint-bar"><span>trading-models <span class="tag">· concept note I</span></span><span>Microstructure · Liquidity</span></div>
+
+  <div class="title-block">
+    <h1 class="paper-title">How Order Flow Shapes Liquidity</h1>
+    <p class="subtitle"><i>A first-principles account of why trades consume, move, and replenish the liquidity they demand — and why the price you get is a function of the flow you bring.</i></p>
+    <p class="byline"><span class="who">trading-models</span> research notes · Concept series, note 01</p>
+    <p class="dateline">Compiled 2026-06-04 · a self-contained primer, not a backtest</p>
+    <div class="meta-tags">
+      <span class="meta-tag"><b>Topic</b> market microstructure</span>
+      <span class="meta-tag"><b>Theme</b> liquidity</span>
+      <span class="meta-tag"><b>Level</b> foundational</span>
+      <span class="meta-tag"><b>Math</b> light</span>
+      <span class="meta-tag"><b>Type</b> concept note</span>
+    </div>
+  </div>
+
+  <div class="abstract">
+    <h2>Abstract</h2>
+    <p>Liquidity is not a number a market has; it is a <i>supply schedule</i> a market offers, and order flow is the demand that walks along it. This note builds, from first principles, the link between the two. We define liquidity along its three classical dimensions — tightness, depth, and resiliency — and then show that each is shaped by order flow through two distinct channels. The <i>mechanical</i> channel is the simple act of consuming resting size: a marketable order eats the book level by level, so the average price it pays drifts away from the mid in proportion to how much depth it removes. The <i>informational</i> channel is subtler and, on liquid venues, dominant: because some order flow is informed, a rational liquidity provider treats every trade as news and revises quotes toward it, so price moves even when no visible depth is consumed. We derive the adverse-selection spread of Glosten and Milgrom, in which a bid–ask spread exists with zero costs and zero inventory risk purely because the maker must protect against being picked off; we derive Kyle's linear price-impact rule, in which depth is exactly the reciprocal of the impact coefficient \(\lambda\); and we separate the <i>permanent</i> (informational, price-discovering) component of impact from the <i>transient</i> (inventory, mean-reverting) component, identifying resiliency with the decay rate of the latter. We close with the empirical concavity of aggregate impact — the square-root law — and with the destabilizing feedback by which a flow shock withdraws the very liquidity that would have absorbed it, the mechanism behind liquidity spirals and flash crashes. Throughout, the companion empirical artifact is <a href="../models/03-order-flow-imbalance-btc.html">Working Paper III</a>, whose negative result is exactly what this theory predicts.</p>
+    <p class="keywords"><b>Keywords.</b> liquidity, order flow, bid–ask spread, adverse selection, price impact, Kyle's lambda, market depth, resiliency, permanent vs transient impact, square-root law, liquidity spiral.</p>
+  </div>
+
+  <h2>Introduction</h2>
+  <p class="lead">A price quote is an offer, not a fact. When a screen shows BTC at \$60,000 it is showing the price at which a <i>small</i> trade would clear; it says almost nothing about the price at which a large one would. The gap between those two prices — between the headline quote and the price your order actually realizes — is the entire subject of liquidity, and that gap is opened by your own order flow. Liquidity is best understood not as a property of the asset but as a relationship between the size you want to trade and the price concession you must pay to trade it. This note develops that relationship from the ground up.</p>
+
+  <p>The organizing claim is that order flow affects liquidity through two channels that are easy to conflate and important to separate. The first is <i>mechanical</i>: a market order consumes resting limit orders, and once a price level is exhausted the next unit fills at a worse level, so the act of demanding liquidity removes it. The second is <i>informational</i>: because some traders know something, every order carries a signal, and a rational market maker shades quotes in the direction of the flow to avoid systematically buying from the informed and selling to them. The first channel would exist even in a market of pure noise traders; the second exists even in a market with infinite displayed depth and zero trading costs. On the most liquid venues the second channel dominates — which is why, as <a href="../models/03-order-flow-imbalance-btc.html">Paper III</a> finds, naively chasing order-flow imbalance loses: by the time flow is measured, the informational price move it caused has already happened.</p>
+
+  <p>We proceed in the natural order. Section 2 defines liquidity's three dimensions. Section 3 derives the spread from adverse selection alone. Section 4 derives price impact and shows depth is \(1/\lambda\). Section 5 returns to the mechanical channel — walking the book. Section 6 splits impact into permanent and transient parts and locates resiliency. Section 7 presents the empirical square-root law of aggregate impact. Section 8 shows how the feedback between flow and liquidity destabilizes markets under stress. Section 9 connects the theory back to the models in this repository.</p>
+
+  <h2>The three dimensions of liquidity</h2>
+  <p>A liquid market is one in which a trade of reasonable size can be executed quickly, at low cost, and without much moving the price. Three measurable dimensions, due in this formulation to Kyle (1985), make this precise.</p>
+
+  <div class="keybox accent"><span class="lab">Definition · the three dimensions</span>
+  <ul style="margin:6px 0 0">
+    <li><b>Tightness</b> — the cost of turning a position around quickly, measured by the bid–ask spread \(s=a-b\). It is the price of immediacy for an <i>infinitesimal</i> trade.</li>
+    <li><b>Depth</b> — the size that can be traded at, or near, the current quote without moving the price. Operationally, the order flow \(\Delta q\) required to move the price by one unit; its reciprocal is the price-impact coefficient.</li>
+    <li><b>Resiliency</b> — the speed at which price and depth recover to their pre-trade levels after a liquidity-consuming order. It governs how fast the transient part of impact decays.</li>
+  </ul>
+  </div>
+
+  <p>The three are logically independent. A market can be tight but shallow (a penny-wide quote for one lot, with a cliff behind it); deep but wide (size available, but only several ticks out); or tight and deep yet brittle (replenishing slowly, so a burst of flow leaves a lasting dent). Order flow acts on all three at once: it pays the spread (tightness), it removes posted size (depth), and the rate at which makers re-post determines recovery (resiliency). The remainder of this note is, in effect, a study of <i>how</i> flow moves each dimension and <i>why</i>.</p>
+
+  <h2>Where the spread comes from: adverse selection</h2>
+  <p>It is tempting to attribute the bid–ask spread to costs — the exchange fee, the maker's overhead, the capital tied up in inventory. Those components are real, and the spread is conventionally decomposed into three: an <i>order-processing</i> cost, an <i>inventory-holding</i> cost, and an <i>adverse-selection</i> cost. The deepest of the three is the last, because it survives when the other two are set to zero. The argument is due to Glosten and Milgrom (1985).</p>
+
+  <p>Consider a market maker quoting a single asset whose true value \(V\) is uncertain — say \(V\in\{V_{\text{hi}},V_{\text{lo}}\}\) with prior mean \(\mu_0=\mathbb{E}[V]\). A fraction \(\pi\) of incoming orders come from <i>informed</i> traders who know \(V\) and trade in its direction; the remaining \(1-\pi\) come from <i>uninformed</i> traders who buy or sell for idiosyncratic reasons, independent of \(V\). The maker cannot tell which is which. To avoid expected losses, the maker must quote a price equal to the expected value of the asset <i>conditional on the direction of the trade that just arrived</i>:</p>
+  <div class="keybox accent"><span class="lab">Result · the regret-free quotes</span>
+  \begin{equation}
+  a=\mathbb{E}[V\mid\text{buy}], \qquad b=\mathbb{E}[V\mid\text{sell}].
+  \end{equation}
+  A market buy is more likely to come from an informed trader who knows \(V=V_{\text{hi}}\), so it raises the posterior; a market sell lowers it. Hence \(a>\mu_0>b\), and the spread
+  \[ s=a-b=\mathbb{E}[V\mid\text{buy}]-\mathbb{E}[V\mid\text{sell}]>0 \]
+  is strictly positive <i>with no processing cost, no inventory, and a risk-neutral maker.</i>
+  </div>
+
+  <p>The spread, in this account, is the price of the maker's ignorance: it is exactly the amount by which a trade is expected to be informed. Two comparative statics follow immediately and matter for everything below. First, the spread widens with the share of informed flow \(\pi\) and with the dispersion of \(V\) — more toxic flow, or more uncertainty about value, makes immediacy dearer. Second, and crucially, <b>each trade moves the quotes permanently</b>: after a buy the maker updates \(\mu_0\to\mathbb{E}[V\mid\text{buy}]\) and quotes around the new, higher mean. This Bayesian updating is the informational channel in its purest form — order flow moves price not by exhausting depth but by <i>revealing information</i>, and the move persists because the belief revision is rational. A sequence of buys ratchets the efficient price upward trade by trade, which is precisely how order flow "shapes" the price level even when the book looks bottomless.</p>
+
+  <h2>Price impact and the meaning of depth</h2>
+  <p>Glosten–Milgrom prices one trade at a time. Kyle (1985) gives the aggregate version and, with it, the cleanest definition of depth. In Kyle's model a single informed trader who observes \(V\) submits a quantity \(x\); noise traders submit a net random quantity \(u\); the market maker sees only the <i>combined</i> order flow \(q=x+u\) and sets a single price that clears it. The equilibrium pricing rule is linear:</p>
+  <div class="keybox accent"><span class="lab">Result · linear price impact</span>
+  \begin{equation}
+  \Delta P=\lambda\,q,\qquad q=\text{net signed order flow},
+  \end{equation}
+  where \(\lambda\) — <i>Kyle's lambda</i> — is the price-impact coefficient. In the static model \(\lambda=\tfrac12\,\sigma_V/\sigma_u\): impact rises with the informed trader's edge \(\sigma_V\) and falls as noise-trader volume \(\sigma_u\) provides cover.
+  </div>
+
+  <p>The interpretation of \(\lambda\) is the whole point. It is the slope of price in order flow — the number of price units the market moves per unit of net flow. Its reciprocal is therefore the flow required to move the price by one unit, which is exactly the operational definition of depth from §2:</p>
+  \begin{equation}
+  \text{depth}=\frac{1}{\lambda},\qquad \text{illiquidity}=\lambda.
+  \end{equation}
+  <p>A deep market has small \(\lambda\): large flow, little price response. An illiquid market has large \(\lambda\): a small order shoves the price. Kyle's \(\lambda\) is, to this day, the canonical scalar summary of market depth, estimated in practice by regressing price changes on signed volume — Amihud's widely used illiquidity ratio is a coarse, daily-data proxy for the same slope. And because \(\lambda\) is increasing in the informed share, the same force that widens the Glosten–Milgrom spread also steepens the Kyle impact line: <b>toxic flow makes a market both wider and shallower at once</b>, eroding two of the three dimensions of liquidity simultaneously.</p>
+
+  <p>Note what equation \((2)\) does and does not say. It relates the order flow of a period to the price change <i>of the same period</i>; it is a contemporaneous equilibrium identity, not a forecast. This is the formal reason a strategy that observes flow and then trades the next interval is fighting the theory rather than using it — the move implied by the flow is, by construction, already in the price by the time the flow is measured. <a href="../models/03-order-flow-imbalance-btc.html">Paper III</a> is the empirical face of this caveat.</p>
+
+  <h2>Walking the book: the mechanical channel</h2>
+  <p>The informational channel of §§3–4 moves price through belief revision. The mechanical channel moves the price you <i>realize</i> through the simple geometry of a limit-order book. A book is a discrete supply schedule: at each price level sits some resting quantity, ascending in price on the ask side, descending on the bid side. A marketable buy order is filled greedily against the cheapest available offers; when it exhausts the size at the best ask it rolls to the next level up, and so on. The average price it pays is a size-weighted walk up this ladder.</p>
+
+  <p>Formally, let the ask side hold quantity \(Q_i\) at price \(a_i\), with \(a_1 < a_2 < \cdots\) the best, second-best, and so on. A buy market order for total size \(Q\) consumes levels \(1,2,\dots,k\) until \(\sum_{i\le k}Q_i\ge Q\), and its average fill price is</p>
+  \begin{equation}
+  \bar P(Q)=\frac{1}{Q}\sum_{i=1}^{k} a_i\,\tilde Q_i,\qquad \sum_i\tilde Q_i=Q,\;\tilde Q_i\le Q_i,
+  \end{equation}
+  <p>so the per-share cost relative to the mid \(m\), the <i>realized half-spread</i> \(\bar P(Q)-m\), is increasing in \(Q\): the larger the order, the deeper into the book it reaches, the worse its average price. This is impact with no information content whatsoever — it would occur in a market of pure noise traders — and it is purely a function of how much depth the order removes. It also makes vivid why depth and tightness are different dimensions: the quoted spread \(a_1-b_1\) is the cost of the <i>first</i> share; \(\bar P(Q)-m\) is the cost of the <i>average</i> share, and the two diverge exactly as fast as the book thins above the touch.</p>
+
+  <div class="remark"><span class="lab">Two channels, one price.</span> Every trade pays both. The mechanical part is the slippage from consuming posted size and is mostly <i>transient</i> — once the order finishes, makers re-post and the book heals. The informational part is the quote revision the trade provokes and is mostly <i>permanent</i> — it reflects a belief update that does not reverse. The next section makes this split exact, because it is the key to resiliency and to whether any flow-based signal can be traded.</div>
+
+  <h2>Permanent versus transient impact, and resiliency</h2>
+  <p>Decompose the observed transaction price into an efficient price and a pricing error:</p>
+  \begin{equation}
+  P_t=m_t+\eta_t,\qquad m_t=m_{t-1}+\underbrace{\theta\,\epsilon_t}_{\text{permanent}}+w_t,\qquad \eta_t=\underbrace{\rho\,\eta_{t-1}}_{\text{transient}}+\xi_t,
+  \end{equation}
+  <p>where \(\epsilon_t\in\{-1,+1\}\) is the signed direction of trade \(t\), \(m_t\) is the (random-walk) efficient price into which information is permanently impounded, and \(\eta_t\) is a stationary, mean-reverting deviation with persistence \(\rho\in[0,1)\). This is the reduced form of Hasbrouck's (1991) trade-and-quote VAR. It separates impact into two pieces with opposite fates:</p>
+
+  <div class="keybox accent"><span class="lab">Definition · permanent and transient impact</span>
+  <ul style="margin:6px 0 0">
+    <li><b>Permanent impact</b> \(\theta\) — the lasting move in the efficient price per unit of signed flow. It is the information the trade revealed; it does not revert. This is the Glosten–Milgrom / Kyle component.</li>
+    <li><b>Transient impact</b> \(\eta_t\) — the temporary concession for consuming liquidity, decaying at rate \(1-\rho\) as makers replenish and inventory is worked off. This is the book-walking component of §5.</li>
+  </ul>
+  </div>
+
+  <p>Resiliency is now precise: it is the decay rate \(1-\rho\) of the transient component — the speed at which the pricing error \(\eta_t\) relaxes back to zero and depth refills. A resilient market has \(\rho\) near \(0\): the dent from a large order heals within seconds. A sluggish market has \(\rho\) near \(1\): the dent lingers, and a second order arriving before recovery lands on an already-depleted book, paying even more. The three dimensions of §2 map cleanly onto this algebra — tightness is the spread embedded in \(\theta\) and the touch, depth is \(1/\lambda\) governing the size-to-impact slope, and resiliency is \(1-\rho\).</p>
+
+  <p>The split also resolves a question that confuses many flow strategies: <i>which</i> part of impact is tradeable? Continuation lives in the permanent component — but that component is, by definition, already in the price the instant the trade prints, so it cannot be captured by reacting to observed flow. Reversal lives in the transient component — but capturing it means <i>providing</i> liquidity into the dent, i.e. being the maker who re-posts, not the taker who chases. A taker who follows measured imbalance is positioned to harvest neither: too late for the permanent move, on the wrong side of the transient one. That is the structural reason the order-flow-imbalance taker strategy in Paper III is rejected by the data.</p>
+
+  <h2>The aggregate shape: the square-root law of impact</h2>
+  <p>Kyle's rule \((2)\) is linear, and over a single small clearing it is a good local description — \(\lambda\) is the slope at the origin. But the impact of a large <i>metaorder</i> — a parent order of size \(Q\) sliced into many child trades over minutes or hours — is robustly <i>concave</i> in \(Q\), not linear. Across equities, futures, and crypto, and across decades of data, the total impact of executing a fraction of daily volume obeys an approximate square-root law:</p>
+  <div class="keybox accent"><span class="lab">Empirical regularity · the square-root law</span>
+  \begin{equation}
+  \mathcal{I}(Q)\;\approx\;Y\,\sigma\,\sqrt{\frac{Q}{V}},
+  \end{equation}
+  where \(\sigma\) is the asset's volatility over the execution horizon, \(V\) is the volume traded over that horizon, \(Q/V\) is the metaorder's participation rate, and \(Y\) is a dimensionless constant of order one.
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 560 340" width="100%" style="border:1px solid #d9d4c7;background:#fff;border-radius:2px" role="img" aria-label="A concave, increasing curve of price impact against metaorder size, rising steeply for the first shares and flattening as size grows, illustrating the square-root law of market impact.">
+      <!-- axes -->
+      <line x1="70" y1="280" x2="535" y2="280" stroke="#1c1b18" stroke-width="1.3"/>
+      <line x1="70" y1="280" x2="70" y2="55" stroke="#1c1b18" stroke-width="1.3"/>
+      <!-- square-root impact curve -->
+      <path d="M70,280 L92.5,235 L115,217 L160,191 L205,170 L250,154 L295,139 L362,119 L430,101 L520,80"
+            fill="none" stroke="#8a2b2b" stroke-width="2.4"/>
+      <!-- tangent at origin (local Kyle slope), dashed -->
+      <line x1="70" y1="280" x2="250" y2="120" stroke="#8a857a" stroke-width="1.3" stroke-dasharray="4 4"/>
+      <!-- labels -->
+      <text x="300" y="312" font-family="IBM Plex Mono, monospace" font-size="12" fill="#44423c" text-anchor="middle">metaorder size&#160;&#160;Q / V&#160;&#160;(participation rate)</text>
+      <text x="22" y="170" font-family="IBM Plex Mono, monospace" font-size="12" fill="#44423c" text-anchor="middle" transform="rotate(-90 22 170)">price impact&#160;&#160;&#8464;(Q)</text>
+      <text x="430" y="92" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="#8a2b2b">&#8464; &#8776; Y&#963;&#8730;(Q/V)</text>
+      <text x="232" y="138" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#8a857a" text-anchor="end">local slope &#955;</text>
+      <text x="70" y="297" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8a857a" text-anchor="middle">0</text>
+    </svg>
+    <figcaption>Aggregate price impact is concave in order size. The dashed line is the locally linear Kyle response (slope \(\lambda\), the inverse of depth) that holds for the first marginal shares; the solid curve is the empirical square-root law that governs a full metaorder. The marginal cost of the first shares is high and falls with size — the opposite of a convex cost — which is why large orders are sliced rather than sent at once, and why participation rate, not absolute size, is the natural unit of liquidity demand.</figcaption>
+  </figure>
+
+  <p>Three features deserve emphasis. First, impact scales with <i>participation</i> \(Q/V\), not raw size: the same number of shares is cheap in a liquid name and expensive in an illiquid one, which is the practical meaning of depth. Second, the dependence on \(\sigma\) ties liquidity to volatility — markets are mechanically less liquid (higher impact per unit flow) precisely when they are more volatile, a coupling that §8 turns into a feedback loop. Third, concavity is not predicted by the static linear model; it emerges from the dynamics of execution — informed traders split orders, liquidity providers learn gradually and re-post, and the latent supply of liquidity is drawn out over time. The square-root law is therefore best read as the time-aggregated envelope of many small, locally linear Kyle clearings, each landing on a book that is partially healed (§6) from the last.</p>
+
+  <h2>The feedback loop: when flow withdraws the liquidity it needs</h2>
+  <p>So far liquidity has been a fixed backdrop that flow pushes against. Under stress the backdrop moves. The maker's spread rises with the perceived share of informed flow (§3) and the impact slope \(\lambda\) rises with volatility (§7), so a burst of one-sided flow does not merely consume depth — it <i>signals toxicity and raises volatility</i>, prompting makers to widen quotes and pull size. The same flow now lands on a thinner, wider book and moves the price more, which triggers further flow:</p>
+
+  <div class="keybox accent"><span class="lab">Mechanism · the liquidity spiral</span>
+  one-sided flow&#160;&#8594;&#160;depth consumed and toxicity inferred&#160;&#8594;&#160;makers widen \(s\) and withdraw size (depth \(1/\lambda\) falls)&#160;&#8594;&#160;the <i>same</i> flow now moves price more&#160;&#8594;&#160;margin calls, stop-losses, and de-risking generate <i>more</i> one-sided flow&#160;&#8594;&#160;back to the top.
+  </div>
+
+  <p>This is the loss-and-margin spiral of Brunnermeier and Pedersen (2009): falling prices tighten funding constraints on the very intermediaries who supply liquidity, forcing them to reduce it, which deepens the fall. The transient impact of §6 stops being transient because resiliency itself collapses — there is no one left to re-post, so \(\rho\to1\) and the dent does not heal. A market that was tight and deep a minute earlier becomes wide and shallow, and a flow that would have been absorbed without trace in calm conditions instead clears at a price several percent away. This is the anatomy of a flash crash, and it is why liquidity is most absent exactly when it is most demanded.</p>
+
+  <p>The 2024-08-05 crypto sell-off studied in <a href="../models/03-order-flow-imbalance-btc.html">Paper III</a> is a clean instance: heavy, at times symmetric two-sided taker flow through a violent move, with impact and reversal both elevated. It is also the regime in which a slow, smoothed flow signal is most dangerous — by the time a trailing average crosses a threshold, the permanent move is in the price and the transient move is reverting on a book that is no longer there to lean on.</p>
+
+  <h2>Connections to the models in this repository</h2>
+  <p>This note is the theory whose empirics live in the model catalogue. The most direct link is <a href="../models/03-order-flow-imbalance-btc.html">Working Paper III — Order-Flow Imbalance and the Decay of Price Impact</a>, which tests the continuation hypothesis on minute-bar BTCUSDT and rejects it; every mechanism invoked there — Kyle's \(\lambda\), the permanent/transient split, adverse selection, the staleness of smoothed flow — is developed from scratch above. The transaction-cost model used across the catalogue, a linear charge per unit of turnover, is the practical residue of §5's mechanical impact; its assumptions and limits are documented in <a href="../methodology.md">methodology.md</a> (see the "what this engine does <i>not</i> model" section, which lists size-dependent slippage and market impact as out of scope — exactly the nonlinearity of §7). Definitions of the terms used here — spread, depth, order-flow imbalance, slippage — are collected in the <a href="../glossary.md">glossary</a>.</p>
+
+  <div class="remark"><span class="lab">Takeaway.</span> Order flow shapes liquidity through a mechanical channel (consuming depth, a transient cost that heals with resiliency) and an informational channel (revising the efficient price, a permanent cost that does not). On liquid venues the informational channel dominates, so the price move implied by a flow imbalance is already paid by the time the imbalance is measured — the reason chasing flow as a taker is structurally a losing trade, and the reason the genuine edge in microstructure lies in <i>providing</i> liquidity into transient dislocations rather than <i>demanding</i> it.</div>
+
+  <div class="footnotes">
+    <ol>
+      <li>The three-way spread decomposition (order-processing, inventory, adverse-selection) is standard; this note focuses on the adverse-selection component because it is the one that survives in a frictionless, risk-neutral market and so isolates the informational channel of order flow.</li>
+      <li>The static Kyle coefficient \(\lambda=\tfrac12\,\sigma_V/\sigma_u\) is stated without derivation; what matters here is the structural fact \(\Delta P=\lambda q\) and the identification depth \(=1/\lambda\). The reciprocal relationship, not the constant \(\tfrac12\), is the portable result.</li>
+      <li>"Permanent" and "transient" are horizon-relative idealizations. Over very long horizons even the permanent component is just the realized value innovation; over very short ones even the transient component looks permanent if resiliency is slow. The decomposition is a statement about the autocorrelation structure of the pricing error, not a metaphysical claim about which moves are "real".</li>
+    </ol>
+  </div>
+
+  <nav class="paper-nav"><a href="index.html">← Concept catalogue</a><a href="../models/03-order-flow-imbalance-btc.html">Empirical companion · Paper III →</a></nav>
+
+  <footer class="colophon">
+    <p>SOURCE: docs/concepts/ · SERIES: trading-models concept notes · companion model: models/microstructure/01-order-flow-btc/</p>
+    <p>SEE ALSO: <a href="../index.html">research index</a> · <a href="index.html">concept catalogue</a> · <a href="../models/index.html">model breakdowns</a> · <a href="../methodology.md">methodology.md</a> · <a href="../glossary.md">glossary.md</a></p>
+    <p>trading-models · concept note · 2026-06-04</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Trading Models
 
-📄 **[Read the working papers →](https://vankyle00.github.io/trading-models/)** — in-depth research write-ups, one self-contained paper per model.
+📄 **[Read the research →](https://vankyle00.github.io/trading-models/docs/index.html)** — two tracks: in-depth **model breakdowns** (one self-contained paper per model) and first-principles **concept writeups** (the theory behind the models).
 
 A growing portfolio of trading models spanning classical quant, machine
 learning, market microstructure, and alternative data — across US equities
@@ -80,7 +80,9 @@ auto-generated from each model's `model.md` frontmatter.
 | `models/options/` | Options pricing, Greeks, multi-leg payoffs, vol strategies |
 | `models/alt-data/` | Sentiment, news, alternative signals (empty for now) |
 | `notebooks/eda/` | Exploratory analyses not tied to a single model |
-| `docs/` | Glossary, data sources, backtest methodology, latency notes |
+| `docs/` | Research hub (`docs/index.html`), glossary, data sources, backtest methodology, latency notes |
+| `docs/models/` | Working papers — one empirical breakdown per model (the model catalogue) |
+| `docs/concepts/` | Concept writeups — first-principles theory behind the signals |
 | `scripts/` | Maintenance scripts (e.g., regenerating `MODELS.md`) |
 | `tests/` | Unit tests for `tradinglib` |
 
@@ -132,6 +134,13 @@ New to systematic trading? Start with the
 [**glossary**](docs/glossary.md) — terms are defined plainly with the
 context needed to follow the rest of the repo. Wondering when you'd need to
 leave Python for C++? See [`docs/latency-notes.md`](docs/latency-notes.md).
+
+Want the theory behind a signal, not just its backtest? The
+[**concept writeups**](docs/concepts/index.html) develop the recurring
+ideas from first principles — the first,
+[*How Order Flow Shapes Liquidity*](docs/concepts/01-order-flow-and-liquidity.html),
+is the theory behind the microstructure model. Both tracks are reachable
+from the [research index](docs/index.html).
 
 ## Status
 

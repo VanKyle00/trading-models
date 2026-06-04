@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Models — Research</title>
+<link rel="stylesheet" href="models/paper.css">
+<style>
+  /* hub widens beyond the single-column paper measure to hold two tracks side by side */
+  .paper.hub { max-width: 1180px; padding: 0 40px 120px; }
+  /* keep the masthead + overview at a comfortable reading measure, centered */
+  .hub .lede { max-width: 780px; margin: 0 auto; }
+
+  /* two-track grid */
+  .tracks {
+    display: grid; gap: 26px; margin: 26px 0 0;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 880px) { .tracks { grid-template-columns: 1fr 1fr; align-items: start; } }
+
+  .track { min-width: 0; }
+  .track-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 14px; flex-wrap: wrap;
+    padding-bottom: 10px; margin-bottom: 4px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .track-head .ttl {
+    font-family: var(--serif); font-weight: 600; font-size: 22px; color: var(--ink);
+  }
+  .track-head .eyebrow {
+    display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 3px;
+  }
+  .track-head .more {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.03em; color: var(--ink-faint);
+    border: none; white-space: nowrap;
+  }
+  .track-head .more:hover { color: var(--accent); }
+  .track-head .count {
+    font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin-left: 8px;
+  }
+
+  /* tighter cards for the two-up layout */
+  .tracks .toc-item { padding: 18px 22px; margin: 14px 0; }
+  .tracks .toc-item h3 { font-size: 20px; margin: 6px 0 6px; }
+  .tracks .toc-item p { font-size: 15px; }
+  .tracks .toc-item .stat { font-size: 11px; margin-top: 10px; }
+
+  .more-line {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+    color: var(--ink-faint); margin: 34px 0 0; padding-top: 16px; border-top: 1px solid var(--rule-soft);
+  }
+</style>
+</head>
+<body>
+<div class="paper hub">
+
+  <div class="lede">
+    <div class="preprint-bar">
+      <span>trading-models <span class="tag">· research</span></span>
+      <span>Quantitative Research</span>
+    </div>
+
+    <div class="title-block">
+      <h1 class="paper-title">Trading Models — Research</h1>
+      <p class="subtitle">A portfolio of systematic trading models and the theory behind them — empirical model breakdowns and first-principles concept writeups, side by side.</p>
+      <p class="byline"><span class="who">trading-models</span> research notes</p>
+      <p class="dateline">Compiled 2026-06-04 · classical · machine learning · microstructure · alt-data · options</p>
+    </div>
+
+    <div class="abstract">
+      <h2>Overview</h2>
+      <p>This is the reading room for the <a href="https://github.com/VanKyle00/trading-models">trading-models</a> repository. The work runs on two tracks, shown together below. The <b>model breakdowns</b> are end-to-end empirical papers — one per model, each carrying a hypothesis through a lookahead-safe backtest to a verdict, winners and negative results alike. The <b>concept writeups</b> are the theory those models rest on, derived from first principles before any backtest. Open either column's papers directly; shared conventions live in <a href="methodology.md">methodology.md</a> and the <a href="glossary.md">glossary</a>.</p>
+    </div>
+  </div>
+
+  <div class="tracks">
+
+    <section class="track">
+      <div class="track-head">
+        <span class="ttl"><span class="eyebrow">Track 1 · Empirical</span>Model Breakdowns<span class="count">5 papers</span></span>
+        <a class="more" href="models/index.html">filter &amp; sort →</a>
+      </div>
+
+      <a class="toc-item" href="models/01-sma-crossover-spy.html">
+        <span class="no">Paper I · Classical · Trend Following</span>
+        <h3>The Moving-Average Crossover as a Lagged Trend Filter</h3>
+        <p>The 50/200-day golden-cross rule on SPY, framed as a finite-impulse-response filter with
+        explicit group delay. Why it earns a positive Sharpe yet cannot avoid a deep drawdown.</p>
+        <p class="stat">SPY daily, 2010–2024 · Sharpe <span class="pos">+0.75</span> · Max DD <span class="neg">−34%</span> · <b>working</b></p>
+      </a>
+
+      <a class="toc-item" href="models/02-xgboost-next-day-return-spy.html">
+        <span class="no">Paper II · Machine Learning · Supervised Forecasting</span>
+        <h3>Gradient-Boosted Forecasts of Next-Day Equity Returns</h3>
+        <p>A second-order boosted-tree regressor on eight technical features. The information
+        coefficient collapses out-of-sample; we reconcile a sub-50% hit rate with a positive Sharpe
+        through the Fundamental Law of Active Management.</p>
+        <p class="stat">SPY daily, OOS 2022–2024 · Sharpe <span class="pos">+0.96</span> · Max DD <span class="neg">−12%</span> · <b>working</b></p>
+      </a>
+
+      <a class="toc-item" href="models/03-order-flow-imbalance-btc.html">
+        <span class="no">Paper III · Microstructure · Order Flow</span>
+        <h3>Order-Flow Imbalance and the Decay of Price Impact</h3>
+        <p>Trade-signed order-flow imbalance on minute-bar BTCUSDT across the 2024-08-05 crash. The
+        continuation hypothesis is rejected; we derive why minute-frequency Sharpe is not comparable
+        to the daily-bar papers and what the scale-invariant metrics say instead.</p>
+        <p class="stat">BTCUSDT 1-min, Aug 2024 · Hit rate <span class="neg">29.7%</span> · Max DD <span class="neg">−36%</span> · <b>negative result</b></p>
+      </a>
+
+      <a class="toc-item" href="models/04-google-trends-contrarian-btc.html">
+        <span class="no">Paper IV · Alternative Data · Attention</span>
+        <h3>Search Attention as a Contrarian Signal for Bitcoin</h3>
+        <p>A rolling z-score of "bitcoin" search interest, traded contrarian. We show the z-transform
+        fails to strip the price-coincident component at weekly resolution, and that even the momentum
+        inverse is untradeable once drawdown is accounted for.</p>
+        <p class="stat">Weekly BTC, 2021–2024 · Sharpe <span class="neg">−0.30</span> · Max DD <span class="neg">−80%</span> · <b>negative result</b></p>
+      </a>
+      <a class="toc-item" href="models/05-delta-hedged-long-option-spy.html">
+        <span class="no">Paper V · Options · Volatility Trading</span>
+        <h3>Delta-Hedging and the Price of Realized Variance</h3>
+        <p>A continuously delta-hedged long SPY call, priced at 18% implied vol. Its P&amp;L is the
+        dollar-gamma-weighted gap between realized and implied variance; it bleeds steadily through
+        2023–2024 because realized sat below implied — a loss the theory predicts before any backtest.</p>
+        <p class="stat">SPY daily, 2023–2024 · Sharpe <span class="neg">−6.94</span> · Max DD <span class="neg">−8%</span> · <b>demonstrator</b></p>
+      </a>
+
+    </section>
+
+    <section class="track">
+      <div class="track-head">
+        <span class="ttl"><span class="eyebrow">Track 2 · Theory</span>Concept Writeups<span class="count">1 note</span></span>
+        <a class="more" href="concepts/index.html">filter &amp; sort →</a>
+      </div>
+
+      <a class="toc-item" href="concepts/01-order-flow-and-liquidity.html">
+        <span class="no">Note I · Microstructure · Liquidity</span>
+        <h3>How Order Flow Shapes Liquidity</h3>
+        <p>Why trades consume, move, and replenish the liquidity they demand. The three dimensions of
+        liquidity; adverse selection as the source of the spread; Kyle's lambda and depth as its
+        reciprocal; permanent vs transient impact and resiliency; the square-root law; and the feedback
+        that drains liquidity in a crash. The theory behind <a href="models/03-order-flow-imbalance-btc.html">Paper III</a>.</p>
+        <p class="stat">first-principles primer · companion: Paper III (OFI on BTC) · <b>foundational</b></p>
+      </a>
+
+      <p style="font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin:14px 2px 0">More concept notes are on the way — one per recurring idea behind the models.</p>
+    </section>
+
+  </div>
+
+  <p class="more-line">SEE ALSO: <a href="https://github.com/VanKyle00/trading-models">repository</a> · <a href="methodology.md">methodology.md</a> · <a href="glossary.md">glossary.md</a> · <a href="data-sources.md">data-sources.md</a> · <a href="latency-notes.md">latency-notes.md</a></p>
+
+  <footer class="colophon">
+    <p>SOURCE: github.com/VanKyle00/trading-models · BUILT FROM: models/&lt;family&gt;/NN-slug/ + docs/concepts/</p>
+    <p>trading-models · research index · 2026-06-04</p>
+  </footer>
+
+</div>
+</body>
+</html>
