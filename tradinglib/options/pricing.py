@@ -26,10 +26,14 @@ from scipy.stats import norm
 Right = Literal["call", "put"]
 
 
-def _intrinsic(right: Right, spot: float, strike: float) -> float:
+def intrinsic(right: Right, spot: float, strike: float) -> float:
+    """Intrinsic (exercise) value of a single option leg."""
     if right == "call":
         return max(spot - strike, 0.0)
-    return max(strike - spot, 0.0)
+    elif right == "put":
+        return max(strike - spot, 0.0)
+    else:
+        raise ValueError(f"unknown right: {right!r}")
 
 
 def _d1_d2(
@@ -62,7 +66,7 @@ def bs_price(
             f"spot and strike must be positive; got spot={spot}, strike={strike}"
         )
     if t <= 0 or vol <= 0:
-        return _intrinsic(right, spot, strike)
+        return intrinsic(right, spot, strike)
     d1, d2 = _d1_d2(spot, strike, t, vol, rate, div)
     disc = math.exp(-rate * t)
     carry = math.exp(-div * t)
@@ -193,7 +197,7 @@ def crr_price(
             f"spot and strike must be positive; got spot={spot}, strike={strike}"
         )
     if t <= 0 or vol <= 0:
-        return _intrinsic(right, spot, strike)
+        return intrinsic(right, spot, strike)
 
     dt = t / steps
     u = math.exp(vol * math.sqrt(dt))

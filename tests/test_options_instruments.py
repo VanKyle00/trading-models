@@ -49,3 +49,17 @@ def test_short_leg_has_negative_quantity() -> None:
     pos = Position(legs=[_leg(right="put", strike=100, quantity=-1.0)])
     # short a put, spot 80 -> liability of intrinsic(20) * 100
     assert pos.intrinsic_value(spot=80.0) == pytest.approx(-20.0 * CONTRACT_MULTIPLIER)
+
+
+def test_empty_position_is_zero() -> None:
+    assert Position().intrinsic_value(spot=100.0) == 0.0
+
+
+def test_multi_leg_straddle_intrinsic() -> None:
+    call_leg = _leg(right="call", strike=100.0, quantity=1.0)
+    put_leg = _leg(right="put", strike=100.0, quantity=1.0)
+    pos = Position(legs=[call_leg, put_leg])
+    # spot=120: call ITM by 20, put worthless -> 1 * 20 * 100 + 1 * 0 * 100 = 2000
+    assert pos.intrinsic_value(spot=120.0) == pytest.approx(20.0 * CONTRACT_MULTIPLIER)
+    # spot=80: put ITM by 20, call worthless -> 1 * 0 * 100 + 1 * 20 * 100 = 2000
+    assert pos.intrinsic_value(spot=80.0) == pytest.approx(20.0 * CONTRACT_MULTIPLIER)

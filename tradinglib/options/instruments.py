@@ -13,9 +13,10 @@ from typing import Literal
 
 import pandas as pd
 
+from tradinglib.options.pricing import Right, intrinsic
+
 CONTRACT_MULTIPLIER = 100.0
 
-Right = Literal["call", "put"]
 Style = Literal["european", "american"]
 
 
@@ -33,9 +34,7 @@ class OptionLeg:
 
 def intrinsic_value(leg: OptionLeg, spot: float) -> float:
     """Per-contract intrinsic value of one leg's option (unsigned by quantity)."""
-    if leg.right == "call":
-        return max(spot - leg.strike, 0.0)
-    return max(leg.strike - spot, 0.0)
+    return intrinsic(leg.right, spot, leg.strike)
 
 
 @dataclass
