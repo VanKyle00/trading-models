@@ -23,9 +23,9 @@ class ParamSpec:
     name: str
     label: str
     type: Literal["int", "float"]
-    default: float
-    min: float
-    max: float
+    default: int | float
+    min: int | float
+    max: int | float
 
 
 @dataclass(frozen=True)
@@ -64,18 +64,20 @@ def _default_ticker(meta: dict[str, Any], choices: tuple[str, ...]) -> str:
 
 
 def _params(meta: dict[str, Any]) -> tuple[ParamSpec, ...]:
-    raw = meta.get("params") or []
-    return tuple(
-        ParamSpec(
-            name=p["name"],
-            label=p.get("label", p["name"]),
-            type=p["type"],
-            default=p["default"],
-            min=p["min"],
-            max=p["max"],
+    specs: list[ParamSpec] = []
+    for p in meta.get("params") or []:
+        cast = int if p["type"] == "int" else float
+        specs.append(
+            ParamSpec(
+                name=p["name"],
+                label=p.get("label", p["name"]),
+                type=p["type"],
+                default=cast(p["default"]),
+                min=cast(p["min"]),
+                max=cast(p["max"]),
+            )
         )
-        for p in raw
-    )
+    return tuple(specs)
 
 
 def _spec_from_meta(meta: dict[str, Any]) -> ModelSpec:

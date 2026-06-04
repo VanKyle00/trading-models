@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 # tests/test_service_spec.py
 import pytest
 
 from tradinglib.service import ModelSpec, ParamSpec, list_specs, model_spec
 
 
-def test_lists_all_five_models():
+def test_lists_all_models():
+    from tradinglib.models_index import find_models
+
     specs = list_specs()
-    assert len(specs) == 5
+    assert len(specs) == len(find_models())
     assert all(isinstance(s, ModelSpec) for s in specs)
 
 
@@ -47,3 +51,18 @@ def test_model_spec_unknown_id_raises():
 def test_every_model_declares_params_key():
     for spec in list_specs():
         assert isinstance(spec.params, tuple)
+
+
+def test_param_lookup():
+    spec = next(s for s in list_specs() if s.family == "classical")
+    assert spec.param("fast") is spec.params[0]
+    assert spec.param("nonexistent") is None
+
+
+def test_ticker_mode_branches():
+    from tradinglib.service.spec import _ticker_mode
+
+    assert _ticker_mode({"tickers": "any"}) == "free"
+    assert _ticker_mode({"tickers": ["SPY"]}) == "fixed"
+    assert _ticker_mode({"tickers": ["SPY", "QQQ"]}) == "choice"
+    assert _ticker_mode({}) == "fixed"
