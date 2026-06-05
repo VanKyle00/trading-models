@@ -58,6 +58,8 @@ class Corpus:
         chunks: list[str] = []
         for path in discover_docs():
             chunks += chunk_text(path.read_text(encoding="utf-8", errors="ignore"))
+        if not chunks:
+            chunks = ["(empty corpus)"]
         return cls.from_chunks(chunks)
 
     def search(self, query: str, k: int = 3) -> list[str]:

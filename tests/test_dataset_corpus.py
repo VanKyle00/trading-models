@@ -23,3 +23,11 @@ def test_corpus_search_returns_relevant_chunk():
     )
     hits = corpus.search("how are fills modelled?", k=1)
     assert hits and "next-open" in hits[0]
+
+
+def test_corpus_build_handles_empty_gracefully(monkeypatch):
+    from tradinglib.dataset import corpus as corpus_mod
+
+    monkeypatch.setattr(corpus_mod, "discover_docs", lambda: [])
+    c = corpus_mod.Corpus.build()
+    assert c.search("anything") == []  # no crash, empty results

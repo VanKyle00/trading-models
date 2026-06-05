@@ -49,6 +49,8 @@ def record_trace(
             budget.charge_tokens(turn.usage.total)
         except BudgetExceeded:
             break
+        except Exception:
+            break
 
         if turn.stop_reason != "tool_use" or not turn.tool_calls:
             return RecordedTrace(

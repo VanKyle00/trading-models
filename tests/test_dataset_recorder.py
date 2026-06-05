@@ -50,3 +50,15 @@ def test_marks_not_ok_when_no_final_text():
     provider = StubProvider([_turn(text="")])  # empty final answer
     trace = record_trace(_scn(), provider, Budget(), specs, dispatch)
     assert not trace.ok
+
+
+def test_provider_error_yields_not_ok_trace():
+    specs, dispatch = make_dataset_tools(Corpus.from_chunks(["fills methodology"]))
+
+    class _BoomProvider:
+        def complete(self, system, conversation, tools):
+            raise RuntimeError("simulated API 529")
+
+    trace = record_trace(_scn(), _BoomProvider(), Budget(), specs, dispatch)
+    assert not trace.ok
+    assert trace.final_answer == ""
