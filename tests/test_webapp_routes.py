@@ -91,16 +91,15 @@ def test_index_has_theme_toggle_and_assistant_console():
 def test_index_ticker_control_honors_lock():
     client = TestClient(create_app())
     html = client.get("/").text
-    # one ticker control per model, toggled by JS like params/events
-    assert "data-model-ticker=" in html
-    # a locked (fixed) model renders its symbol read-only at the locked value
-    assert 'value="BTCUSDT"' in html
-    assert "readonly" in html
-    # the control is now per-model (one group each) rather than one global box
-    assert html.count("data-model-ticker=") == len(list_specs())
-    assert 'data-model-ticker="models/classical/01-sma-crossover-spy"' in html
-    # a free-text model keeps an editable default
-    assert 'value="SPY"' in html
+    # exactly one `symbol` field so the form can never submit duplicate keys
+    assert html.count('name="symbol"') == 1
+    # each model option carries the ticker metadata the JS needs to drive it
+    assert "data-ticker-mode=" in html
+    assert html.count("data-ticker-default=") == len(list_specs())
+    # the locked models expose their fixed mode + locked symbol to the JS
+    assert 'data-ticker-mode="fixed"' in html
+    for locked in ("BTC-USD", "BTCUSDT", "SPY"):
+        assert f'data-ticker-default="{locked}"' in html
 
 
 def test_index_has_model_aware_event_presets():
