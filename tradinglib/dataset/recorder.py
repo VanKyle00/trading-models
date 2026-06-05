@@ -31,6 +31,7 @@ class RecordedTrace:
     tool_outputs: list[str] = field(default_factory=list)
     final_answer: str = ""
     ok: bool = False
+    error: str = ""  # provider/infra error (e.g. API credit/rate-limit), "" if none
 
 
 def record_trace(
@@ -42,6 +43,7 @@ def record_trace(
 ) -> RecordedTrace:
     conversation: list[Message] = [UserMsg(scenario.question)]
     tool_outputs: list[str] = []
+    last_error = ""
 
     for _ in range(_MAX_TURNS):
         try:
@@ -49,7 +51,11 @@ def record_trace(
             budget.charge_tokens(turn.usage.total)
         except BudgetExceeded:
             break
-        except Exception:
+        except Exception as exc:
+            # Capture (don't swallow) infra errors so the builder can tell an
+            # API outage (credits/rate-limit/key) from a model that just didn't
+            # answer, and abort instead of writing a silently-broken dataset.
+            last_error = f"{type(exc).__name__}: {exc}"
             break
 
         if turn.stop_reason != "tool_use" or not turn.tool_calls:
@@ -74,4 +80,4 @@ def record_trace(
             results.append(ToolResult(call.id, content, is_error))
         conversation.append(ToolResultMsg(tuple(results)))
 
-    return RecordedTrace(scenario, conversation, tool_outputs, "", False)
+    return RecordedTrace(scenario, conversation, tool_outputs, "", False, error=last_error)
