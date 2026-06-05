@@ -185,8 +185,26 @@
           {% endfor %}
         </select>
 
-        <label>Ticker</label>
-        <input name="symbol" value="SPY" />
+        {# One ticker control per model; JS shows only the selected model's.   #}
+        {# Mode comes from the model.md `tickers` frontmatter via ModelSpec:    #}
+        {#   free → editable text · choice → dropdown · fixed → locked symbol.  #}
+        {% for s in specs %}
+        <div class="ticker-group" data-model-ticker="{{ s.id }}" hidden>
+          <label>Ticker</label>
+          {% if s.ticker_mode == "choice" %}
+          <select name="symbol">
+            {% for t in s.ticker_choices %}
+            <option value="{{ t }}"{% if t == s.default_ticker %} selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+          {% elif s.ticker_mode == "fixed" %}
+          <input name="symbol" value="{{ s.default_ticker }}" readonly
+                 title="This model is locked to {{ s.default_ticker }}" />
+          {% else %}
+          <input name="symbol" value="{{ s.default_ticker }}" />
+          {% endif %}
+        </div>
+        {% endfor %}
 
         {# Market-event presets; JS shows only the selected model's set and #}
         {# fills the dates below when one is picked. #}
@@ -277,6 +295,14 @@
           // disable the other models' inputs so they don't submit — distinct
           // models can share a param name and would otherwise collide.
           g.querySelectorAll("input").forEach(function (i) { i.disabled = !on; });
+        });
+        // ticker control: show only the selected model's, and disable the rest
+        // so exactly one `symbol` field submits (a fixed model's input is
+        // readonly-but-enabled when active, so its locked value still posts).
+        document.querySelectorAll("[data-model-ticker]").forEach(function (g) {
+          var on = g.dataset.modelTicker === sel.value;
+          g.hidden = !on;
+          g.querySelectorAll("input, select").forEach(function (i) { i.disabled = !on; });
         });
         // show only the selected model's market-event presets
         document.querySelectorAll("[data-model-events]").forEach(function (g) {

@@ -1,6 +1,7 @@
 # tests/test_webapp_routes.py
 from fastapi.testclient import TestClient
 
+from tradinglib.service import list_specs
 from webapp.main import create_app
 
 
@@ -85,6 +86,21 @@ def test_index_has_theme_toggle_and_assistant_console():
     assert 'data-theme-set="bone"' in html and 'data-theme-set="night"' in html
     assert 'id="composer"' in html  # the assistant console input
     assert "/api/v1/chat" in html  # console wired to the SSE endpoint
+
+
+def test_index_ticker_control_honors_lock():
+    client = TestClient(create_app())
+    html = client.get("/").text
+    # one ticker control per model, toggled by JS like params/events
+    assert "data-model-ticker=" in html
+    # a locked (fixed) model renders its symbol read-only at the locked value
+    assert 'value="BTCUSDT"' in html
+    assert "readonly" in html
+    # the control is now per-model (one group each) rather than one global box
+    assert html.count("data-model-ticker=") == len(list_specs())
+    assert 'data-model-ticker="models/classical/01-sma-crossover-spy"' in html
+    # a free-text model keeps an editable default
+    assert 'value="SPY"' in html
 
 
 def test_index_has_model_aware_event_presets():
