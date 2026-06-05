@@ -181,30 +181,23 @@
         <label>Model</label>
         <select name="model_id" id="model-select">
           {% for s in specs %}
-          <option value="{{ s.id }}">{{ s.name }}</option>
+          {# ticker mode/default/choices ride on the option so the JS can drive #}
+          {# a single `symbol` field (one field → no duplicate-key submission). #}
+          <option value="{{ s.id }}"
+                  data-ticker-mode="{{ s.ticker_mode }}"
+                  data-ticker-default="{{ s.default_ticker }}"
+                  data-ticker-choices="{{ s.ticker_choices|join(',') }}">{{ s.name }}</option>
           {% endfor %}
         </select>
 
-        {# One ticker control per model; JS shows only the selected model's.   #}
-        {# Mode comes from the model.md `tickers` frontmatter via ModelSpec:    #}
-        {#   free → editable text · choice → dropdown · fixed → locked symbol.  #}
-        {% for s in specs %}
-        <div class="ticker-group" data-model-ticker="{{ s.id }}" hidden>
-          <label>Ticker</label>
-          {% if s.ticker_mode == "choice" %}
-          <select name="symbol">
-            {% for t in s.ticker_choices %}
-            <option value="{{ t }}"{% if t == s.default_ticker %} selected{% endif %}>{{ t }}</option>
-            {% endfor %}
-          </select>
-          {% elif s.ticker_mode == "fixed" %}
-          <input name="symbol" value="{{ s.default_ticker }}" readonly
-                 title="This model is locked to {{ s.default_ticker }}" />
-          {% else %}
-          <input name="symbol" value="{{ s.default_ticker }}" />
-          {% endif %}
-        </div>
-        {% endfor %}
+        {# Single ticker control, reconfigured by JS per selected model:        #}
+        {#   free → editable · choice → editable + datalist · fixed → readonly.  #}
+        {# Mode/default come from the model.md `tickers` frontmatter (ModelSpec).#}
+        <label>Ticker</label>
+        <input name="symbol" id="ticker-field" autocomplete="off" list="ticker-choices"
+               value="{{ specs[0].default_ticker }}"
+               {% if specs[0].ticker_mode == "fixed" %}readonly title="Locked to {{ specs[0].default_ticker }}"{% endif %} />
+        <datalist id="ticker-choices"></datalist>
 
         {# Market-event presets; JS shows only the selected model's set and #}
         {# fills the dates below when one is picked. #}
@@ -288,6 +281,25 @@
       var sel = document.getElementById("model-select"),
           startEl = document.querySelector('input[name="start"]'),
           endEl = document.querySelector('input[name="end"]');
+      // Reconfigure the single ticker field from the selected model's option:
+      // locked models get a readonly symbol; choice models get datalist hints.
+      // One field means the form can never submit duplicate `symbol` keys.
+      function syncTicker() {
+        var opt = sel.options[sel.selectedIndex],
+            field = document.getElementById("ticker-field"),
+            list = document.getElementById("ticker-choices");
+        if (!opt || !field) return;
+        var mode = opt.dataset.tickerMode, def = opt.dataset.tickerDefault || "";
+        field.value = def;
+        field.readOnly = mode === "fixed";
+        field.title = mode === "fixed" ? "Locked to " + def : "";
+        list.innerHTML = "";
+        if (mode === "choice" && opt.dataset.tickerChoices) {
+          opt.dataset.tickerChoices.split(",").forEach(function (t) {
+            var o = document.createElement("option"); o.value = t; list.appendChild(o);
+          });
+        }
+      }
       function sync() {
         document.querySelectorAll("[data-model-params]").forEach(function (g) {
           var on = g.dataset.modelParams === sel.value;
@@ -296,14 +308,7 @@
           // models can share a param name and would otherwise collide.
           g.querySelectorAll("input").forEach(function (i) { i.disabled = !on; });
         });
-        // ticker control: show only the selected model's, and disable the rest
-        // so exactly one `symbol` field submits (a fixed model's input is
-        // readonly-but-enabled when active, so its locked value still posts).
-        document.querySelectorAll("[data-model-ticker]").forEach(function (g) {
-          var on = g.dataset.modelTicker === sel.value;
-          g.hidden = !on;
-          g.querySelectorAll("input, select").forEach(function (i) { i.disabled = !on; });
-        });
+        syncTicker();
         // show only the selected model's market-event presets
         document.querySelectorAll("[data-model-events]").forEach(function (g) {
           g.hidden = g.dataset.modelEvents !== sel.value;
