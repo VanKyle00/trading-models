@@ -1,4 +1,4 @@
-from tradinglib.eval.config import DEFAULT_BAR, ShipBar
+from tradinglib.assistant_eval.config import DEFAULT_BAR, ShipBar
 
 
 def test_default_bar_matches_spec():
