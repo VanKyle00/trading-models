@@ -17,11 +17,19 @@ _IGNORE_BELOW = 10.0  # bare small ints are usually prose, not metric claims
 # LLMs routinely emit typographic minus / dashes in tables ("−12.97%"); fold them
 # to ASCII '-' so a correctly-signed claim isn't misread as positive.
 _DASHES = str.maketrans({"−": "-", "–": "-", "—": "-"})
+# Numbers inside index/proper-noun names ("S&P 500", "Russell 2000") are names,
+# not metric claims -- strip the names before extraction so they aren't flagged
+# ungrounded (also fixes false drops at dataset-build time).
+_INDEX_NAMES = re.compile(
+    r"S&P\s*500|S&P\s*600|Russell\s*2000|Russell\s*1000|Nasdaq[- ]?100|FTSE\s*100|Dow\s*30",
+    re.IGNORECASE,
+)
 
 
 def extract_numbers(text: str) -> set[float]:
     out: set[float] = set()
-    for tok in _NUM.findall(text.translate(_DASHES)):
+    text = _INDEX_NAMES.sub(" ", text.translate(_DASHES))
+    for tok in _NUM.findall(text):
         is_pct = tok.endswith("%")
         cleaned = tok.replace("$", "").replace(",", "").rstrip("%")
         try:
