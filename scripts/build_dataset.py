@@ -27,6 +27,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--eval-frac", type=float, default=0.15)
     p.add_argument("--limit", type=int, default=None, help="cap total scenarios (smoke)")
+    p.add_argument(
+        "--split",
+        choices=["index", "ticker", "stratified"],
+        default="index",
+        help="train/eval split: 'index' (shuffle), 'ticker' (strict held-out-by-ticker), "
+        "or 'stratified' (by-ticker for explain/counterfactual + random methodology/refusal)",
+    )
     return p.parse_args(argv)
 
 
@@ -47,6 +54,7 @@ def main() -> None:
         eval_frac=args.eval_frac,
         seed=args.seed,
         corpus=Corpus.build(),
+        split_by=args.split,
     )
     print(json.dumps(stats, indent=2))
 

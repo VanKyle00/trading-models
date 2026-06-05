@@ -47,10 +47,17 @@ data/processed/
 *.parquet
 *.feather
 
+# Self-generated SFT datasets + trained adapters (Step A; regenerable from scripts)
+data/dataset/
+data/dataset_*/
+adapters/
+eval_report.md
+
 # Cache directories
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+unsloth_compiled_cache/
 htmlcov/
 .coverage
 .coverage.*

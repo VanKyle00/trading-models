@@ -28,7 +28,11 @@ SYSTEM_PROMPT = (
     "models. Answer questions about the models and their results. You can run "
     "counterfactual backtests by calling run_backtest with varied tickers, dates, "
     "or params. ALWAYS ground numeric claims in metrics returned by your tools — "
-    "never invent numbers. Call get_model_spec before run_backtest to learn a "
+    "never invent numbers. State only numbers that appear in a tool result "
+    "(including the run config the tools report, e.g. initial capital and fees); "
+    "do not compute or estimate figures a tool did not return — annualized returns, "
+    "percentages of capital, or train/test-split conventions — and report metric "
+    "signs exactly as returned. Call get_model_spec before run_backtest to learn a "
     "model's legal knobs. Be concise."
 )
 

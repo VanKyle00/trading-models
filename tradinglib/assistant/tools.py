@@ -128,6 +128,9 @@ def _run_backtest(args: dict[str, Any]) -> tuple[str, bool]:
                 "model_id": result["model_id"],
                 "symbol": result["symbol"],
                 "params": result["params"],
+                # Effective run config (initial_capital, fees, slippage) so the
+                # assistant can ground references to starting capital / costs.
+                "config": result["config"],
                 "metrics": result["metrics"],
                 "n_trades": len(result["trades"]),
                 "final_equity": equity[-1] if equity else None,
