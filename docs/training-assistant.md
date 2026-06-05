@@ -173,3 +173,32 @@ No changes to `tradinglib/training/` are needed for sub-project 4.
 | `ANTHROPIC_API_KEY=... uv run python scripts/build_dataset.py --out data/dataset --n 3 --limit 8` | Quick dataset smoke run (8 scenarios) |
 | `uv run python scripts/train_assistant.py --train data/dataset/train.jsonl --eval data/dataset/eval.jsonl --out adapters/smoke --max-steps 10` | 10-step smoke run |
 | `uv run python scripts/train_assistant.py --train data/dataset/train.jsonl --eval data/dataset/eval.jsonl --out adapters/qwen25-7b-assistant` | Full training run (2 epochs) |
+
+---
+
+## Running the eval gate (sub-project 3)
+
+After a training run produces an adapter, run the gate in WSL2 against the held-out
+`eval.jsonl`. The judge calls Claude, so export your key:
+
+```bash
+ANTHROPIC_API_KEY=... uv run python scripts/eval_assistant.py \
+    --eval-file data/dataset/eval.jsonl \
+    --provider local --adapter adapters/qwen25-7b-assistant \
+    --out eval_report.md
+```
+
+Exit code `0` means the candidate cleared the ship-bar (tool-call accuracy ≥0.90,
+grounded ≥0.99, judge win-rate ≥0.45) and can become the default provider; `1` means
+keep Claude as default (or enable the router later). The scorecard (overall + per-category)
+is printed and written to `--out`.
+
+CI smoke (no GPU, no key) — exercises the whole pipeline with a canned provider:
+
+```bash
+python scripts/eval_assistant.py --eval-file data/dataset/eval.jsonl --provider stub
+```
+
+The first real run also verifies the Qwen tool-call parser against the model's actual
+output format (the one piece CI cannot cover) — sanity-check `eval_report.md`'s tool-call
+column is non-zero on a few `explain`/`counterfactual` cases.
