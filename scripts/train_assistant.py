@@ -47,9 +47,12 @@ def main() -> None:
     settings = _resolve_settings(args)
 
     # Lazy heavy imports - keep this module importable without a GPU.
+    # Unsloth MUST be imported before trl/transformers/peft so its kernel +
+    # memory patches apply (it warns and degrades VRAM use otherwise).
+    from unsloth import FastLanguageModel
+    from unsloth.chat_templates import train_on_responses_only
     from datasets import Dataset
     from trl import SFTConfig, SFTTrainer
-    from unsloth import FastLanguageModel
 
     from tradinglib.training.data import prepare_records
 
@@ -78,6 +81,17 @@ def main() -> None:
         random_state=settings.seed,
     )
 
+    # Render conversational rows to a flat ``text`` column via the Qwen chat
+    # template (tool_calls/tool turns included). Unsloth's SFTTrainer does NOT
+    # auto-apply the chat template to a `messages` column -- it requires `text`,
+    # a prompt/completion pair, or a formatting_func -- so we materialize it here.
+    def _to_text(rec: dict) -> dict:
+        return {"text": tokenizer.apply_chat_template(rec["messages"], tokenize=False)}
+
+    train_ds = train_ds.map(_to_text, remove_columns=train_ds.column_names)
+    if eval_ds is not None:
+        eval_ds = eval_ds.map(_to_text, remove_columns=eval_ds.column_names)
+
     sft_config = SFTConfig(
         output_dir=args.out,
         per_device_train_batch_size=settings.per_device_batch_size,
@@ -89,15 +103,29 @@ def main() -> None:
         max_steps=(args.max_steps if args.max_steps is not None else -1),
         seed=settings.seed,
         logging_steps=1,
-        max_seq_length=settings.max_seq_len,
+        # TRL >=0.20 renamed SFTConfig.max_seq_length -> max_length (verified on trl 0.24).
+        max_length=settings.max_seq_len,
+        # Pin the EOS explicitly: under Unsloth+trl 0.24 a None eos_token resolves to
+        # an unresolved '<EOS_TOKEN>' sentinel that fails TRL's vocab check. The Qwen
+        # tokenizer's real EOS is '<|im_end|>'.
+        eos_token=tokenizer.eos_token,
         eval_strategy="epoch" if eval_ds is not None else "no",
     )
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        # TRL >=0.13 replaced the `tokenizer=` arg with `processing_class=` (verified on trl 0.24).
+        processing_class=tokenizer,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
         args=sft_config,
+    )
+    # Assistant-only loss: mask the system prompt, user turns, and tool outputs so
+    # loss is computed only on the assistant's tool-calls + final answers (ChatML
+    # markers). Focuses limited training signal on what the ship-bar measures.
+    trainer = train_on_responses_only(
+        trainer,
+        instruction_part="<|im_start|>user\n",
+        response_part="<|im_start|>assistant\n",
     )
     trainer.train()
     model.save_pretrained(args.out)

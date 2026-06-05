@@ -49,3 +49,38 @@ def test_malformed_tool_call_json_is_skipped():
     calls, stop_reason, _ = parse_qwen_tool_calls(text)
     assert calls == []
     assert stop_reason == "end_turn"
+
+
+def test_parses_string_encoded_arguments():
+    # The format our serialize.py emits and the model is trained on: `arguments`
+    # is a JSON *string*, not a nested object (the chat template renders it
+    # escaped). The parser must json.loads it back to a dict so scoring (which
+    # compares dicts) matches the gold call.
+    from tradinglib.assistant.local_provider import parse_qwen_tool_calls
+
+    text = (
+        "<tool_call>\n"
+        '{"name": "search_docs", "arguments": "{\\"query\\": \\"SMA on SPY\\"}"}\n'
+        "</tool_call>"
+    )
+    calls, stop_reason, _ = parse_qwen_tool_calls(text)
+    assert stop_reason == "tool_use"
+    assert len(calls) == 1
+    assert calls[0].name == "search_docs"
+    assert calls[0].input == {"query": "SMA on SPY"}  # decoded to a dict, not left a string
+
+
+def test_nested_object_arguments_not_truncated_by_closing_tag():
+    # A run_backtest call with nested args: the `</tool_call>` anchor must let the
+    # lazy `{.*?}` extend to the object's true close, not stop at an inner `}`.
+    from tradinglib.assistant.local_provider import parse_qwen_tool_calls
+
+    text = (
+        "<tool_call>\n"
+        '{"name": "run_backtest", "arguments": {"model_id": "m1", '
+        '"params": {"fast": 50, "slow": 200}}}\n'
+        "</tool_call>"
+    )
+    calls, _, _ = parse_qwen_tool_calls(text)
+    assert len(calls) == 1
+    assert calls[0].input == {"model_id": "m1", "params": {"fast": 50, "slow": 200}}
