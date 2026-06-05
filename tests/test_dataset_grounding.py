@@ -24,3 +24,10 @@ def test_small_integers_are_ignored():
     # bare 1/2/3 etc. are prose ("the 3 models"), not claims to verify
     ok, missing = is_grounded("There are 5 models and 2 asset classes.", [])
     assert ok and missing == []
+
+
+def test_index_name_numbers_are_not_metric_claims():
+    # "S&P 500" / "Russell 2000" are proper-noun names, not numbers to verify
+    assert extract_numbers("The S&P 500 and Russell 2000 indices") == set()
+    ok, missing = is_grounded("Tracks the S&P 500; Sharpe was 1.2.", ['{"sharpe": 1.2}'])
+    assert ok and missing == []
