@@ -52,6 +52,20 @@ ml-extra = [
 dl = [
     "torch>=2.3",  # ~1 GB install; only needed for future neural-net models
 ]
+train = [
+    # Local QLoRA fine-tuning on the RTX 5080 in WSL2 (CUDA 12.8+). NOT installed
+    # in the base or Modal-serving env. Unsloth is the primary trainer; install it
+    # per its WSL2/Blackwell instructions (see docs/training-assistant.md) - it is
+    # intentionally NOT pinned here because its build is CUDA/torch-version
+    # specific. transformers/trl/peft/datasets/accelerate are the stable core.
+    "torch>=2.4",
+    "transformers>=4.46",
+    "trl>=0.12",
+    "peft>=0.13",
+    "datasets>=3.0",
+    "accelerate>=1.0",
+    "bitsandbytes>=0.44",  # TRL/bnb fallback path; Unsloth bundles its own kernels
+]
 deploy = [
     "modal>=0.66",  # serverless host for the FastAPI workbench (see deploy/modal_app.py)
 ]
