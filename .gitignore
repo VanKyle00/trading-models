@@ -51,7 +51,7 @@ data/processed/
 data/dataset/
 data/dataset_*/
 adapters/
-eval_report.md
+eval_report*.md
 
 # Cache directories
 .pytest_cache/
