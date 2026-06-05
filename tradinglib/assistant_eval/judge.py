@@ -7,6 +7,7 @@ verdicts for tests. anthropic is imported lazily so this module loads without a 
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 Verdict = str  # "win" | "tie" | "loss"
@@ -27,6 +28,14 @@ def _parse_verdict(text: str, candidate_label: str) -> Verdict:
     if pick == "TIE":
         return "tie"
     return "win" if pick == candidate_label else "loss"
+
+
+def _candidate_is_a(question: str, candidate: str) -> bool:
+    """Pick the candidate's A/B slot from a STABLE content hash, so the same
+    (question, candidate) always lands in the same slot across runs/processes
+    (builtin hash() is per-process salted and would not be reproducible)."""
+    digest = hashlib.sha256(f"{question}\x00{candidate}".encode()).digest()
+    return digest[0] % 2 == 0
 
 
 def win_rate(verdicts: list[Verdict]) -> float:
@@ -56,8 +65,8 @@ class ClaudeJudge:
         self._max_tokens = max_tokens
 
     def compare(self, question: str, gold: str, candidate: str) -> Verdict:
-        # Deterministic order from content hash: candidate is A when hash is even.
-        cand_is_a = (hash((question, candidate)) % 2) == 0
+        # Stable content-derived order: candidate is A when the digest is even.
+        cand_is_a = _candidate_is_a(question, candidate)
         a, b = (candidate, gold) if cand_is_a else (gold, candidate)
         label = "A" if cand_is_a else "B"
         prompt = (

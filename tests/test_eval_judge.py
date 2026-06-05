@@ -1,6 +1,14 @@
 import pytest
 
-from tradinglib.assistant_eval.judge import StubJudge, win_rate
+from tradinglib.assistant_eval.judge import StubJudge, _candidate_is_a, win_rate
+
+
+def test_candidate_order_is_stable_and_content_derived():
+    # same content -> same slot every call (stable across the salted builtin hash)
+    assert _candidate_is_a("q", "cand") == _candidate_is_a("q", "cand")
+    # the slot depends on content, so at least one differing input flips somewhere
+    slots = {_candidate_is_a("q", f"cand{i}") for i in range(8)}
+    assert slots == {True, False}
 
 
 def test_win_rate_counts_ties_as_half():

@@ -72,3 +72,21 @@ def test_skips_malformed_lines(tmp_path):
     p.write_text(good + "\n" + bad + "\n", encoding="utf-8")
 
     assert len(load_eval_cases(p)) == 1
+
+
+def test_row_without_user_message_yields_empty_prompt(tmp_path):
+    # validate_example permits system+assistant (last is assistant); the loader
+    # must tolerate a missing user turn rather than crash.
+    row = {
+        "messages": [
+            {"role": "system", "content": "sys"},
+            {"role": "assistant", "content": "hello"},
+        ],
+        "meta": {"category": "explain", "model_id": "m1"},
+    }
+    p = tmp_path / "eval.jsonl"
+    p.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    case = load_eval_cases(p)[0]
+    assert case.user_prompt == ""
+    assert case.gold_answer == "hello"

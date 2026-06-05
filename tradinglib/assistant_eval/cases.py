@@ -39,7 +39,7 @@ def _gold_calls(messages: list[dict]) -> list[ToolCall]:
 
 def _to_case(row: dict) -> EvalCase:
     messages = row["messages"]
-    user_prompt = next(m["content"] for m in messages if m.get("role") == "user")
+    user_prompt = next((m["content"] for m in messages if m.get("role") == "user"), "")
     gold_answer = messages[-1].get("content", "")
     meta = row.get("meta", {})
     return EvalCase(
