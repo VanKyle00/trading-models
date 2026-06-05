@@ -186,7 +186,9 @@
           <option value="{{ s.id }}"
                   data-ticker-mode="{{ s.ticker_mode }}"
                   data-ticker-default="{{ s.default_ticker }}"
-                  data-ticker-choices="{{ s.ticker_choices|join(',') }}">{{ s.name }}</option>
+                  data-ticker-choices="{{ s.ticker_choices|join(',') }}"
+                  data-date-min="{{ s.date_min or '' }}"
+                  data-date-max="{{ s.date_max or '' }}">{{ s.name }}</option>
           {% endfor %}
         </select>
 
@@ -300,6 +302,27 @@
           });
         }
       }
+      // Bound the date pickers to the selected model's backtestable window so a
+      // run can't be submitted for dates the model has no data to score (e.g.
+      // the ML model's OOS slice). Snaps out-of-range values and hides event
+      // presets that fall outside the window.
+      function syncDates() {
+        var opt = sel.options[sel.selectedIndex];
+        if (!opt) return;
+        var dmin = opt.dataset.dateMin || "", dmax = opt.dataset.dateMax || "";
+        [startEl, endEl].forEach(function (el) {
+          if (dmin) { el.min = dmin; if (el.value && el.value < dmin) el.value = dmin; }
+          else el.removeAttribute("min");
+          if (dmax) { el.max = dmax; if (el.value && el.value > dmax) el.value = dmax; }
+          else el.removeAttribute("max");
+        });
+        document.querySelectorAll('[data-model-events="' + sel.value + '"] .event-select option')
+          .forEach(function (o) {
+            if (!o.dataset.start) return;  // the "Custom range" option
+            var bad = (dmin && o.dataset.start < dmin) || (dmax && o.dataset.end > dmax);
+            o.hidden = bad; o.disabled = bad;
+          });
+      }
       function sync() {
         document.querySelectorAll("[data-model-params]").forEach(function (g) {
           var on = g.dataset.modelParams === sel.value;
@@ -309,6 +332,7 @@
           g.querySelectorAll("input").forEach(function (i) { i.disabled = !on; });
         });
         syncTicker();
+        syncDates();
         // show only the selected model's market-event presets
         document.querySelectorAll("[data-model-events]").forEach(function (g) {
           g.hidden = g.dataset.modelEvents !== sel.value;

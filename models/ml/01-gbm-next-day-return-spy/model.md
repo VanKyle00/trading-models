@@ -5,6 +5,10 @@ window: swing
 assets: [equities]
 data_sources: [yfinance_daily_bars]
 tickers: [SPY]
+# Model is evaluated only on its held-out OOS slice; earlier dates have no
+# data to score, so bound the picker to the OOS window.
+date_min: 2022-01-14
+date_max: 2024-12-31
 params: []
 status: working
 sharpe_oos: 0.96

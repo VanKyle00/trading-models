@@ -5,6 +5,10 @@ window: swing
 assets: [crypto]
 data_sources: [google_trends_bitcoin, yfinance_daily_bars]
 tickers: [BTC-USD]
+# Google-Trends interest is relative within its 2021-2024 query window; dates
+# outside it have no aligned search data to score.
+date_min: 2021-01-01
+date_max: 2024-12-31
 params:
   - {name: window, label: Z-score window (weeks), type: int, default: 4, min: 2, max: 12}
 status: negative-result

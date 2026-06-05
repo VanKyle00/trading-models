@@ -5,6 +5,10 @@ window: intraday
 assets: [crypto]
 data_sources: [binance_aggTrades]
 tickers: [BTCUSDT]
+# Ships only the 2024-08-05-crash aggTrades window; other days aren't cached and
+# pulling them (~50-100 MB/day) risks OOM on the hosted demo.
+date_min: 2024-08-04
+date_max: 2024-08-06
 supports_costs: false
 supports_sizing: false
 params:
