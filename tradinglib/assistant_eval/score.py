@@ -31,8 +31,13 @@ def _value_match(x: Any, y: Any) -> bool:
     return x == y
 
 
-def _args_match(a: dict, b: dict) -> bool:
-    return a.keys() == b.keys() and all(_value_match(a[k], b[k]) for k in a)
+def _args_match(candidate: dict, gold: dict) -> bool:
+    """The candidate must satisfy every arg the gold trace specified (right keys,
+    matching values); extra optional args on the candidate are allowed. The
+    minimal gold traces omit defaults the model often spells out (some are inert
+    knobs the model doesn't even support), so penalizing that over-specification
+    measured tool *selection* unfairly. Wrong or missing gold args still fail."""
+    return all(k in candidate and _value_match(candidate[k], gold[k]) for k in gold)
 
 
 def tool_call_score(candidate: list[ToolCall], gold: list[ToolCall]) -> float:

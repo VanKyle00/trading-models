@@ -33,6 +33,32 @@ def test_wrong_args_do_not_match():
     )
 
 
+def test_extra_optional_args_on_candidate_still_match():
+    # The model often spells out default/inert knobs the minimal gold omits;
+    # that over-specification is not a wrong tool call.
+    gold = [_c("run_backtest", model_id="m1", symbol="IWM", start="2020-01-01")]
+    cand = [
+        _c(
+            "run_backtest",
+            model_id="m1",
+            symbol="IWM",
+            start="2020-01-01",
+            fee_bps=1,
+            slippage_bps=5,
+            params={"implied_vol": 0.18},
+        )
+    ]
+    assert tool_call_score(cand, gold) == 1.0
+
+
+def test_missing_gold_arg_still_fails():
+    # but if gold specified a knob (e.g. fees for a "fees are 10 bps" question),
+    # the candidate must include it
+    gold = [_c("run_backtest", model_id="m1", fee_bps=10.0)]
+    cand = [_c("run_backtest", model_id="m1")]
+    assert tool_call_score(cand, gold) == 0.0
+
+
 def test_spurious_call_is_penalized():
     gold = [_c("run_backtest", model_id="m1")]
     cand = [_c("run_backtest", model_id="m1"), _c("list_models")]
