@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -100,3 +101,81 @@ def generate_scenarios(seed: int = 0, per_model_per_category: int = 3) -> list[S
 
     rng.shuffle(out)
     return out
+
+
+def partition_by_ticker(
+    scenarios: list[Scenario], eval_frac: float = 0.15, seed: int = 0
+) -> tuple[list[Scenario], list[Scenario]]:
+    """Strict held-out-by-ticker split: every scenario for a given symbol lands
+    entirely in train OR eval, so no ticker (and its templated phrasings) leaks
+    train->eval. Refusals (``symbol is None``) are model-agnostic and carry no
+    ticker to leak; they're split by a seeded shuffle so eval still exercises
+    them. Deterministic for a given seed.
+    """
+    rng = random.Random(seed)
+    symbols = sorted({s.symbol for s in scenarios if s.symbol is not None})
+    rng.shuffle(symbols)
+    eval_symbols = set(symbols[: int(len(symbols) * eval_frac)])
+
+    ticker_train = [s for s in scenarios if s.symbol is not None and s.symbol not in eval_symbols]
+    ticker_eval = [s for s in scenarios if s.symbol is not None and s.symbol in eval_symbols]
+
+    refusals = [s for s in scenarios if s.symbol is None]
+    rng.shuffle(refusals)
+    n_ref_eval = int(len(refusals) * eval_frac)
+
+    return ticker_train + refusals[n_ref_eval:], ticker_eval + refusals[:n_ref_eval]
+
+
+# Categories whose answers cite real backtest numbers -> hold these out BY TICKER
+# so a ticker's metrics can't leak train->eval. Others (methodology=doc-based,
+# refusal=model-agnostic) carry no ticker numbers, so a random within-category
+# holdout is leakage-free and gives us guaranteed category coverage in eval.
+_TICKER_CATS = ("explain", "counterfactual")
+
+
+def partition_stratified(
+    scenarios: list[Scenario], eval_frac: float = 0.2, seed: int = 0
+) -> tuple[list[Scenario], list[Scenario]]:
+    """Category-balanced, leakage-aware held-out split.
+
+    explain/counterfactual are held out by ticker, choosing the *rarest* tickers
+    first so dominant tickers (e.g. SPY/BTC) stay in training while backtest
+    numbers still can't leak. methodology/refusal are held out at random within
+    each category (>=1 each) so every category is represented in eval. The two
+    aims -- no number leakage where it matters, full category coverage for a
+    trustworthy gate -- are why a single rule can't serve both. Deterministic.
+    """
+    rng = random.Random(seed)
+
+    # 1. hold out the rarest explain/counterfactual tickers up to ~eval_frac.
+    tk_counts: Counter[str] = Counter(
+        s.symbol for s in scenarios if s.symbol and s.category in _TICKER_CATS
+    )
+    target = sum(tk_counts.values()) * eval_frac
+    held_tickers: set[str] = set()
+    held = 0
+    for tk, cnt in sorted(tk_counts.items(), key=lambda kv: (kv[1], kv[0])):
+        if held >= target:
+            break
+        held_tickers.add(tk)
+        held += cnt
+
+    train: list[Scenario] = []
+    eval_: list[Scenario] = []
+
+    # 2. ticker-bound categories: eval iff the ticker is held out.
+    for s in scenarios:
+        if s.category in _TICKER_CATS:
+            (eval_ if s.symbol in held_tickers else train).append(s)
+
+    # 3. every other category: random within-category holdout, >=1 in eval.
+    other_cats = {s.category for s in scenarios} - set(_TICKER_CATS)
+    for cat in sorted(other_cats):
+        group = [s for s in scenarios if s.category == cat]
+        rng.shuffle(group)
+        n_eval = max(1, round(len(group) * eval_frac)) if group else 0
+        eval_.extend(group[:n_eval])
+        train.extend(group[n_eval:])
+
+    return train, eval_

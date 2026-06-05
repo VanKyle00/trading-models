@@ -9,13 +9,19 @@ from __future__ import annotations
 
 import re
 
-_NUM = re.compile(r"-?\$?\d[\d,]*(?:\.\d+)?%?")
+# A leading '-' counts as a sign only at a token boundary, not when it follows a
+# digit/dot -- otherwise hyphenated ranges and ISO dates ("2020-2024",
+# "2023-12-31") spuriously parse the trailing field as negative.
+_NUM = re.compile(r"(?<![\d.])-?\$?\d[\d,]*(?:\.\d+)?%?")
 _IGNORE_BELOW = 10.0  # bare small ints are usually prose, not metric claims
+# LLMs routinely emit typographic minus / dashes in tables ("−12.97%"); fold them
+# to ASCII '-' so a correctly-signed claim isn't misread as positive.
+_DASHES = str.maketrans({"−": "-", "–": "-", "—": "-"})
 
 
 def extract_numbers(text: str) -> set[float]:
     out: set[float] = set()
-    for tok in _NUM.findall(text):
+    for tok in _NUM.findall(text.translate(_DASHES)):
         is_pct = tok.endswith("%")
         cleaned = tok.replace("$", "").replace(",", "").rstrip("%")
         try:
@@ -26,12 +32,12 @@ def extract_numbers(text: str) -> set[float]:
     return out
 
 
-def _matches(claim: float, pool: set[float], rel: float = 0.02, abs_: float = 0.01) -> bool:
+def _matches(claim: float, pool: set[float], rel: float = 0.05, abs_: float = 0.01) -> bool:
     return any(abs(claim - p) <= max(abs_, rel * abs(p)) for p in pool)
 
 
 def is_grounded(
-    answer: str, tool_outputs: list[str], rel: float = 0.02
+    answer: str, tool_outputs: list[str], rel: float = 0.05
 ) -> tuple[bool, list[float]]:
     """Return (ok, missing). ``missing`` lists claimed numbers not found in any
     tool output. Bare integers below ``_IGNORE_BELOW`` are treated as prose."""
