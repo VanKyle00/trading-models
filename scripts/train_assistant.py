@@ -42,13 +42,6 @@ def _resolve_settings(args: argparse.Namespace) -> TrainSettings:
     return dataclasses.replace(TrainSettings(), **overrides)
 
 
-def validate_dataset_summary(path: str) -> tuple[int, list[str]]:
-    """Thin wrapper so the heavy-import-free validator is reachable from main."""
-    from tradinglib.training.data import validate_dataset
-
-    return validate_dataset(path)
-
-
 def main() -> None:
     args = parse_args()
     settings = _resolve_settings(args)
@@ -58,16 +51,16 @@ def main() -> None:
     from trl import SFTConfig, SFTTrainer
     from unsloth import FastLanguageModel
 
-    from tradinglib.training.data import load_jsonl, to_trl_records, validate_example
+    from tradinglib.training.data import prepare_records
 
-    n_ok, problems = validate_dataset_summary(args.train)
-    if problems:
-        print(f"WARNING: {len(problems)} invalid lines; {n_ok} valid")
-    valid = [ex for ex in load_jsonl(args.train) if not validate_example(ex)]
-    train_ds = Dataset.from_list(to_trl_records(valid))
+    train_records, n_dropped = prepare_records(args.train, require_nonempty=True)
+    if n_dropped:
+        print(f"WARNING: dropped {n_dropped} invalid training example(s)")
+    train_ds = Dataset.from_list(train_records)
     eval_ds = None
     if args.eval:
-        eval_ds = Dataset.from_list(to_trl_records(load_jsonl(args.eval)))
+        eval_records, _ = prepare_records(args.eval)
+        eval_ds = Dataset.from_list(eval_records)
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=settings.base_model,
@@ -93,9 +86,10 @@ def main() -> None:
         learning_rate=settings.learning_rate,
         warmup_ratio=settings.warmup_ratio,
         weight_decay=settings.weight_decay,
-        max_steps=args.max_steps or -1,
+        max_steps=(args.max_steps if args.max_steps is not None else -1),
         seed=settings.seed,
         logging_steps=1,
+        max_seq_length=settings.max_seq_len,
         eval_strategy="epoch" if eval_ds is not None else "no",
     )
     trainer = SFTTrainer(

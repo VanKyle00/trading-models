@@ -75,3 +75,34 @@ def test_validate_dataset_counts(tmp_path: Path):
 def test_to_trl_records_strips_meta():
     recs = to_trl_records([_GOOD])
     assert recs == [{"messages": _GOOD["messages"]}]
+
+
+def test_prepare_records_drops_invalid_and_strips_meta(tmp_path: Path):
+    from tradinglib.training.data import prepare_records
+
+    bad = _ex([{"role": "user", "content": "hi"}, {"role": "wizard", "content": "x"}])
+    p = tmp_path / "d.jsonl"
+    p.write_text(json.dumps(_GOOD) + "\n" + json.dumps(bad) + "\n", encoding="utf-8")
+    records, n_dropped = prepare_records(p)
+    assert n_dropped == 1
+    assert records == [{"messages": _GOOD["messages"]}]  # meta stripped, bad dropped
+
+
+def test_prepare_records_raises_on_empty_when_required(tmp_path: Path):
+    from tradinglib.training.data import prepare_records
+
+    p = tmp_path / "empty.jsonl"
+    p.write_text("", encoding="utf-8")
+    import pytest
+
+    with pytest.raises(ValueError):
+        prepare_records(p, require_nonempty=True)
+
+
+def test_prepare_records_allows_empty_when_not_required(tmp_path: Path):
+    from tradinglib.training.data import prepare_records
+
+    p = tmp_path / "empty.jsonl"
+    p.write_text("", encoding="utf-8")
+    records, n_dropped = prepare_records(p, require_nonempty=False)
+    assert records == [] and n_dropped == 0

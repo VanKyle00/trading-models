@@ -65,3 +65,23 @@ def validate_dataset(path: str | Path) -> tuple[int, list[str]]:
 def to_trl_records(examples: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Strip everything but the conversational ``messages`` the trainer needs."""
     return [{"messages": ex["messages"]} for ex in examples]
+
+
+def prepare_records(
+    path: str | Path, *, require_nonempty: bool = False
+) -> tuple[list[dict[str, Any]], int]:
+    """Load, drop invalid examples, and shape for the trainer in one pass.
+
+    Returns (trl_records, n_dropped). Raises ValueError if the result is empty
+    and ``require_nonempty`` is set (so a bad dataset fails fast, before any
+    expensive GPU model load)."""
+    valid: list[dict[str, Any]] = []
+    n_dropped = 0
+    for ex in load_jsonl(path):
+        if validate_example(ex):
+            n_dropped += 1
+        else:
+            valid.append(ex)
+    if require_nonempty and not valid:
+        raise ValueError(f"no valid examples in {path}")
+    return to_trl_records(valid), n_dropped
