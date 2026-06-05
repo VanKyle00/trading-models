@@ -86,7 +86,13 @@ class LocalAdapterProvider:
         from peft import PeftModel
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-        self._tokenizer = AutoTokenizer.from_pretrained(base_model)
+        # Prefer the tokenizer saved with the adapter: it carries the exact chat
+        # template + special tokens used at train time, so the eval prompt format
+        # matches training. Fall back to the base model's tokenizer.
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(adapter_path)
+        except (OSError, ValueError):
+            self._tokenizer = AutoTokenizer.from_pretrained(base_model)
         quant = (
             BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype="bfloat16"
