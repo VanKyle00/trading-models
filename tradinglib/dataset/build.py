@@ -23,6 +23,7 @@ from tradinglib.dataset.serialize import to_chat_example
 from tradinglib.dataset.tools import make_dataset_tools
 
 _MAX_LOG_FIELD = 1200  # cap logged answer/tool-output strings so dropped.jsonl stays readable
+_ABORT_AFTER_CONSEC_FAILS = 8  # a burst of failures = API outage (credits/rate/key), not bad luck
 
 
 def _record_and_filter(
@@ -37,6 +38,7 @@ def _record_and_filter(
     kept: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
     n_failed = n_ungrounded = 0
+    consec_fail = 0
 
     for scn in scenarios:
         trace = record_trace(scn, provider_factory(), Budget(), tool_specs, dispatch)
@@ -48,8 +50,21 @@ def _record_and_filter(
         }
         if not trace.ok:
             n_failed += 1
-            dropped.append({"reason": "failed", "scenario": scn_meta})
+            consec_fail += 1
+            # A run of failures means the provider is down (out of credits, rate
+            # limited, bad key) -- abort loudly rather than silently writing a
+            # broken, partial dataset (the failure path otherwise looks like a
+            # normal "model didn't answer" drop).
+            if consec_fail >= _ABORT_AFTER_CONSEC_FAILS:
+                raise RuntimeError(
+                    f"Aborting dataset build: {consec_fail} consecutive trace failures "
+                    f"after {n_failed + len(kept) + n_ungrounded} scenarios. This is almost "
+                    f"certainly an API problem (credits, rate limit, or key), not the data. "
+                    f"Last provider error: {trace.error or 'unknown'}"
+                )
+            dropped.append({"reason": "failed", "scenario": scn_meta, "error": trace.error})
             continue
+        consec_fail = 0
         ok, missing = is_grounded(trace.final_answer, trace.tool_outputs)
         if not ok:
             n_ungrounded += 1
