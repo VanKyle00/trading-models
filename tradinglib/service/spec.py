@@ -40,6 +40,11 @@ class ModelSpec:
     params: tuple[ParamSpec, ...]
     supports_costs: bool
     supports_sizing: bool
+    # Optional backtestable window (ISO dates). Set for models whose data/eval
+    # is restricted — e.g. the ML model only scores its held-out OOS slice — so
+    # the UI can bound the date picker instead of letting a run 400 server-side.
+    date_min: str | None = None
+    date_max: str | None = None
 
     def param(self, name: str) -> ParamSpec | None:
         return next((p for p in self.params if p.name == name), None)
@@ -97,7 +102,16 @@ def _spec_from_meta(meta: dict[str, Any]) -> ModelSpec:
         params=_params(meta),
         supports_costs=bool(meta.get("supports_costs", True)),
         supports_sizing=bool(meta.get("supports_sizing", True)),
+        date_min=_iso_or_none(meta.get("date_min")),
+        date_max=_iso_or_none(meta.get("date_max")),
     )
+
+
+def _iso_or_none(value: Any) -> str | None:
+    """Coerce a frontmatter date (YAML parses ``2022-01-14`` to a date) to ISO."""
+    if value is None:
+        return None
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
 @lru_cache(maxsize=1)

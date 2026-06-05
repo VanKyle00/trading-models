@@ -59,6 +59,16 @@ def test_param_lookup():
     assert spec.param("nonexistent") is None
 
 
+def test_windowed_models_declare_date_bounds():
+    # The ML model only scores its OOS slice; the spec must expose that window
+    # so the UI can bound the date picker. Free models leave it unset.
+    ml = next(s for s in list_specs() if s.family == "ml")
+    assert ml.date_min == "2022-01-14"
+    assert ml.date_max == "2024-12-31"
+    classical = next(s for s in list_specs() if s.family == "classical")
+    assert classical.date_min is None and classical.date_max is None
+
+
 def test_ticker_mode_branches():
     from tradinglib.service.spec import _ticker_mode
 
