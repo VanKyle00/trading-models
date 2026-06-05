@@ -109,7 +109,15 @@ def main() -> None:
         # an unresolved '<EOS_TOKEN>' sentinel that fails TRL's vocab check. The Qwen
         # tokenizer's real EOS is '<|im_end|>'.
         eos_token=tokenizer.eos_token,
+        # Keep the best (lowest eval_loss) checkpoint, not the final epoch: on small
+        # data the model overfits after a few epochs (eval_loss turns up and judged
+        # answer quality collapses), so the last epoch can be a worse model.
         eval_strategy="epoch" if eval_ds is not None else "no",
+        save_strategy="epoch" if eval_ds is not None else "no",
+        load_best_model_at_end=eval_ds is not None,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
+        save_total_limit=2,
     )
     trainer = SFTTrainer(
         model=model,
