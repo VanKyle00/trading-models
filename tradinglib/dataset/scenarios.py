@@ -1,4 +1,5 @@
 """Scenario generation: model x legal ticker x question template."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -9,8 +10,8 @@ from typing import Any
 class Scenario:
     category: str
     question: str
-    model_id: str           # "" for model-agnostic refusals
-    symbol: str | None      # None -> tool uses model default
+    model_id: str  # "" for model-agnostic refusals
+    symbol: str | None  # None -> tool uses model default
     start: str
     end: str
     params: dict[str, Any] = field(default_factory=dict)

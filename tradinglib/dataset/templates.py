@@ -3,6 +3,7 @@
 Categories mirror spec §4's dataset composition: explain ~50%, counterfactual
 ~25%, methodology ~15%, refusal ~10%. Placeholders are filled by scenarios.py.
 """
+
 from __future__ import annotations
 
 CATEGORIES = ("explain", "counterfactual", "methodology", "refusal")
