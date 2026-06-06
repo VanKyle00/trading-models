@@ -14,9 +14,9 @@ import re
 # "2023-12-31") spuriously parse the trailing field as negative.
 _NUM = re.compile(r"(?<![\d.])-?\$?\d[\d,]*(?:\.\d+)?%?")
 _IGNORE_BELOW = 10.0  # bare small ints are usually prose, not metric claims
-# LLMs routinely emit typographic minus / dashes in tables ("−12.97%"); fold them
-# to ASCII '-' so a correctly-signed claim isn't misread as positive.
-_DASHES = str.maketrans({"−": "-", "–": "-", "—": "-"})
+# LLMs routinely emit a typographic minus or dash in tables (not ASCII "-"); fold
+# them to ASCII '-' so a correctly-signed claim isn't misread as positive.
+_DASHES = str.maketrans({"−": "-", "–": "-", "—": "-"})  # noqa: RUF001
 # Numbers inside index/proper-noun names ("S&P 500", "Russell 2000") are names,
 # not metric claims -- strip the names before extraction so they aren't flagged
 # ungrounded (also fixes false drops at dataset-build time).

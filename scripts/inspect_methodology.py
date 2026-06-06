@@ -70,16 +70,25 @@ def main() -> None:
     for idx, case in enumerate(cases):
         s12, c12, k12 = results["n12"][idx]
         s20, c20, k20 = results["n20"][idx]
-        flag = "  <-- n20 WORSE" if s20 < s12 - 1e-9 else ("  (n20 better)" if s20 > s12 + 1e-9 else "")
+        flag = (
+            "  <-- n20 WORSE"
+            if s20 < s12 - 1e-9
+            else ("  (n20 better)" if s20 > s12 + 1e-9 else "")
+        )
         print(f"\n[{idx}] {case.user_prompt[:90]!r}{flag}")
         print(f"   gold : {_fmt_calls(case.gold_tool_calls)}")
         print(f"   n12  : score={s12:.2f} [{k12}] {_fmt_calls(c12)}")
         print(f"   n20  : score={s20:.2f} [{k20}] {_fmt_calls(c20)}")
 
     # summary of where n20 lost ground
-    worse = [(i, results["n20"][i][2]) for i in range(len(cases)) if results["n20"][i][0] < results["n12"][i][0] - 1e-9]
+    worse = [
+        (i, results["n20"][i][2])
+        for i in range(len(cases))
+        if results["n20"][i][0] < results["n12"][i][0] - 1e-9
+    ]
     print("\n==== n20 REGRESSIONS (class counts) ====")
     from collections import Counter
+
     cls = Counter(k.split("(")[0] for _, k in worse)
     print(f"n20 worse on {len(worse)}/{len(cases)} cases:", dict(cls))
 

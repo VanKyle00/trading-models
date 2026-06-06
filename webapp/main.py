@@ -32,7 +32,7 @@ _CHAT_LIMITER = RateLimiter(max_per_window=30)
 # The assistant console can run on the hosted Claude teacher ("claude") or our
 # fine-tuned LoRA adapter ("local"). The adapter path is env-overridable; the
 # 7B load is slow and needs a GPU, so it's loaded once and cached per process.
-_ASSISTANT_ADAPTER = os.environ.get("ASSISTANT_ADAPTER", "adapters/qwen25-7b-assistant-n20")
+_ASSISTANT_ADAPTER = os.environ.get("ASSISTANT_ADAPTER", "adapters/qwen25-7b-assistant-n20-ep3")
 _local_provider_cache: dict[str, Any] = {}
 
 
