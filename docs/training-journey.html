@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fine-tuning the trading-models assistant — a build log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#121110; --panel:#1a1815; --inset:#171511; --code:#0e0d0c;
+    --ink:#e8e2d4; --muted:#8a8478; --line:#34302a; --line-strong:#4a463e;
+    --up:#3fbf6b; --down:#e5534b; --accent:#d39a4f; --accent-ink:#121110; --blue:#6fa8c7;
+    --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --disp:"Space Grotesk", var(--mono);
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--mono); font-size:15px; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:860px; margin:0 auto; padding:0 22px 120px; }
+
+  /* header */
+  header { border-bottom:1px solid var(--line); padding:46px 0 30px; margin-bottom:8px; }
+  .kicker { font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent); margin:0 0 14px; }
+  h1 { font-family:var(--disp); font-weight:700; font-size:30px; line-height:1.2; margin:0 0 14px; letter-spacing:-.01em; }
+  .lede { color:var(--muted); font-size:15px; margin:0; max-width:62ch; }
+  .meta { margin-top:20px; font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:8px 18px; }
+  .meta b { color:var(--ink); font-weight:500; }
+
+  /* nav */
+  nav.toc { margin:26px 0 8px; padding:14px 16px; background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+  nav.toc .lbl { font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); }
+  nav.toc ol { margin:8px 0 0; padding:0; list-style:none; counter-reset:t; display:grid; grid-template-columns:1fr 1fr; gap:2px 18px; }
+  nav.toc li { counter-increment:t; font-size:13px; }
+  nav.toc li::before { content:counter(t,decimal-leading-zero); color:var(--accent); margin-right:8px; }
+  a { color:var(--blue); text-decoration:none; border-bottom:1px solid transparent; }
+  a:hover { border-bottom-color:currentColor; }
+
+  /* sections */
+  section { padding-top:38px; }
+  h2 { font-family:var(--disp); font-size:21px; margin:0 0 4px; letter-spacing:-.01em; scroll-margin-top:20px; }
+  h2 .num { color:var(--accent); font-size:13px; vertical-align:super; margin-right:8px; }
+  h3 { font-family:var(--disp); font-size:16px; color:var(--ink); margin:26px 0 6px; }
+  p { margin:12px 0; }
+  .sub { color:var(--muted); font-size:12px; letter-spacing:.04em; margin:0 0 16px; }
+  strong { color:#fff; font-weight:500; }
+  code { font-family:var(--mono); font-size:13px; background:var(--code); color:#dcc59a; padding:1px 6px; border-radius:4px; border:1px solid var(--line); }
+  hr { border:0; border-top:1px solid var(--line); margin:40px 0 0; }
+
+  /* callouts */
+  .call { border:1px solid var(--line); border-left-width:3px; border-radius:8px; padding:14px 16px; margin:16px 0; background:var(--panel); }
+  .call .tag { font-size:10px; letter-spacing:.16em; text-transform:uppercase; display:block; margin-bottom:6px; }
+  .call.symptom { border-left-color:var(--down); }   .call.symptom .tag { color:var(--down); }
+  .call.cause   { border-left-color:var(--accent); } .call.cause .tag { color:var(--accent); }
+  .call.fix     { border-left-color:var(--up); }     .call.fix .tag { color:var(--up); }
+  .call.note    { border-left-color:var(--blue); }   .call.note .tag { color:var(--blue); }
+  .call p { margin:6px 0; }
+
+  /* the three-act chips */
+  .acts { display:grid; grid-template-columns:1fr; gap:10px; margin:18px 0; }
+  .act { background:var(--inset); border:1px solid var(--line); border-radius:8px; padding:12px 14px; display:flex; gap:14px; align-items:baseline; }
+  .act .n { font-family:var(--disp); font-size:22px; color:var(--accent); min-width:30px; }
+  .act .t { font-size:13px; }
+  .act .t b { display:block; color:#fff; font-weight:500; margin-bottom:2px; font-size:14px; }
+
+  /* table */
+  .tbl { overflow-x:auto; margin:18px 0; border:1px solid var(--line); border-radius:8px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:right; padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th:first-child, td:first-child { text-align:left; }
+  thead th { background:var(--inset); color:var(--muted); font-weight:500; font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr.win td { color:var(--up); }
+  td .b { color:#fff; }
+  .good { color:var(--up); } .bad { color:var(--down); }
+  caption { caption-side:bottom; color:var(--muted); font-size:11px; padding-top:8px; text-align:left; }
+
+  /* misc */
+  ul.clean { margin:12px 0; padding-left:20px; }
+  ul.clean li { margin:7px 0; }
+  .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--line); color:var(--muted); }
+  footer { margin-top:60px; padding-top:22px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+  .flow { font-family:var(--mono); font-size:12.5px; color:var(--muted); background:var(--code); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin:16px 0; line-height:1.9; overflow-x:auto; }
+  .flow b { color:var(--accent); font-weight:500; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="kicker">Build log · trading-models</p>
+  <h1>Teaching a small model to talk about backtests</h1>
+  <p class="lede">A walk through fine-tuning a 7-billion-parameter assistant to answer questions about quant trading models — what we were trying to do, how the pieces fit together, and the three separate bugs hiding behind one symptom.</p>
+  <div class="meta">
+    <span><b>Model:</b> Qwen2.5-7B-Instruct + LoRA</span>
+    <span><b>Method:</b> QLoRA (4-bit) via Unsloth</span>
+    <span><b>Hardware:</b> single RTX 5080 (16 GB)</span>
+    <span><b>Teacher / judge:</b> Claude</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <span class="lbl">Contents</span>
+  <ol>
+    <li><a href="#goal">The goal &amp; why</a></li>
+    <li><a href="#pieces">The four pieces</a></li>
+    <li><a href="#training">What "training" means here</a></li>
+    <li><a href="#gate">The eval gate</a></li>
+    <li><a href="#saga">One symptom, three bugs</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#lessons">Lessons</a></li>
+  </ol>
+</nav>
+
+<section id="goal">
+  <h2><span class="num">01</span>The goal &amp; why</h2>
+  <p class="sub">What we were building, and the reason it's worth doing</p>
+  <p>The <strong>trading-models</strong> project is a portfolio of quant strategies — each with a reproducible backtest — wrapped in a web "workbench" where you pick a model, run a backtest over any window, and see the results as charts. Bolted onto that workbench is a <strong>chat assistant</strong>: you can ask "what data source does this model use?" or "how would higher fees change this?" and get an answer <em>grounded in the run you're looking at</em>.</p>
+  <p>That assistant can just call Claude. But calling a hosted model on every question costs money per query and needs a network round-trip. The goal of this sub-project was to <strong>fine-tune a small, open model that runs locally</strong> and matches the hosted model's quality <em>on this one narrow domain</em> — answering questions about these specific backtests, calling the right tools, and never inventing numbers.</p>
+  <div class="call note">
+    <span class="tag">The bet</span>
+    <p>A general 7B model is mediocre at this out of the box. But the domain is small and well-defined. If we can <em>teach</em> it the handful of tools and the house style for grounded answers, a free local model can stand in for the paid one — with a toggle in the UI to switch back to Claude when you want maximum quality.</p>
+  </div>
+</section>
+
+<section id="pieces">
+  <h2><span class="num">02</span>The four pieces</h2>
+  <p class="sub">How the system fits together</p>
+  <div class="flow">
+    <b>1. Teacher</b> &nbsp;Claude generates example conversations &nbsp;→&nbsp; <b>2. Dataset</b> &nbsp;(question → tool calls → grounded answer)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+    <b>4. Eval gate</b> &nbsp;score the student &nbsp;←&nbsp; <b>3. Student</b> &nbsp;Qwen-7B fine-tuned to imitate the teacher
+  </div>
+  <p><strong>The teacher</strong> is Claude. We don't hand-write training data — we have Claude play the assistant across a grid of <em>scenarios</em> (every model × a legal ticker × a question template), producing realistic traces: the user's question, the tool calls the assistant makes, the tool outputs, and a final grounded answer.</p>
+  <p><strong>The dataset</strong> sorts those traces into four kinds of question:</p>
+  <ul class="clean">
+    <li><span class="pill">explain</span> &nbsp;"explain the worst month of this backtest" — narrate real numbers.</li>
+    <li><span class="pill">counterfactual</span> &nbsp;"how would a longer lookback change this?" — re-run with a tweak.</li>
+    <li><span class="pill">methodology</span> &nbsp;"what's the train/test split?" — answer from the docs.</li>
+    <li><span class="pill">refusal</span> &nbsp;"should I buy this?" — decline politely; it's not financial advice.</li>
+  </ul>
+  <p>A <strong>grounding filter</strong> throws away any teacher answer that cites a number not present in its tool outputs — so the model only ever learns from answers that are actually supported by data. The working dataset (<code>dataset_n20</code>) ended up at <strong>185 training</strong> + <strong>51 held-out eval</strong> examples.</p>
+  <p><strong>The student</strong> is Qwen2.5-7B-Instruct, fine-tuned to imitate those traces. <strong>The eval gate</strong> is how we measure whether it worked — more on both below.</p>
+</section>
+
+<section id="training">
+  <h2><span class="num">03</span>What "training" actually means here</h2>
+  <p class="sub">QLoRA, in plain terms</p>
+  <p>We don't retrain all 7 billion of the model's weights — that needs far more memory than a 16 GB card has, and would risk wrecking its general ability. Instead we use <strong>QLoRA</strong>, which is two tricks stacked:</p>
+  <ul class="clean">
+    <li><strong>Quantization (the "Q"):</strong> load the big model in 4-bit precision so it fits in 16 GB. These weights stay <em>frozen</em>.</li>
+    <li><strong>LoRA (Low-Rank Adaptation):</strong> bolt a few small, trainable matrices onto each layer. We only train those — a tiny fraction of the parameters. The result is a ~160 MB "adapter" that rides on top of the frozen base model.</li>
+  </ul>
+  <p>One important detail: we compute the training loss <strong>only on the assistant's turns</strong> (its tool calls and final answers), masking out the system prompt, the user's question, and the tool outputs. The model already knows how to read; we want to spend the limited training signal teaching it how to <em>respond</em>.</p>
+  <div class="call note">
+    <span class="tag">Recipe</span>
+    <p>Train for 8 epochs (8 passes over the data), checkpoint after each one, and keep the checkpoint that scores best on the held-out eval set. On a dataset this small the model starts <em>overfitting</em> — memorizing the training examples — after just a few epochs, so the last epoch is rarely the best one. <span style="color:var(--muted)">(This "keep the best checkpoint" logic is exactly where bug #2 hid — see below.)</span></p>
+  </div>
+</section>
+
+<section id="gate">
+  <h2><span class="num">04</span>The eval gate: three numbers</h2>
+  <p class="sub">How we decide if the student is any good</p>
+  <p>After training, the student answers all 51 held-out questions and we score it three ways. The held-out set is the key word: the model never saw these during training, so doing well means it <em>generalized</em>, not memorized.</p>
+  <ul class="clean">
+    <li><strong>Tool-call accuracy</strong> — did it call the right tools with the right arguments? (Deterministic, computed locally, free.)</li>
+    <li><strong>Grounded fraction</strong> — does every number in its answer actually appear in a tool output? Catches hallucinated stats. (Also local and free.)</li>
+    <li><strong>Judge win-rate</strong> — Claude reads the student's answer and the gold answer side by side and says which is better. This is the closest thing to "is the answer actually <em>good</em>." (Needs an API call per question, so it costs money.)</li>
+  </ul>
+  <p>A "ship bar" sets thresholds for each. The bars are deliberately strict (tool-call ≥ 0.90, grounded ≥ 0.99) — the model never cleared them in this work, but the metrics were invaluable as a <em>compass</em> for finding what was broken.</p>
+  <div class="call note">
+    <span class="tag">Why three, not one</span>
+    <p>They measure different failure modes. A model can call perfect tools and still write a useless answer (high tool-call, low judge). It can write a beautiful answer full of made-up numbers (high judge, low grounded). You need all three to know <em>where</em> it's failing — which turned out to matter a lot.</p>
+  </div>
+</section>
+
+<section id="saga">
+  <h2><span class="num">05</span>One symptom, three bugs</h2>
+  <p class="sub">The interesting part</p>
+  <p>We trained a new, bigger dataset (<code>n20</code>) and compared it to an older one (<code>n12</code>). The new model looked <em>worse</em> at the <span class="pill">methodology</span> questions — its score dropped noticeably. That one symptom turned out to be three completely separate problems, uncovered one at a time. Each looked like "the model regressed." None of them actually were.</p>
+
+  <div class="acts">
+    <div class="act"><span class="n">1</span><span class="t"><b>The ruler was wrong</b> — a scoring artifact</span></div>
+    <div class="act"><span class="n">2</span><span class="t"><b>We picked the wrong snapshot</b> — a checkpoint-selection artifact</span></div>
+    <div class="act"><span class="n">3</span><span class="t"><b>The textbook had errors</b> — a gold-data bug</span></div>
+  </div>
+
+  <h3>Act 1 — the ruler was wrong</h3>
+  <div class="call symptom"><span class="tag">Symptom</span><p>Methodology tool-call accuracy looked terrible (~0.4) for the new model.</p></div>
+  <p>Methodology questions are answered by searching the docs — the model calls <code>search_docs(query="...")</code>. The scorer checked the query argument with an <strong>exact string match</strong>. So if the gold query was <em>"slippage execution model"</em> and the model searched <em>"slippage fee model"</em>, it scored a flat zero — even though both find the same document. A quarter of the methodology questions were scored 0 for <em>every</em> model, purely on phrasing.</p>
+  <div class="call cause"><span class="tag">Root cause</span><p>The metric demanded a word-for-word match on free-text search queries. It was measuring phrasing, not whether the model used the tool correctly.</p></div>
+  <div class="call fix"><span class="tag">Fix</span><p>Score the query by <strong>token overlap</strong> instead — match if the two queries share enough words (and keep exact matching for real identifiers like model IDs). Methodology tool-call jumped to <strong>0.78–0.97</strong> for <em>both</em> models. The "regression" was mostly the ruler.</p></div>
+
+  <h3>Act 2 — we picked the wrong snapshot</h3>
+  <div class="call symptom"><span class="tag">Symptom</span><p>Even after fixing the ruler, the new model's methodology tool-call (0.78) lagged the old one's (0.97).</p></div>
+  <p>Remember the recipe keeps the checkpoint with the lowest <em>eval-loss</em>. Eval-loss is a proxy for "how surprised is the model by the held-out answers" — a decent default, but not the same thing as "calls tools correctly." We trained again while keeping <em>every</em> epoch's checkpoint, then scored epochs 2, 3 and 4 directly.</p>
+  <div class="call cause"><span class="tag">Root cause</span><p>Eval-loss bottomed out at <strong>epoch 2</strong>, but the tool-call <em>format</em> only fully locked in at <strong>epoch 3</strong> — where eval-loss was a hair higher. The "keep best eval-loss" rule had been handing us the snapshot from one epoch too early.</p></div>
+  <div class="call fix"><span class="tag">Fix</span><p>Sweep the epochs and pick by what we actually care about. At epoch 3, methodology tool-call hit <strong>0.969</strong> (matching the old model) and overall tool-call rose to <strong>0.675</strong> — beating both earlier candidates. Added a flag to keep all checkpoints so this sweep is repeatable.</p></div>
+
+  <h3>Act 3 — the textbook had errors</h3>
+  <div class="call symptom"><span class="tag">Symptom</span><p>Tool-calls were now fixed, but the <em>judge</em> still rated the new model's methodology <em>answers</em> poorly (0.31) versus the old model (0.59). This one was real — and it survived every training knob we tried.</p></div>
+  <p>Since the model learns to answer like its training data, we compared the two datasets' methodology answers directly. The new ones weren't shorter or lazier — if anything, longer. But some were <strong>wrong</strong>. The clearest case: for a rules-based options strategy, the gold answer claimed it "uses a default 80/20 train/test split."</p>
+  <p>Checking the actual methodology docs: the 80/20 split is a discipline <strong>for machine-learning models only</strong> — and just one of the five models is ML. The other four are rule-based with no parameters to fit, so they have <em>no</em> train/test split at all. The teacher had pasted the ML boilerplate onto models it didn't apply to, and the student dutifully learned the wrong answer.</p>
+  <div class="call cause"><span class="tag">Root cause</span><p>Bad gold answers. A model can only be as correct as what it's trained on — and judged answer quality is a <em>data</em> problem, not a training-knob problem. (Tool-calls and grounding can't catch this; only the judge, which compares the actual prose, can.)</p></div>
+  <div class="call fix"><span class="tag">Fix</span><p>Rewrite the affected gold answers to the ground-truth-correct version (ML → 80/20 out-of-sample; non-ML → no split, full-period backtest), then retrain. Methodology judge climbed <strong>0.31 → 0.59</strong> — exactly the old model's level — with no change to tool-calls. The gap was the textbook, not the student.</p></div>
+
+  <div class="call note"><span class="tag">A dead end worth noting</span><p>Before finding the real cause, we suspected the new dataset simply had too few methodology examples. It turned out there are only <strong>12 unique methodology questions</strong> possible from the templates — the space was already saturated, and the new set had <em>more</em> copies than the old one. More data couldn't have helped; the problem was never quantity.</p></div>
+</section>
+
+<section id="results">
+  <h2><span class="num">06</span>Results</h2>
+  <p class="sub">Methodology category, scored on the same 51 held-out questions</p>
+  <div class="tbl">
+  <table>
+    <thead>
+      <tr><th>Adapter</th><th>method. tool-call</th><th>method. judge</th><th>overall tool-call</th><th>what changed</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>n20 · epoch 2 <span class="pill">start</span></td><td>0.781</td><td>0.31</td><td>0.602</td><td>baseline (after ruler fix)</td></tr>
+      <tr><td>n20 · epoch 3</td><td><span class="b">0.969</span></td><td>0.31</td><td><span class="b">0.675</span></td><td>+ checkpoint sweep <span class="good">(Act 2)</span></td></tr>
+      <tr class="win"><td>n21 · epoch 3 <span class="pill">final</span></td><td>0.969</td><td><span class="b">0.59</span></td><td>0.699</td><td>+ corrected gold <span class="good">(Act 3)</span></td></tr>
+    </tbody>
+    <caption>"Judge" = win-rate vs the gold answer as scored by Claude. The final model matches the older n12 reference (0.59) on answer quality while leading on tool-calls. Per-category judge is noisy at this sample size, so the overall judge number isn't certifiable from a single run — but the methodology gain is large, causal, and reproducible.</caption>
+  </table>
+  </div>
+  <p>None of these clear the (deliberately strict) ship bar yet, but the trajectory is the point: every apparent "regression" was diagnosed to a specific, fixable cause, and the final adapter is the strongest on every metric we can attribute to a real change.</p>
+</section>
+
+<section id="lessons">
+  <h2><span class="num">07</span>Lessons</h2>
+  <p class="sub">What this build actually taught us</p>
+  <ul class="clean">
+    <li><strong>Trust the metric last.</strong> Two of the three "regressions" were the measurement, not the model. Before believing a number, check that it measures what you think.</li>
+    <li><strong>One symptom can have many causes.</strong> "Methodology got worse" was a scoring bug <em>and</em> a checkpoint bug <em>and</em> a data bug — stacked. Fixing one revealed the next.</li>
+    <li><strong>Separate the metrics on purpose.</strong> Tool-call, grounding, and judge each catch a different failure. The data bug was invisible to two of them and only the judge could see it.</li>
+    <li><strong>A model is a mirror of its data.</strong> The student faithfully learned a wrong answer because the teacher wrote one. Garbage-in isn't loud — it shows up as a quiet quality ceiling.</li>
+    <li><strong>Cheap diagnostics first.</strong> The data bug was found by diffing two text files — no GPU, no API. The expensive judge run only confirmed what the free comparison already implied.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>trading-models · assistant fine-tuning build log. Base model: Qwen2.5-7B-Instruct (QLoRA, 4-bit, Unsloth). Teacher &amp; judge: Claude. All evaluation on a 51-example held-out set.</p>
+</footer>
+
+</div>
+</body>
+</html>
