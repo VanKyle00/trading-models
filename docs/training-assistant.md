@@ -99,6 +99,35 @@ uv run python scripts/train_assistant.py \
 
 **Runtime:** expect minutes to low hours on the 5080.
 
+## Checkpoint selection (epoch sweep)
+
+`load_best_model_at_end` keeps the lowest-`eval_loss` checkpoint. That's a decent
+default, but **eval_loss under-selects for tool-call accuracy**: on our data the
+eval_loss minimum lands at ~epoch 2, while tool-call formatting only fully locks
+in at ~epoch 3 (where eval_loss is barely higher). In one measured run methodology
+tool-call went 0.781 → 0.969 between epoch 2 and 3, and overall 0.602 → 0.675, for
+a negligible eval_loss change (0.581 → 0.586).
+
+For a model that ships on the eval gate, sweep the epochs instead of trusting
+eval_loss:
+
+```bash
+# 1. keep every epoch checkpoint
+uv run python scripts/train_assistant.py \
+    --train data/dataset/train.jsonl --eval data/dataset/eval.jsonl \
+    --out adapters/run-allck --epochs 8 --save-total-limit 0
+
+# 2. score candidate epochs WITHOUT the Claude judge (no API spend): tool-call + grounded
+uv run python scripts/score_local_noapi.py data/dataset/eval.jsonl \
+    adapters/run-allck/checkpoint-48 adapters/run-allck/checkpoint-72 adapters/run-allck/checkpoint-96
+
+# 3. promote the best epoch's inference files to a clean adapter dir and point
+#    ASSISTANT_ADAPTER (webapp) / --adapter (eval) at it.
+```
+
+Pick the epoch with the best tool-call near the eval_loss minimum; confirm answer
+quality with the full eval gate (`eval_assistant.py`, needs the judge / API) before shipping.
+
 **VRAM:** the defaults (seq 2048, batch 2, grad-accum 4) target 16 GB. If you hit OOM:
 
 ```bash

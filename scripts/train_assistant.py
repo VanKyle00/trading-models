@@ -26,6 +26,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--lr", type=float, default=None)
     p.add_argument("--max-seq-len", type=int, default=None)
     p.add_argument("--max-steps", type=int, default=None, help="cap steps for a smoke run")
+    p.add_argument(
+        "--save-total-limit",
+        type=int,
+        default=2,
+        help="max checkpoints to keep (best + most recent). Use 0 to keep every epoch "
+        "(e.g. for an epoch sweep).",
+    )
     return p.parse_args(argv)
 
 
@@ -112,12 +119,19 @@ def main() -> None:
         # Keep the best (lowest eval_loss) checkpoint, not the final epoch: on small
         # data the model overfits after a few epochs (eval_loss turns up and judged
         # answer quality collapses), so the last epoch can be a worse model.
+        # CAVEAT: eval_loss is only a proxy and can UNDER-select for tool-call
+        # accuracy -- the eval_loss minimum (often epoch ~2) can sit an epoch
+        # before tool-call formatting fully locks in (epoch ~3), where eval_loss
+        # is barely higher. For a model that ships on the eval gate, prefer an
+        # epoch sweep: train with `--save-total-limit 0` (keep every epoch) and
+        # pick the checkpoint via scripts/score_local_noapi.py. See docs.
         eval_strategy="epoch" if eval_ds is not None else "no",
         save_strategy="epoch" if eval_ds is not None else "no",
         load_best_model_at_end=eval_ds is not None,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        save_total_limit=2,
+        # 0 -> keep every epoch checkpoint (None disables the cap in TRL/transformers).
+        save_total_limit=(None if args.save_total_limit == 0 else args.save_total_limit),
     )
     trainer = SFTTrainer(
         model=model,
