@@ -11,6 +11,7 @@ Run locally with::
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,22 @@ from webapp.forms import request_from_payload
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _CHAT_LIMITER = RateLimiter(max_per_window=30)
+
+# The assistant console can run on the hosted Claude teacher ("claude") or our
+# fine-tuned LoRA adapter ("local"). The adapter path is env-overridable; the
+# 7B load is slow and needs a GPU, so it's loaded once and cached per process.
+_ASSISTANT_ADAPTER = os.environ.get("ASSISTANT_ADAPTER", "adapters/qwen25-7b-assistant-n20")
+_local_provider_cache: dict[str, Any] = {}
+
+
+def _get_local_provider() -> Any:
+    provider = _local_provider_cache.get(_ASSISTANT_ADAPTER)
+    if provider is None:
+        from tradinglib.assistant.local_provider import LocalAdapterProvider
+
+        provider = LocalAdapterProvider(adapter_path=_ASSISTANT_ADAPTER)
+        _local_provider_cache[_ASSISTANT_ADAPTER] = provider
+    return provider
 
 
 # (key, label, kind, tone) — kind drives formatting, tone drives colour.
@@ -184,6 +201,8 @@ def create_app() -> FastAPI:
             return JSONResponse({"error": "message is required"}, status_code=400)
 
         context = _chat_context(payload.get("context"))
+        # "claude" (hosted teacher) or "local" (our fine-tuned LoRA adapter).
+        use_local = str(payload.get("provider", "claude")).lower() == "local"
 
         client_ip = request.client.host if request.client else "unknown"
         if not _CHAT_LIMITER.allow(client_ip):
@@ -191,7 +210,24 @@ def create_app() -> FastAPI:
 
         def stream() -> Any:
             try:
-                provider = _assistant_provider.ClaudeProvider()
+                if use_local:
+                    try:
+                        provider = _get_local_provider()
+                    except Exception:  # no GPU / adapter missing -> tell the user, don't 500
+                        yield (
+                            "data: "
+                            + json.dumps(
+                                {
+                                    "type": "final",
+                                    "text": "Local model unavailable (needs a GPU and a "
+                                    "trained adapter). Switch to Claude.",
+                                }
+                            )
+                            + "\n\n"
+                        )
+                        return
+                else:
+                    provider = _assistant_provider.ClaudeProvider()
                 for event in run_chat(message, provider, Budget(), context=context):
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception:  # never break the SSE stream; always end with a final event

@@ -84,3 +84,42 @@ def test_chat_provider_failure_still_emits_final(monkeypatch):
     events = _sse_events(resp.text)
     assert events[-1]["type"] == "final"  # graceful terminal event, not a truncated stream
     assert "unavailable" in events[-1]["text"].lower()
+
+
+def test_chat_provider_local_uses_local_adapter(monkeypatch):
+    # provider="local" must route to the fine-tuned adapter, not Claude.
+    import webapp.main as main
+    from tradinglib.assistant import provider as provider_mod
+
+    def claude_boom(*a, **k):
+        raise AssertionError("local request must not construct ClaudeProvider")
+
+    monkeypatch.setattr(provider_mod, "ClaudeProvider", claude_boom)
+    scripted = [
+        AssistantTurn(text="Local says hi.", tool_calls=(), stop_reason="end_turn", usage=Usage(3, 3))
+    ]
+    monkeypatch.setattr(main, "_get_local_provider", lambda: provider_mod.StubProvider(list(scripted)))
+
+    client = TestClient(create_app())
+    resp = client.post("/api/v1/chat", json={"message": "hi", "provider": "local"})
+    assert resp.status_code == 200
+    events = _sse_events(resp.text)
+    assert events[-1]["type"] == "final"
+    assert "Local" in events[-1]["text"]
+
+
+def test_chat_local_load_failure_emits_helpful_final(monkeypatch):
+    # If the adapter can't load (no GPU / missing weights), tell the user to switch.
+    import webapp.main as main
+
+    def boom():
+        raise RuntimeError("CUDA not available")
+
+    monkeypatch.setattr(main, "_get_local_provider", boom)
+
+    client = TestClient(create_app())
+    resp = client.post("/api/v1/chat", json={"message": "hi", "provider": "local"})
+    assert resp.status_code == 200
+    events = _sse_events(resp.text)
+    assert events[-1]["type"] == "final"
+    assert "local model unavailable" in events[-1]["text"].lower()
