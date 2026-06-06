@@ -145,6 +145,28 @@ Further OOM: reduce `per_device_train_batch_size` by editing `TrainSettings` in 
 
 ---
 
+## Gold-answer quality (judge win-rate)
+
+Tool-call accuracy and grounding are checkpoint/format problems; **judged answer
+quality is a gold-data problem**. The model learns to answer like its training
+gold, so a wrong or generic gold answer caps how well the model can score on the
+judge — even when tool-calls are perfect.
+
+A worked example: methodology judge win-rate trailed (~0.31) because the gold
+misapplied the ML "80/20 train/test split" to *non-ML* models. Per
+[`docs/methodology.md`](methodology.md) the 80/20 split is an **ML-model**
+discipline (only `models/ml/*` is ML); the classical / options / alt-data /
+microstructure models are rule-based with no fitted parameters, so they have **no
+train/test split** — they're backtested over the full period. Correcting those
+gold answers (`scripts/curate_methodology_gold.py`) lifted methodology judge
+0.31 → 0.59 with no change to tool-calls.
+
+Audit the gold with `scripts/compare_methodology_gold.py` (diffs two datasets'
+gold side by side) when a category's judge win-rate lags but its tool-call is
+fine — that signature points at the gold, not the model.
+
+---
+
 ## Fallback: TRL + peft + bitsandbytes (if Unsloth fails on Blackwell)
 
 If Unsloth has no wheel for your sm_120 build, swap the model-load block in `scripts/train_assistant.py`:
