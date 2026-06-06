@@ -55,8 +55,9 @@ def main() -> None:
 
     # Lazy heavy imports - keep this module importable without a GPU.
     # Unsloth MUST be imported before trl/transformers/peft so its kernel +
-    # memory patches apply (it warns and degrades VRAM use otherwise).
-    from unsloth import FastLanguageModel
+    # memory patches apply (it warns and degrades VRAM use otherwise). This
+    # ordering is load-bearing, so the block opts out of import sorting (I001).
+    from unsloth import FastLanguageModel  # noqa: I001
     from unsloth.chat_templates import train_on_responses_only
     from datasets import Dataset
     from trl import SFTConfig, SFTTrainer

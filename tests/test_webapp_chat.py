@@ -96,9 +96,13 @@ def test_chat_provider_local_uses_local_adapter(monkeypatch):
 
     monkeypatch.setattr(provider_mod, "ClaudeProvider", claude_boom)
     scripted = [
-        AssistantTurn(text="Local says hi.", tool_calls=(), stop_reason="end_turn", usage=Usage(3, 3))
+        AssistantTurn(
+            text="Local says hi.", tool_calls=(), stop_reason="end_turn", usage=Usage(3, 3)
+        )
     ]
-    monkeypatch.setattr(main, "_get_local_provider", lambda: provider_mod.StubProvider(list(scripted)))
+    monkeypatch.setattr(
+        main, "_get_local_provider", lambda: provider_mod.StubProvider(list(scripted))
+    )
 
     client = TestClient(create_app())
     resp = client.post("/api/v1/chat", json={"message": "hi", "provider": "local"})

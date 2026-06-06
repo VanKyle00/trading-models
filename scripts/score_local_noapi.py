@@ -63,14 +63,14 @@ def main() -> None:
     print("\n==== TOOL-CALL ACCURACY (no judge / no API) ====")
     header = "category".ljust(16) + "".join(lbl.ljust(20) for lbl in labels)
     print(header)
-    for cat in cats + ["OVERALL"]:
+    for cat in [*cats, "OVERALL"]:
         row = cat.ljust(16)
         for lbl in labels:
             m = results[lbl]["overall"] if cat == "OVERALL" else results[lbl]["by_cat"].get(cat)
             row += (f"{m['tc']:.3f} (n={m['n']})" if m else "-").ljust(20)
         print(row)
     print("\n==== GROUNDED FRACTION ====")
-    for cat in cats + ["OVERALL"]:
+    for cat in [*cats, "OVERALL"]:
         row = cat.ljust(16)
         for lbl in labels:
             m = results[lbl]["overall"] if cat == "OVERALL" else results[lbl]["by_cat"].get(cat)

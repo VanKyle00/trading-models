@@ -56,7 +56,7 @@ def test_partition_by_ticker_no_leakage_and_deterministic():
     tr_tk = {s.symbol for s in train if s.symbol}
     ev_tk = {s.symbol for s in eval_ if s.symbol}
     assert not (tr_tk & ev_tk)  # a ticker is wholly in one side or the other
-    train2, eval2 = partition_by_ticker(scen, eval_frac=0.2, seed=0)
+    _train2, eval2 = partition_by_ticker(scen, eval_frac=0.2, seed=0)
     assert [s.question for s in eval_] == [s.question for s in eval2]
 
 
@@ -72,5 +72,5 @@ def test_partition_stratified_covers_categories_without_number_leakage():
         ev_tk = {s.symbol for s in eval_ if s.category == cat and s.symbol}
         assert not (tr_tk & ev_tk), f"{cat} ticker leak: {tr_tk & ev_tk}"
     # deterministic
-    train2, eval2 = partition_stratified(scen, eval_frac=0.2, seed=0)
+    _train2, eval2 = partition_stratified(scen, eval_frac=0.2, seed=0)
     assert [s.question for s in eval_] == [s.question for s in eval2]
