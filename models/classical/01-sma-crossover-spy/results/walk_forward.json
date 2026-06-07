@@ -1,0 +1,19 @@
+{
+  "n_windows": 23,
+  "n_trials": 9,
+  "walk_forward_oos": {
+    "annualized_return": 0.09103643105376635,
+    "sharpe": 0.7023258287944883,
+    "sortino": 1.0313139195958285,
+    "max_drawdown": -0.33717259886422923,
+    "hit_rate": 0.5549936788874842,
+    "probabilistic_sharpe": 0.9896714328690859,
+    "deflated_sharpe": 0.7862319260245738,
+    "n_bars": 2898
+  },
+  "naive_full_sample_sharpe": 0.7450978938217356,
+  "param_stability": {
+    "fast": 0.045454545454545456,
+    "slow": 0.09090909090909091
+  }
+}
