@@ -7,22 +7,25 @@ transaction-cost assumptions.
 Conventions
 -----------
 - Bars are equally spaced; the engine does not try to handle calendar gaps.
-- A signal at bar ``t`` is executed at the close of bar ``t`` — PnL on that
-  decision accrues over the bar ``t → t+1``. This is enforced by lagging the
-  signal one bar before multiplying by returns, which prevents look-ahead bias.
-  Pass ``execution_prices`` (e.g. the open series) to instead fill at the next
-  bar's open; see that parameter on :func:`run_backtest`.
-- A position of ``1.0`` means fully invested in the asset; ``-1.0`` means
-  fully short; ``0.0`` means flat. Fractional values for partial sizing.
-- Transaction costs are linear in turnover, expressed in basis points
-  (``1 bp = 0.01%``). Slippage is symmetric.
+- A signal at bar ``t`` is lagged one bar before multiplying by returns, which
+  prevents look-ahead bias. By default trades fill at the **next bar's open**
+  (``fill="next_open"``, which requires ``open_prices``): the entry bar earns
+  ``open[t] -> close[t]`` and the overnight gap is not captured. Pass
+  ``fill="decision_close"`` to fill at the decision bar's own close (optimistic;
+  close-to-close).
+- A position of ``1.0`` means fully invested; ``-1.0`` fully short; ``0.0`` flat.
+  Fractional values size partially.
+- Transaction costs are linear in turnover, in basis points (``1 bp = 0.01%``).
+  Slippage is symmetric.
 
-For tick-level microstructure models, an event-driven engine will live next
-to this one (``event_engine.py``) — not yet implemented.
+An event-driven front-end (:mod:`tradinglib.backtest.event_engine`) generates
+signals via a per-bar callback and feeds them through this same vectorized core,
+so PnL and metrics are identical.
 """
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -50,6 +53,8 @@ def run_backtest(
     slippage_bps: float = 0.5,
     periods_per_year: int = 252,
     n_trials: int = 1,
+    open_prices: pd.Series | None = None,
+    fill: str = "next_open",
     execution_prices: pd.Series | None = None,
 ) -> BacktestResult:
     """Run a vectorized backtest of a single-asset strategy.
@@ -74,19 +79,41 @@ def run_backtest(
         one. Forwarded to :func:`compute_metrics` to deflate the Sharpe; ``1``
         (the default) leaves the Deflated Sharpe equal to the Probabilistic
         Sharpe.
+    open_prices:
+        Per-bar open prices (same index as ``prices``). Required when
+        ``fill="next_open"``: a position change is filled at this bar's open, so
+        the entry bar earns ``open -> close``. Held bars stay close-to-close.
+    fill:
+        ``"next_open"`` (default) or ``"decision_close"``. ``"decision_close"``
+        fills at the decision bar's own close (the prior, optimistic behavior).
     execution_prices:
-        Optional per-bar fill prices (e.g. the open series). When provided, a
-        position change is filled at this bar's value rather than the prior
-        close, so the entry bar earns ``execution_price -> close``. ``None``
-        (default) keeps close-to-close fills, bit-identical to prior behavior.
+        Deprecated alias for ``open_prices`` (implies ``fill="next_open"``).
     """
+    if execution_prices is not None:
+        warnings.warn(
+            "execution_prices= is deprecated; pass open_prices= instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if open_prices is None:
+            open_prices = execution_prices
+        fill = "next_open"
+
+    if fill not in ("next_open", "decision_close"):
+        raise ValueError(f"fill must be 'next_open' or 'decision_close', got {fill!r}")
+    if fill == "next_open" and open_prices is None:
+        raise ValueError(
+            "fill='next_open' (the default) requires open_prices; pass the open "
+            "series, or set fill='decision_close' for close-to-close fills"
+        )
+
     if not prices.index.equals(signals.index):
         raise ValueError("prices and signals must share the same index")
     if len(prices) < 2:
         raise ValueError("need at least 2 bars to compute a return")
 
-    if execution_prices is not None and not prices.index.equals(execution_prices.index):
-        raise ValueError("prices and execution_prices must share the same index")
+    if open_prices is not None and not prices.index.equals(open_prices.index):
+        raise ValueError("prices and open_prices must share the same index")
 
     price_returns = prices.pct_change().fillna(0.0)
 
@@ -98,14 +125,13 @@ def run_backtest(
     prev_position = position.shift(1).fillna(0.0)
     turnover = (position - prev_position).abs()
 
-    if execution_prices is not None:
+    if fill == "next_open":
         # A position change in force at bar t was decided at close[t-1] and is
-        # filled at bar t's OPEN. The entry bar therefore earns open[t] ->
-        # close[t], not close[t-1] -> close[t]. Held (unchanged) bars stay
-        # close-to-close. This removes the optimism of filling at the very close
-        # used to make the decision.
+        # filled at bar t's OPEN. The entry bar earns open[t] -> close[t]; held
+        # bars stay close-to-close. Removes the optimism of filling at the very
+        # close used to make the decision.
         entered = turnover > 0.0
-        entry_returns = (prices / execution_prices - 1.0).fillna(0.0)
+        entry_returns = (prices / open_prices - 1.0).fillna(0.0)
         price_returns = price_returns.where(~entered, entry_returns)
 
     gross_returns = position * price_returns
@@ -132,6 +158,6 @@ def run_backtest(
             "slippage_bps": slippage_bps,
             "periods_per_year": periods_per_year,
             "n_trials": n_trials,
-            "execution": "next_open" if execution_prices is not None else "decision_close",
+            "execution": fill,
         },
     )

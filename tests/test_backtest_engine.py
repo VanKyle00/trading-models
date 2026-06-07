@@ -159,3 +159,44 @@ def test_execution_prices_index_mismatch_raises(rising_prices: pd.Series) -> Non
     )
     with pytest.raises(ValueError, match="execution_prices"):
         run_backtest(rising_prices, signals, execution_prices=bad_opens)
+
+
+def test_next_open_is_default_and_requires_opens(rising_prices: pd.Series) -> None:
+    signals = pd.Series(1.0, index=rising_prices.index)
+    with pytest.raises(ValueError, match="open_prices"):
+        run_backtest(rising_prices, signals)
+
+
+def test_decision_close_matches_legacy_closetoclose(rising_prices: pd.Series) -> None:
+    signals = pd.Series(1.0, index=rising_prices.index)
+    result = run_backtest(rising_prices, signals, fill="decision_close", fee_bps=0, slippage_bps=0)
+    assert result.equity_curve.iloc[-1] > 150_000.0
+    assert result.config["execution"] == "decision_close"
+
+
+def test_open_prices_next_open_entry_bar() -> None:
+    idx = pd.date_range("2020-01-01", periods=3, freq="D")
+    close = pd.Series([100.0, 110.0, 121.0], index=idx)
+    opens = pd.Series([100.0, 105.0, 121.0], index=idx)
+    signals = pd.Series([1.0, 1.0, 1.0], index=idx)
+    res = run_backtest(close, signals, open_prices=opens, fee_bps=0, slippage_bps=0)
+    assert res.returns.iloc[1] == pytest.approx(110.0 / 105.0 - 1.0)
+    assert res.config["execution"] == "next_open"
+
+
+def test_execution_prices_alias_warns_and_matches() -> None:
+    idx = pd.date_range("2020-01-01", periods=3, freq="D")
+    close = pd.Series([100.0, 110.0, 121.0], index=idx)
+    opens = pd.Series([100.0, 105.0, 121.0], index=idx)
+    signals = pd.Series([1.0, 1.0, 1.0], index=idx)
+    with pytest.warns(DeprecationWarning, match="execution_prices"):
+        legacy = run_backtest(close, signals, execution_prices=opens, fee_bps=0, slippage_bps=0)
+    explicit = run_backtest(close, signals, open_prices=opens, fee_bps=0, slippage_bps=0)
+    pd.testing.assert_series_equal(legacy.equity_curve, explicit.equity_curve)
+
+
+def test_open_prices_index_mismatch_raises(rising_prices: pd.Series) -> None:
+    signals = pd.Series(1.0, index=rising_prices.index)
+    bad = pd.Series(1.0, index=pd.date_range("2099-01-01", periods=len(rising_prices), freq="D"))
+    with pytest.raises(ValueError, match="open_prices"):
+        run_backtest(rising_prices, signals, open_prices=bad)
