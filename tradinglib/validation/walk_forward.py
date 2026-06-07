@@ -34,7 +34,7 @@ def _in_sample_sharpe(
 ) -> float:
     sig = make_signal(train, train, params)
     if not sig.index.equals(train.index):
-        raise ValueError("make_signal must return a series indexed like test_df")
+        raise ValueError("make_signal must return a series indexed like the in-sample window")
     res = run_backtest(
         train[price_col], sig, open_prices=train[open_col], fill="next_open",
         fee_bps=fee_bps, slippage_bps=slippage_bps, periods_per_year=periods_per_year,
@@ -75,6 +75,8 @@ def walk_forward(
         raise ValueError("no walk-forward windows — check sizes vs data length")
 
     n_trials = len(expand_grid(param_grid))
+    if n_trials == 0:
+        raise ValueError("param_grid produced an empty search space — check for empty value lists")
     oos_signals: list[pd.Series] = []
     rows: list[dict] = []
 

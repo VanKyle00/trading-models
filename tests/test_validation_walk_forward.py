@@ -57,7 +57,7 @@ def test_walk_forward_rejects_misindexed_in_sample_signal() -> None:
     def bad_in_sample(train, test, params):
         return pd.Series(1.0, index=test.index[:-1])  # wrong length even in-sample
 
-    with pytest.raises(ValueError, match="indexed like test"):
+    with pytest.raises(ValueError, match="indexed like the in-sample window"):
         walk_forward(data, bad_in_sample, param_grid={"long": [True]}, mode="anchored",
                      initial_train=40, test_size=20)
 
@@ -66,3 +66,21 @@ def test_walk_forward_requires_window_sizing() -> None:
     data = _data()
     with pytest.raises(ValueError, match="initial_train"):
         walk_forward(data, _make_signal, param_grid={"long": [True]}, mode="anchored", test_size=20)
+
+
+def test_walk_forward_rolling_mode() -> None:
+    data = _data()
+    res = walk_forward(
+        data, _make_signal, param_grid={"long": [True, False]}, mode="rolling",
+        train_size=40, test_size=20,
+    )
+    assert isinstance(res, WalkForwardResult)
+    assert res.oos_result.config["n_trials"] == 2
+    assert (res.windows["param_long"] == True).all()  # noqa: E712
+
+
+def test_walk_forward_rejects_empty_search_space() -> None:
+    data = _data()
+    with pytest.raises(ValueError, match="empty search space"):
+        walk_forward(data, _make_signal, param_grid={"long": []}, mode="anchored",
+                     initial_train=40, test_size=20)
