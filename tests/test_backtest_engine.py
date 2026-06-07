@@ -200,3 +200,10 @@ def test_open_prices_index_mismatch_raises(rising_prices: pd.Series) -> None:
     bad = pd.Series(1.0, index=pd.date_range("2099-01-01", periods=len(rising_prices), freq="D"))
     with pytest.raises(ValueError, match="open_prices"):
         run_backtest(rising_prices, signals, open_prices=bad)
+
+
+def test_open_prices_and_execution_prices_both_raises(rising_prices: pd.Series) -> None:
+    signals = pd.Series(1.0, index=rising_prices.index)
+    opens = rising_prices.copy()
+    with pytest.raises(ValueError, match="not both"):
+        run_backtest(rising_prices, signals, open_prices=opens, execution_prices=opens)

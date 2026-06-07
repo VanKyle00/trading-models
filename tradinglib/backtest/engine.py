@@ -95,8 +95,11 @@ def run_backtest(
             DeprecationWarning,
             stacklevel=2,
         )
-        if open_prices is None:
-            open_prices = execution_prices
+        if open_prices is not None:
+            raise ValueError(
+                "pass either open_prices= or the deprecated execution_prices=, not both"
+            )
+        open_prices = execution_prices
         fill = "next_open"
 
     if fill not in ("next_open", "decision_close"):
