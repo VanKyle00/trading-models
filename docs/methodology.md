@@ -132,3 +132,17 @@ README.
 | Forgetting to pay transaction costs | Costs default to non-zero (1 bp + 0.5 bp) |
 | Mixing train and test data | Engine doesn't enforce, but every ML seed model uses a chronological split — copy that pattern |
 | Equity index drift across models | Every `BacktestResult` shares the same `BacktestResult` shape, including `config` recording the parameters used |
+
+## Walk-forward validation & the next-open default
+
+`run_backtest` now defaults to `fill="next_open"` and requires an `open_prices`
+series; pass `fill="decision_close"` for the prior close-to-close behavior. The
+legacy `execution_prices=` argument is a deprecated alias.
+
+The `tradinglib.validation` package adds a walk-forward harness
+(`walk_forward`), grid search with an honest trial count (`grid_search`), and
+sensitivity / regime diagnostics (`parameter_sensitivity`, `metrics_by_regime`).
+A model adopts it by writing one `make_signal(train, test, params)` adapter; the
+harness re-optimizes parameters per window and deflates the out-of-sample Sharpe
+by the grid size. See `models/classical/01-sma-crossover-spy/walk_forward.py`
+and `models/ml/01-gbm-next-day-return-spy/walk_forward.py`.
