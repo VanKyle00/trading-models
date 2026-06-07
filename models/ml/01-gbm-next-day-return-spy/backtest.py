@@ -96,7 +96,7 @@ def run_for_gui(
     result = run_backtest(
         user_prices,
         signal,
-        execution_prices=user_opens,
+        open_prices=user_opens,
         fee_bps=fee_bps,
         slippage_bps=slippage_bps,
         initial_capital=initial_capital,
@@ -137,7 +137,7 @@ def main() -> None:
     result = run_backtest(
         oos_prices,
         signal,
-        execution_prices=oos_opens,
+        open_prices=oos_opens,
         fee_bps=FEE_BPS,
         slippage_bps=SLIPPAGE_BPS,
     )

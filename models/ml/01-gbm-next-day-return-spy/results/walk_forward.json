@@ -1,0 +1,18 @@
+{
+  "n_windows": 21,
+  "n_trials": 4,
+  "walk_forward_oos": {
+    "annualized_return": 0.08036262270845906,
+    "sharpe": 0.6338711997787577,
+    "sortino": 0.9694283522391282,
+    "max_drawdown": -0.21582088709109548,
+    "hit_rate": 0.4494949494949495,
+    "probabilistic_sharpe": 0.9789835207059361,
+    "deflated_sharpe": 0.8367211011674673,
+    "n_bars": 2646
+  },
+  "param_stability": {
+    "max_depth": 0.0,
+    "n_estimators": 0.0
+  }
+}

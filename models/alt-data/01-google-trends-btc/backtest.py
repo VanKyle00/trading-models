@@ -109,7 +109,7 @@ def run_for_gui(
     result = run_backtest(
         btc_weekly,
         signal,
-        execution_prices=weekly_open,
+        open_prices=weekly_open,
         fee_bps=fee_bps,
         slippage_bps=slippage_bps,
         initial_capital=initial_capital,
