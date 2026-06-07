@@ -18,6 +18,7 @@ sys.path.insert(0, str(HERE))
 
 from backtest import END, START, SYMBOL, build_signal  # noqa: E402
 
+from tradinglib.backtest import run_backtest  # noqa: E402
 from tradinglib.loaders.equities.yfinance import load_daily  # noqa: E402
 from tradinglib.validation import walk_forward  # noqa: E402
 
@@ -45,12 +46,11 @@ def main() -> None:
 
     # Naive full-sample Sharpe (the optimistic number we are correcting).
     naive_sig = build_signal(data["close"], fast=50, slow=200)
-    from tradinglib.backtest import run_backtest
     naive = run_backtest(data["close"], naive_sig, open_prices=data["open"])
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     summary = {
-        "n_windows": int(len(wf.windows)),
+        "n_windows": len(wf.windows),
         "n_trials": int(wf.oos_result.config["n_trials"]),
         "walk_forward_oos": wf.oos_result.metrics,
         "naive_full_sample_sharpe": naive.metrics["sharpe"],
