@@ -146,6 +146,7 @@ def test_open_prices_next_open_entry_bar() -> None:
     signals = pd.Series([1.0, 1.0, 1.0], index=idx)
     res = run_backtest(close, signals, open_prices=opens, fee_bps=0, slippage_bps=0)
     assert res.returns.iloc[1] == pytest.approx(110.0 / 105.0 - 1.0)
+    assert res.returns.iloc[2] == pytest.approx(121.0 / 110.0 - 1.0)  # held bar: close-to-close
     assert res.config["execution"] == "next_open"
 
 
