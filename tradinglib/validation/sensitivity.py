@@ -61,7 +61,12 @@ def metrics_by_regime(
     by: str | pd.Series = "year",
     periods_per_year: int = 252,
 ) -> pd.DataFrame:
-    """compute_metrics per sub-period (calendar 'year' or a label series)."""
+    """compute_metrics per sub-period (calendar 'year' or a label series).
+
+    Bars whose label is NaN (e.g. the warm-up bars from ``vol_regime``) are
+    excluded by the groupby, so per-regime ``n_bars`` may sum to fewer than
+    ``len(returns)``.
+    """
     if isinstance(by, pd.Series):
         labels = by.reindex(returns.index)
     elif by == "year":

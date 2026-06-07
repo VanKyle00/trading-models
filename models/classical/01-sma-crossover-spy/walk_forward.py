@@ -20,7 +20,7 @@ from backtest import END, START, SYMBOL, build_signal  # noqa: E402
 
 from tradinglib.backtest import run_backtest  # noqa: E402
 from tradinglib.loaders.equities.yfinance import load_daily  # noqa: E402
-from tradinglib.validation import walk_forward  # noqa: E402
+from tradinglib.validation import parameter_sensitivity, walk_forward  # noqa: E402
 
 RESULTS = HERE / "results"
 GRID = {"fast": [10, 20, 50], "slow": [100, 150, 200]}
@@ -58,6 +58,15 @@ def main() -> None:
     }
     (RESULTS / "walk_forward.json").write_text(json.dumps(summary, indent=2, default=str))
     wf.windows.to_csv(RESULTS / "walk_forward_windows.csv", index=False)
+
+    # Sensitivity sweep: every (fast, slow) config on one OOS window, so the
+    # chosen pair can be read against its neighbours (plateau vs lucky spike).
+    split = 756
+    sensitivity = parameter_sensitivity(
+        data, make_signal, GRID,
+        train_index=data.index[:split], test_index=data.index[split:],
+    )
+    sensitivity.to_csv(RESULTS / "sensitivity.csv", index=False)
 
     fig, ax = plt.subplots(figsize=(10, 5))
     wf.oos_result.equity_curve.plot(ax=ax, label="SMA walk-forward (OOS)")
