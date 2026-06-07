@@ -36,14 +36,29 @@ def test_walk_forward_selects_best_param_and_deflates() -> None:
     assert "long" in res.param_stability
 
 
-def test_walk_forward_rejects_misindexed_signal() -> None:
+def test_walk_forward_rejects_misindexed_oos_signal() -> None:
     data = _data()
 
     def bad_signal(train, test, params):
-        return pd.Series(1.0, index=test.index[:-1])  # wrong length
+        # Correct in-sample (train == test); wrong only on the real OOS slice,
+        # so the out-of-sample guard is what fires.
+        if test.index.equals(train.index):
+            return pd.Series(1.0, index=test.index)
+        return pd.Series(1.0, index=test.index[:-1])
 
     with pytest.raises(ValueError, match="indexed like test"):
         walk_forward(data, bad_signal, param_grid={"long": [True]}, mode="anchored",
+                     initial_train=40, test_size=20)
+
+
+def test_walk_forward_rejects_misindexed_in_sample_signal() -> None:
+    data = _data()
+
+    def bad_in_sample(train, test, params):
+        return pd.Series(1.0, index=test.index[:-1])  # wrong length even in-sample
+
+    with pytest.raises(ValueError, match="indexed like test"):
+        walk_forward(data, bad_in_sample, param_grid={"long": [True]}, mode="anchored",
                      initial_train=40, test_size=20)
 
 
