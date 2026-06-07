@@ -32,16 +32,28 @@ _CHAT_LIMITER = RateLimiter(max_per_window=30)
 # The assistant console can run on the hosted Claude teacher ("claude") or our
 # fine-tuned LoRA adapter ("local"). The adapter path is env-overridable; the
 # 7B load is slow and needs a GPU, so it's loaded once and cached per process.
+#
+# ASSISTANT_LOCAL_BACKEND picks how "local" is served:
+#   "inprocess" (default) — load the adapter in this process (WSL2 / local GPU).
+#   "modal"               — call a remote Modal GPU container (set in the Modal
+#                           deployment; see deploy/modal_app.py). Keeps the web
+#                           container CPU-only so the GPU is billed only on use.
 _ASSISTANT_ADAPTER = os.environ.get("ASSISTANT_ADAPTER", "adapters/qwen25-7b-assistant-n21-ep3")
+_ASSISTANT_LOCAL_BACKEND = os.environ.get("ASSISTANT_LOCAL_BACKEND", "inprocess")
 _local_provider_cache: dict[str, Any] = {}
 
 
 def _get_local_provider() -> Any:
     provider = _local_provider_cache.get(_ASSISTANT_ADAPTER)
     if provider is None:
-        from tradinglib.assistant.local_provider import LocalAdapterProvider
+        if _ASSISTANT_LOCAL_BACKEND == "modal":
+            from webapp.modal_provider import ModalRemoteProvider
 
-        provider = LocalAdapterProvider(adapter_path=_ASSISTANT_ADAPTER)
+            provider = ModalRemoteProvider()
+        else:
+            from tradinglib.assistant.local_provider import LocalAdapterProvider
+
+            provider = LocalAdapterProvider(adapter_path=_ASSISTANT_ADAPTER)
         _local_provider_cache[_ASSISTANT_ADAPTER] = provider
     return provider
 
