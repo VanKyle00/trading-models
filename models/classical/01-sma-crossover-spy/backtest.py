@@ -65,7 +65,7 @@ def run_for_gui(
     result = run_backtest(
         prices,
         signal,
-        execution_prices=bars["open"],
+        open_prices=bars["open"],
         fee_bps=fee_bps,
         slippage_bps=slippage_bps,
         initial_capital=initial_capital,

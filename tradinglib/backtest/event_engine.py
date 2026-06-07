@@ -159,7 +159,8 @@ def run_event_backtest(
     return run_backtest(
         prices,
         signal_series,
-        execution_prices=open_prices,
+        open_prices=open_prices,
+        fill="next_open",
         initial_capital=initial_capital,
         fee_bps=fee_bps,
         slippage_bps=slippage_bps,

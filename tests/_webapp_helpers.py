@@ -12,7 +12,7 @@ def synthetic_run(n: int = 300) -> BacktestRun:
     rng = np.random.default_rng(0)
     prices = pd.Series(100.0 * np.cumprod(1.0 + rng.normal(0.0004, 0.01, n)), index=idx)
     signal = (prices > prices.rolling(20).mean()).astype(float).fillna(0.0)
-    result = run_backtest(prices, signal, fee_bps=1.0, slippage_bps=0.5)
+    result = run_backtest(prices, signal, fill="decision_close", fee_bps=1.0, slippage_bps=0.5)
     data = pd.DataFrame({"close": prices, "signal": signal})
     return BacktestRun(
         model_id="models/classical/01-sma-crossover-spy",

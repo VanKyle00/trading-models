@@ -71,7 +71,7 @@ def test_always_long_matches_vectorized(rising_df: pd.DataFrame) -> None:
     vec_result = run_backtest(
         rising_df["close"],
         constant_signal,
-        execution_prices=rising_df["open"],
+        open_prices=rising_df["open"],
         fee_bps=0,
         slippage_bps=0,
     )
