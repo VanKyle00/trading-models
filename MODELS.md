@@ -9,3 +9,4 @@
 | [Order Flow Imbalance on BTC](models/microstructure/01-order-flow-btc/) | microstructure | intraday | crypto | binance_aggTrades | -86.37 | -0.36 | negative-result |
 | [XGBoost Next-Day Return on SPY](models/ml/01-gbm-next-day-return-spy/) | ml | swing | equities | yfinance_daily_bars | 0.96 | -0.12 | working |
 | [Delta-Hedged Long Option on SPY](models/options/01-delta-hedged-long-option-spy/) | options | swing | equities | yfinance_daily_bars | -6.94 | -0.08 | working |
+| [Earnings Event-Vol Straddle on SPY](models/options/03-earnings-straddle-spy/) | options | swing | equities | yfinance_daily_bars, yfinance_earnings_calendar | 0.00 | 0.00 | working |

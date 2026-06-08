@@ -17,6 +17,19 @@ Paid / keyed sources are documented as upgrades.
   Occasionally breaks when Yahoo changes their endpoint. Rate-limited but
   generous for personal use. Fine for prototyping; not for production.
 
+### yfinance — earnings calendar
+
+- **What**: Per-ticker earnings event dates (`[ticker, earnings_datetime,
+  session]`, UTC-aware; `session` is `bmo`/`amc`/`unknown`).
+- **Cost**: Free.
+- **Setup**: None — no API key required.
+- **Loader**: [`tradinglib.loaders.events.earnings`](../tradinglib/loaders/events/earnings.py)
+- **Notes**: Wraps `yfinance` `Ticker.get_earnings_dates`. Mocked in tests,
+  never called live. Cached point-in-time to
+  `data/processed/events/earnings/<ticker>/<snapshot>.parquet` (snapshot
+  date in the path, so no future leak). Provider is pluggable behind the
+  same schema. See [`data/ingestion/events/README.md`](../data/ingestion/events/README.md).
+
 ## Planned / not yet wired in
 
 ### Polygon.io — higher-quality equities
