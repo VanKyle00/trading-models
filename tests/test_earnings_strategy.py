@@ -257,6 +257,53 @@ def test_plot_branches_writes_png(tmp_path) -> None:
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_main_excludes_sit_out_events_from_pnl_series(tmp_path) -> None:
+    # Code-quality fix (Task 11): a non-fired k-gate is NO trade, not a flat $0
+    # trade. main() must NOT zero-pad sit-out events into per_ticker_pnl, because
+    # that series is fed verbatim to bootstrap_t_test and trade_metrics, which
+    # drop only NaN (not zeros) -> the zeros would overcount n_trades, dilute
+    # win_rate, and pull expectancy/bootstrap-mean toward 0. Only took_trade
+    # events belong in the filtered trade-level P&L series.
+    bt = _load_backtest()
+    bt._HERE = tmp_path  # redirect main()'s results/ writes away from the repo
+
+    idx = pd.date_range("2023-01-02", periods=80, freq="B", tz="UTC")
+    close = pd.Series(100.0, index=idx)
+    bars = pd.DataFrame({"close": close})
+    # Three events: only the first fires the gate; the other two sit out.
+    e_dates = pd.Series([idx[20], idx[40], idx[60]])
+
+    bt.load_daily = lambda symbol, start=None, end=None, **kw: bars
+    bt.get_earnings_dates = lambda tickers, start=None, end=None, **kw: pd.DataFrame(
+        {"earnings_datetime": e_dates}
+    )
+    bt.WATCHLIST = ["SPY"]
+
+    took = iter([True, False, False])
+    pnl_when_took = iter([150.0])
+
+    def fake_run_synthetic(*, earnings_datetime, **kw):
+        if next(took):
+            return {"filtered": {"took_trade": True, "trade_pnl": next(pnl_when_took)}}
+        return {"filtered": {"took_trade": False, "trade_pnl": 0.0}}
+
+    captured: dict = {}
+
+    def fake_build_validation_report(*, branches, per_ticker_pnl):
+        captured["per_ticker_pnl"] = per_ticker_pnl
+        return {"phase": "test"}
+
+    bt.run_synthetic = fake_run_synthetic
+    bt.build_validation_report = fake_build_validation_report
+    bt.plot_branches = lambda branches, out_path: None
+
+    bt.main()
+
+    # Only the single took_trade event survives; the two sit-outs are excluded,
+    # so the series is [150.0] -- NOT [150.0, 0.0, 0.0].
+    assert captured["per_ticker_pnl"] == {"SPY": [150.0]}
+
+
 def test_run_for_gui_satisfies_service_contract() -> None:
     # The service layer (tradinglib/service/run.py) runs every registered model
     # and requires run_for_gui to return a BacktestResult under "result" plus a

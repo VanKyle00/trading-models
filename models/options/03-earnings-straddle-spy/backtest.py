@@ -382,7 +382,12 @@ def main() -> None:
                 continue
             last_report = rep
             f = rep["filtered"]
-            pnl.append(float(f["trade_pnl"]) if f["took_trade"] else 0.0)
+            # A non-fired k-gate is NO trade, not a flat $0 trade: skip sit-out
+            # events entirely. per_ticker_pnl is fed verbatim to bootstrap_t_test
+            # and trade_metrics, which drop only NaN (not zeros), so zero-padding
+            # sit-outs would overcount n_trades and dilute win_rate/expectancy.
+            if f["took_trade"]:
+                pnl.append(float(f["trade_pnl"]))
         if last_report is not None and pnl:
             branches[ticker] = last_report
             per_ticker_pnl[ticker] = pnl
