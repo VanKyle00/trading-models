@@ -330,3 +330,41 @@ def test_run_for_gui_satisfies_service_contract() -> None:
     assert out["symbol"] == "SPY"
     assert isinstance(out["params"], dict)
     assert out["report"] is not None
+
+
+def test_entry_lead_and_exit_offset_are_validated() -> None:
+    # entry_lead < 1 (enter on/after earnings) and exit_offset < 0 (close before
+    # earnings) are logically nonsensical and must fail fast, not plan a backwards
+    # trade silently.
+    idx = _flat_prices().index
+    earnings = idx[10]
+    with pytest.raises(ValueError):
+        strat.EarningsStraddle(
+            earnings_datetime=earnings, entry_lead=0, exit_offset=1, bar_index=idx
+        )
+    with pytest.raises(ValueError):
+        strat.EarningsStraddle(
+            earnings_datetime=earnings, entry_lead=3, exit_offset=-1, bar_index=idx
+        )
+
+
+def test_exit_counts_actual_bars_not_business_days() -> None:
+    # Mirror of the entry gapped-calendar test, for EXIT: drop the two bars
+    # immediately AFTER the earnings bar so counting forward `exit_offset` ACTUAL
+    # price bars lands on a different date than `earnings + BDay(exit_offset)`.
+    full = pd.date_range("2024-02-01", periods=20, freq="B")
+    earnings = full[10]
+    idx = pd.DatetimeIndex([d for i, d in enumerate(full) if i not in (11, 12)])
+    prices = pd.Series(100.0, index=idx, name="close")
+    s = strat.EarningsStraddle(
+        earnings_datetime=earnings,
+        entry_lead=3,
+        exit_offset=2,
+        contracts=1.0,
+        bar_index=prices.index,
+    )
+    surface = EventVolSurface(earnings_datetime=earnings, pre_iv=0.60, post_iv=0.30)
+    run_options_backtest(prices, s, surface=surface, spread=NoSpread())
+
+    e_idx = idx.get_loc(earnings)
+    assert s.exited_on == idx[e_idx + 2]  # 2 actual bars after earnings, not BDay

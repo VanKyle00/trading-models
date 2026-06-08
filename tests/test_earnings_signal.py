@@ -96,3 +96,29 @@ def test_tradeable_event_rejects_bad_chains() -> None:
     assert signal.tradeable_event(**{**base, "implied": float("nan")}) is False
     assert signal.tradeable_event(**{**base, "spread_frac": 0.25}) is False
     assert signal.tradeable_event(**{**base, "has_expiry": False}) is False
+
+
+def test_expected_move_skips_zero_or_nonfinite_price() -> None:
+    # A zero (or non-finite) earnings-session close makes the realized-move
+    # division blow up to inf, which would falsely satisfy the k-gate. Such an
+    # event must be skipped, not propagated. With the only event poisoned, there
+    # is no usable history -> NaN.
+    idx = pd.date_range("2023-01-02", periods=400, freq="B", tz="UTC")
+    close = pd.Series(100.0, index=idx)
+    pos = 50
+    close.iloc[pos] = 0.0  # bad price on the earnings-session bar (zero denominator)
+    em = signal.expected_move(close=close, earnings_datetimes=pd.Series([idx[pos]]), lookback=8)
+    assert np.isnan(em)
+
+
+def test_passes_filter_boundary_equal_is_false() -> None:
+    # Strict inequality: expected == implied * k must NOT pass (0.06 * 1.5 == 0.09).
+    assert signal.passes_filter(expected=0.09, implied=0.06, k=1.5) is False
+
+
+def test_tradeable_event_spread_at_cap_passes_just_above_fails() -> None:
+    base = dict(
+        implied=0.06, expected=0.10, spread_frac=0.20, max_spread_frac=0.20, has_expiry=True
+    )
+    assert signal.tradeable_event(**base) is True  # exactly at the cap -> tradeable
+    assert signal.tradeable_event(**{**base, "spread_frac": 0.2001}) is False  # just above

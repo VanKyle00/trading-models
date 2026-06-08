@@ -97,7 +97,7 @@ def get_earnings_dates(
     cached read never exposes a schedule that postdates its snapshot. Date
     filtering is applied in-memory on the canonical ``earnings_datetime``.
     """
-    snapshot = pd.Timestamp.utcnow().strftime("%Y-%m-%d")
+    snapshot = pd.Timestamp.now("UTC").strftime("%Y-%m-%d")
     frames: list[pd.DataFrame] = []
     for ticker in tickers:
         out = processed_dir(SOURCE) / _SUBDIR / ticker / f"{snapshot}.parquet"

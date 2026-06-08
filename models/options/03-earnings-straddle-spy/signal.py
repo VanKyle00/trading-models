@@ -59,8 +59,13 @@ def expected_move(
         pos = closes.index.get_loc(prior[-1])
         if pos + 1 >= len(closes):
             continue
-        ret = closes.iloc[pos + 1] / closes.iloc[pos] - 1.0
-        moves.append(abs(float(ret)))
+        prev = float(closes.iloc[pos])
+        if prev <= 0.0:
+            continue  # zero/negative price -> move undefined; treat as missing data
+        ret = float(closes.iloc[pos + 1]) / prev - 1.0
+        if not math.isfinite(ret):
+            continue
+        moves.append(abs(ret))
 
     if not moves:
         return float("nan")

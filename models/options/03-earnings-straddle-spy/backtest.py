@@ -399,8 +399,13 @@ def main() -> None:
     validation = build_validation_report(branches=branches, per_ticker_pnl=per_ticker_pnl)
     (out_dir / "validation.json").write_text(json.dumps(validation, indent=2, default=str))
 
-    spy = branches.get("SPY", {}).get("filtered", {}).get("metrics", {})
-    (out_dir / "metrics.json").write_text(json.dumps(spy, indent=2, default=str))
+    # Headline metrics.json keys off the default ticker (SPY) when it traded;
+    # otherwise fall back to the first ticker whose k-gate fired, so the file is
+    # never silently empty just because the default sat out. Per-ticker detail
+    # lives in validation.json. branches is non-empty here (guarded above).
+    headline_ticker = "SPY" if "SPY" in branches else next(iter(branches))
+    headline = branches[headline_ticker].get("filtered", {}).get("metrics", {})
+    (out_dir / "metrics.json").write_text(json.dumps(headline, indent=2, default=str))
     plot_branches(branches, out_dir / "equity_curve.png")
     print(json.dumps(validation, indent=2, default=str))
 

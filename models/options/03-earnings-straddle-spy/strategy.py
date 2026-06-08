@@ -53,6 +53,10 @@ class EarningsStraddle:
         post_earnings_tenor: int = 14,
         bar_index: pd.DatetimeIndex,
     ) -> None:
+        if entry_lead < 1:
+            raise ValueError(f"entry_lead must be >= 1, got {entry_lead}")
+        if exit_offset < 0:
+            raise ValueError(f"exit_offset must be >= 0, got {exit_offset}")
         self.earnings_datetime = _to_naive(earnings_datetime)
         self.entry_lead = entry_lead
         self.exit_offset = exit_offset
