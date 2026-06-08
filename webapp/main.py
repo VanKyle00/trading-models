@@ -193,6 +193,7 @@ def create_app() -> FastAPI:
             {
                 "symbol": br.symbol,
                 "model_name": spec.name,
+                "note": br.extra.get("note"),
                 "hero": hero,
                 "secondary": secondary,
                 "figures": figures,

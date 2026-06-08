@@ -2,6 +2,10 @@
   <h2>{{ model_name }} <span class="sym">{{ symbol }}</span></h2>
 </div>
 
+{% if note %}
+<p class="note">{{ note }}</p>
+{% endif %}
+
 <div class="metric-strip">
   {% for m in hero %}
   <div class="metric">
