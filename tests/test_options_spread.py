@@ -20,7 +20,7 @@ def test_spread_wider_for_short_dte() -> None:
 
 def test_spread_is_capped() -> None:
     s = ParametricSpread(max_frac=0.5)
-    assert s.half_spread_frac(2.0, -5.0, 1) == 0.5
+    assert s.half_spread_frac(2.0, -10.0, 1) == 0.5
 
 
 def test_min_tick_attribute_present() -> None:

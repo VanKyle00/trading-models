@@ -34,7 +34,7 @@ class ParametricSpread:
     """Half-spread fraction widening for OTM / short-DTE, with a per-share floor."""
 
     base: float = 0.01
-    otm_penalty: float = 0.10
+    otm_penalty: float = 0.05
     short_dte_penalty: float = 0.02
     max_frac: float = 0.5
     min_tick: float = 0.05
