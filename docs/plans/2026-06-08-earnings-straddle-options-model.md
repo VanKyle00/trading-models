@@ -1652,6 +1652,7 @@ def run_synthetic(
             exit_offset=EXIT_OFFSET,
             contracts=1.0,
             post_earnings_tenor=POST_TENOR,
+            bar_index=cl.index,  # REQUIRED: Task 6 shipped a bar_index-based schedule
         )
         res = run_options_backtest(
             cl, s, surface=surface, spread=ParametricSpread(),
