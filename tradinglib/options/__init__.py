@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from tradinglib.options.spread import NoSpread, ParametricSpread, SpreadModel
 from tradinglib.options.surface import (
+    EventVolSurface,
     FlatSurface,
     ParametricSurface,
     SurfaceParams,
@@ -18,6 +19,7 @@ from tradinglib.options.surface import (
 )
 
 __all__ = [
+    "EventVolSurface",
     "FlatSurface",
     "NoSpread",
     "ParametricSpread",

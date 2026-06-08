@@ -90,6 +90,41 @@ class ParametricSurface:
         return float(min(max(iv, p.iv_floor), p.iv_cap))
 
 
+def _to_naive(ts: pd.Timestamp) -> pd.Timestamp:
+    """Drop tz so naive (engine bars) and aware (loader earnings) compare cleanly."""
+    ts = pd.Timestamp(ts)
+    return ts.tz_localize(None) if ts.tz is not None else ts
+
+
+@dataclass(frozen=True)
+class EventVolSurface:
+    """Synthetic two-regime IV for the Phase-1 earnings straddle.
+
+    Returns ``pre_iv`` (elevated) on bars at or before the earnings datetime and
+    ``post_iv`` (crushed) strictly after it. Implements the ``VolSurface``
+    protocol. Enforces ``pre_iv > post_iv > 0`` because IV crush is the entire
+    point: a config with ``post_iv >= pre_iv`` would manufacture an IV expansion
+    into the move and make the long straddle falsely profitable. Phase-1 only —
+    clearly not tradeable, mirrors the repo's synthetic vol treatment. tz-robust:
+    coerces both operands to tz-naive so a UTC-aware loader earnings timestamp
+    compares cleanly with tz-naive engine bars.
+    """
+
+    earnings_datetime: pd.Timestamp
+    pre_iv: float
+    post_iv: float
+
+    def __post_init__(self) -> None:
+        if not (self.pre_iv > self.post_iv > 0):
+            raise ValueError(
+                f"require pre_iv > post_iv > 0 (IV crush); got pre_iv={self.pre_iv}, "
+                f"post_iv={self.post_iv}"
+            )
+
+    def iv(self, spot: float, strike: float, expiry: pd.Timestamp, t: pd.Timestamp) -> float:
+        return self.pre_iv if _to_naive(t) <= _to_naive(self.earnings_datetime) else self.post_iv
+
+
 def realistic_surface(
     prices: pd.Series,
     *,
