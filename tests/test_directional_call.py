@@ -1,4 +1,5 @@
 """The directional-call demo runs frictionless vs realistic and costs money under frictions."""
+
 from __future__ import annotations
 
 import importlib.util

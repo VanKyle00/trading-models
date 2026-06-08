@@ -11,6 +11,7 @@ IV is a separable product::
 
 with ``dte = (expiry - t).days`` and ``m = log(K / spot)`` (log-moneyness).
 """
+
 from __future__ import annotations
 
 import math
@@ -41,11 +42,11 @@ class FlatSurface:
 class SurfaceParams:
     """Shape parameters for :class:`ParametricSurface` (equity-index-typical)."""
 
-    skew_slope: float = -0.30      # b: <0 => OTM puts richer than OTM calls
-    skew_curv: float = 0.50        # c: smile curvature (>= 0)
-    skew_flatten: float = 2.0      # k: skew slope decays with tenor (per year)
-    term_slope: float = 0.05       # term-structure slope per sqrt-year
-    ref_window_days: int = 21      # dte at which term_factor == 1.0
+    skew_slope: float = -0.30  # b: <0 => OTM puts richer than OTM calls
+    skew_curv: float = 0.50  # c: smile curvature (>= 0)
+    skew_flatten: float = 2.0  # k: skew slope decays with tenor (per year)
+    term_slope: float = 0.05  # term-structure slope per sqrt-year
+    ref_window_days: int = 21  # dte at which term_factor == 1.0
     iv_floor: float = 0.02
     iv_cap: float = 3.0
 

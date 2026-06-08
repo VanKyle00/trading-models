@@ -1,4 +1,5 @@
 """Tests for the synthetic bid/ask spread model."""
+
 from __future__ import annotations
 
 from tradinglib.options.spread import NoSpread, ParametricSpread

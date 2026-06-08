@@ -1,4 +1,5 @@
 """Tests for the synthetic implied-volatility surface."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -37,7 +38,9 @@ def test_parametric_surface_has_equity_skew() -> None:
     s = ParametricSurface(atm_vol=atm)
     t = atm.index[0]
     expiry = t + pd.Timedelta(days=60)
-    assert s.iv(100.0, 90.0, expiry, t) > s.iv(100.0, 100.0, expiry, t) > s.iv(100.0, 110.0, expiry, t)
+    assert (
+        s.iv(100.0, 90.0, expiry, t) > s.iv(100.0, 100.0, expiry, t) > s.iv(100.0, 110.0, expiry, t)
+    )
 
 
 def test_parametric_atm_equals_input_at_reference_window() -> None:
@@ -55,8 +58,12 @@ def test_long_dated_skew_is_flatter() -> None:
     atm = pd.Series(0.20, index=pd.date_range("2024-01-01", periods=5, freq="B"))
     s = ParametricSurface(atm_vol=atm)
     t = atm.index[0]
-    short = s.iv(100.0, 90.0, t + pd.Timedelta(days=30), t) - s.iv(100.0, 110.0, t + pd.Timedelta(days=30), t)
-    long = s.iv(100.0, 90.0, t + pd.Timedelta(days=300), t) - s.iv(100.0, 110.0, t + pd.Timedelta(days=300), t)
+    short = s.iv(100.0, 90.0, t + pd.Timedelta(days=30), t) - s.iv(
+        100.0, 110.0, t + pd.Timedelta(days=30), t
+    )
+    long = s.iv(100.0, 90.0, t + pd.Timedelta(days=300), t) - s.iv(
+        100.0, 110.0, t + pd.Timedelta(days=300), t
+    )
     assert short > long > 0
 
 

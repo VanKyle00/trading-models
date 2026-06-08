@@ -76,7 +76,9 @@ class OptionsEngine:
             return intrinsic_value(leg, self.spot)
         iv = self._leg_iv(leg)
         if leg.style == "american":
-            return crr_price(leg.right, self.spot, leg.strike, t_yrs, iv, self.rate, style="american")
+            return crr_price(
+                leg.right, self.spot, leg.strike, t_yrs, iv, self.rate, style="american"
+            )
         return bs_price(leg.right, self.spot, leg.strike, t_yrs, iv, self.rate)
 
     def _leg_delta(self, leg: OptionLeg) -> float:
@@ -197,12 +199,11 @@ def run_options_backtest(
             "run_options_backtest requires surface= (e.g. realistic_surface(prices) "
             "or FlatSurface(vol))"
         )
-    if spread is None:
-        spread = NoSpread()
+    spread_model: SpreadModel = spread if spread is not None else NoSpread()
     if len(prices) < 2:
         raise ValueError("need at least 2 bars to compute a return")
 
-    engine = OptionsEngine(surface, spread, rate, fee_bps, slippage_bps, initial_capital)
+    engine = OptionsEngine(surface, spread_model, rate, fee_bps, slippage_bps, initial_capital)
     equities: list[float] = []
     deltas: list[float] = []
     turnovers: list[float] = []

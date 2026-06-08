@@ -74,7 +74,9 @@ def test_expired_leg_settles_to_intrinsic() -> None:
                 engine.add_leg(OptionLeg("call", strike=100.0, expiry=expiry, quantity=1.0))
                 self.opened = True
 
-    result = run_options_backtest(prices, BuyOnce(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0)
+    result = run_options_backtest(
+        prices, BuyOnce(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0
+    )
     assert result.equity_curve.iloc[-1] == pytest.approx(result.equity_curve.iloc[-2], abs=1e-6)
 
 
@@ -134,7 +136,9 @@ def test_delta_hedged_position_is_insensitive_to_small_moves() -> None:
                 engine.add_leg(OptionLeg("call", strike=100.0, expiry=expiry, quantity=1.0))
                 self.opened = True
 
-    hedged = run_options_backtest(prices, Hedged(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0)
+    hedged = run_options_backtest(
+        prices, Hedged(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0
+    )
     unhedged = run_options_backtest(
         prices, Unhedged(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0
     )
@@ -148,7 +152,9 @@ def test_options_metrics_include_deflated_sharpe(flat_path: pd.Series) -> None:
         def on_bar(self, engine: OptionsEngine, t, spot) -> None:
             return None
 
-    result = run_options_backtest(flat_path, DoNothing(), surface=FlatSurface(0.2), rate=0.04, n_trials=1)
+    result = run_options_backtest(
+        flat_path, DoNothing(), surface=FlatSurface(0.2), rate=0.04, n_trials=1
+    )
     assert "probabilistic_sharpe" in result.metrics
     assert "deflated_sharpe" in result.metrics
     assert result.config["n_trials"] == 1

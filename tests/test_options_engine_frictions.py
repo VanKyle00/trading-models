@@ -1,4 +1,5 @@
 """Tests for surface- and spread-aware options fills."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -35,12 +36,20 @@ def test_round_trip_loses_the_spread() -> None:
     surface = FlatSurface(0.2)
 
     res = run_options_backtest(
-        prices, _OpenThenClose(expiry), surface=surface, spread=ParametricSpread(),
-        fee_bps=0, slippage_bps=0,
+        prices,
+        _OpenThenClose(expiry),
+        surface=surface,
+        spread=ParametricSpread(),
+        fee_bps=0,
+        slippage_bps=0,
     )
     res0 = run_options_backtest(
-        prices, _OpenThenClose(expiry), surface=surface, spread=NoSpread(),
-        fee_bps=0, slippage_bps=0,
+        prices,
+        _OpenThenClose(expiry),
+        surface=surface,
+        spread=NoSpread(),
+        fee_bps=0,
+        slippage_bps=0,
     )
     # Crossing the spread costs money; the frictionless run barely moves.
     assert res.equity_curve.iloc[-1] < res0.equity_curve.iloc[-1]

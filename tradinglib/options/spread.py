@@ -5,6 +5,7 @@ the bid. The half-spread is a fraction of premium that widens for
 out-of-the-money and short-dated options, with an absolute per-share floor
 (``min_tick``) because even cheap options cost a minimum to cross.
 """
+
 from __future__ import annotations
 
 import math
@@ -20,7 +21,7 @@ class SpreadModel(Protocol):
 
 
 @dataclass(frozen=True)
-class NoSpread:
+class NoSpread(SpreadModel):
     """Frictionless fills (mid). Backward-compat + before/after comparison."""
 
     min_tick: float = 0.0
@@ -30,7 +31,7 @@ class NoSpread:
 
 
 @dataclass(frozen=True)
-class ParametricSpread:
+class ParametricSpread(SpreadModel):
     """Half-spread fraction widening for OTM / short-DTE, with a per-share floor."""
 
     base: float = 0.01
