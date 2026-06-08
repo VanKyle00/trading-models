@@ -11,10 +11,9 @@ the first bar whose timestamp is >= the earnings datetime, and entry/exit are th
 index. Counting actual bars (rather than ``earnings ± BDay(n)``) keeps the timing
 correct on gapped/holiday calendars, where a business-day offset can land on a
 date with no bar. Because the entry bar precedes the earnings bar, the strategy
-needs the bar schedule up front: pass ``bar_index`` (the backtest's price index)
-so entry/exit indices are computed deterministically. Knowing the trading
-calendar is not price lookahead. If ``bar_index`` is omitted the strategy falls
-back to an online business-day target (correct only on a contiguous calendar).
+needs the bar schedule up front: ``bar_index`` (the backtest's price index) is
+required so entry/exit indices are computed deterministically. Knowing the
+trading calendar is not price lookahead.
 
 Phase-1 simplification (Component 2): expiry is approximated as
 ``earnings + post_earnings_tenor`` calendar days rather than snapped to a listed
@@ -33,7 +32,6 @@ from __future__ import annotations
 import math  # noqa: F401  (pre-staged for size_contracts in Task 7; see module plan)
 
 import pandas as pd
-from pandas.tseries.offsets import BDay
 
 from tradinglib.backtest.options_engine import OptionsEngine
 from tradinglib.options.instruments import (  # noqa: F401  (pre-staged for Task 7 sizing)
@@ -57,7 +55,7 @@ class EarningsStraddle:
         contracts: float = 1.0,
         strike_step: float = 1.0,
         post_earnings_tenor: int = 14,
-        bar_index: pd.DatetimeIndex | None = None,
+        bar_index: pd.DatetimeIndex,
     ) -> None:
         self.earnings_datetime = _to_naive(earnings_datetime)
         self.entry_lead = entry_lead
@@ -67,11 +65,10 @@ class EarningsStraddle:
         self.post_earnings_tenor = post_earnings_tenor
         self.entered_on: pd.Timestamp | None = None
         self.exited_on: pd.Timestamp | None = None
-        # Exact entry/exit timestamps from the bar schedule, when available.
+        # Exact entry/exit timestamps planned from the bar schedule.
         self._entry_on: pd.Timestamp | None = None
         self._exit_on: pd.Timestamp | None = None
-        if bar_index is not None:
-            self._plan_from_index(bar_index)
+        self._plan_from_index(bar_index)
 
     def _plan_from_index(self, bar_index: pd.DatetimeIndex) -> None:
         naive = pd.DatetimeIndex([_to_naive(b) for b in bar_index])
@@ -89,29 +86,23 @@ class EarningsStraddle:
     def on_bar(self, engine: OptionsEngine, t: pd.Timestamp, spot: float) -> None:
         now = _to_naive(t)
 
-        # Entry: exact bar from the schedule, or the online business-day fallback.
-        if self.entered_on is None:
-            if self._entry_on is not None:
-                hit_entry = now == self._entry_on
-            else:
-                entry_target = self.earnings_datetime - BDay(self.entry_lead)
-                hit_entry = entry_target <= now < self.earnings_datetime
-            if hit_entry:
-                expiry = self.earnings_datetime + pd.Timedelta(days=self.post_earnings_tenor)
-                for leg in atm_straddle_legs(
-                    spot, expiry, quantity=self.contracts, strike_step=self.strike_step
-                ):
-                    engine.add_leg(leg)
-                self.entered_on = t
-                return
+        # Entry: the exact bar planned from the schedule.
+        if self.entered_on is None and self._entry_on is not None and now == self._entry_on:
+            expiry = self.earnings_datetime + pd.Timedelta(days=self.post_earnings_tenor)
+            for leg in atm_straddle_legs(
+                spot, expiry, quantity=self.contracts, strike_step=self.strike_step
+            ):
+                engine.add_leg(leg)
+            self.entered_on = t
+            return
 
-        # Exit: exact bar from the schedule, or the online business-day fallback.
-        if self.entered_on is not None and self.exited_on is None:
-            if self._exit_on is not None:
-                hit_exit = now >= self._exit_on
-            else:
-                hit_exit = now >= self.earnings_datetime + BDay(self.exit_offset)
-            if hit_exit:
-                if engine.position.legs:
-                    engine.close_all_options()
-                self.exited_on = t
+        # Exit: the exact bar planned from the schedule.
+        if (
+            self.entered_on is not None
+            and self.exited_on is None
+            and self._exit_on is not None
+            and now >= self._exit_on
+        ):
+            if engine.position.legs:
+                engine.close_all_options()
+            self.exited_on = t

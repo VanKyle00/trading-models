@@ -6,6 +6,7 @@ import importlib.util
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from tradinglib.backtest.options_engine import run_options_backtest
 from tradinglib.options.spread import NoSpread, ParametricSpread
@@ -98,6 +99,15 @@ def test_entry_counts_actual_bars_not_business_days() -> None:
     e_idx = idx.get_loc(earnings)
     assert s.entered_on == idx[e_idx - 3]  # 3 actual bars before earnings, not BDay
     assert s.exited_on == idx[e_idx + 1]  # 1 actual bar after earnings
+
+
+def test_bar_index_is_required() -> None:
+    # The strategy plans entry/exit from the bar schedule up front (the entry bar
+    # precedes the earnings bar), so bar_index is mandatory. Omitting it must raise
+    # rather than silently degrade to a business-day approximation.
+    earnings = _flat_prices().index[10]
+    with pytest.raises(TypeError):
+        strat.EarningsStraddle(earnings_datetime=earnings, entry_lead=3, exit_offset=1)
 
 
 def test_straddle_pays_spread_on_both_legs() -> None:
