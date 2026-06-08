@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from tradinglib.backtest.options_engine import OptionsStrategy, run_options_backtest
+from tradinglib.options.surface import FlatSurface
 
 TRADING_DAYS_PER_YEAR = 252
 
@@ -100,7 +101,7 @@ def run_simulation(
         result = run_options_backtest(
             price_series,
             strategy_factory(),
-            vol=vol,
+            surface=FlatSurface(vol),
             rate=rate,
             initial_capital=initial_capital,
             fee_bps=fee_bps,

@@ -27,6 +27,7 @@ from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.options.instruments import CONTRACT_MULTIPLIER, OptionLeg
 from tradinglib.options.pricing import Right, bs_price
 from tradinglib.options.simulate import run_simulation
+from tradinglib.options.surface import FlatSurface
 
 SYMBOL = "SPY"
 START = "2023-01-01"
@@ -93,7 +94,7 @@ def run_for_gui(
     result = run_options_backtest(
         prices,
         DeltaHedgedLongOption(tenor_days=tenor_days),
-        vol=implied_vol,
+        surface=FlatSurface(implied_vol),
         rate=RATE,
         fee_bps=FEE_BPS,
         slippage_bps=SLIPPAGE_BPS,

@@ -9,6 +9,7 @@ import pytest
 from tradinglib.backtest import BacktestResult
 from tradinglib.backtest.options_engine import OptionsEngine, run_options_backtest
 from tradinglib.options.instruments import OptionLeg
+from tradinglib.options.surface import FlatSurface
 
 
 @pytest.fixture
@@ -22,7 +23,7 @@ def test_returns_backtest_result(flat_path: pd.Series) -> None:
         def on_bar(self, engine: OptionsEngine, t, spot) -> None:
             return None
 
-    result = run_options_backtest(flat_path, DoNothing(), vol=0.2, rate=0.04)
+    result = run_options_backtest(flat_path, DoNothing(), surface=FlatSurface(0.2), rate=0.04)
     assert isinstance(result, BacktestResult)
     assert len(result.equity_curve) == len(flat_path)
     assert "initial_capital" in result.config
@@ -34,7 +35,7 @@ def test_do_nothing_keeps_equity_flat(flat_path: pd.Series) -> None:
             return None
 
     result = run_options_backtest(
-        flat_path, DoNothing(), vol=0.2, rate=0.04, initial_capital=100_000.0
+        flat_path, DoNothing(), surface=FlatSurface(0.2), rate=0.04, initial_capital=100_000.0
     )
     assert result.equity_curve.iloc[-1] == pytest.approx(100_000.0)
 
@@ -54,7 +55,7 @@ def test_long_call_gains_when_spot_rises() -> None:
                 self.opened = True
 
     result = run_options_backtest(
-        prices, BuyAndHoldCall(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0
+        prices, BuyAndHoldCall(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0
     )
     assert result.equity_curve.iloc[-1] > result.equity_curve.iloc[0]
 
@@ -73,7 +74,7 @@ def test_expired_leg_settles_to_intrinsic() -> None:
                 engine.add_leg(OptionLeg("call", strike=100.0, expiry=expiry, quantity=1.0))
                 self.opened = True
 
-    result = run_options_backtest(prices, BuyOnce(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0)
+    result = run_options_backtest(prices, BuyOnce(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0)
     assert result.equity_curve.iloc[-1] == pytest.approx(result.equity_curve.iloc[-2], abs=1e-6)
 
 
@@ -96,7 +97,7 @@ def test_negative_equity_yields_nan_diagnostics() -> None:
     result = run_options_backtest(
         prices,
         ShortCall(),
-        vol=0.2,
+        surface=FlatSurface(0.2),
         rate=0.04,
         initial_capital=1_000.0,
         fee_bps=0,
@@ -133,9 +134,9 @@ def test_delta_hedged_position_is_insensitive_to_small_moves() -> None:
                 engine.add_leg(OptionLeg("call", strike=100.0, expiry=expiry, quantity=1.0))
                 self.opened = True
 
-    hedged = run_options_backtest(prices, Hedged(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0)
+    hedged = run_options_backtest(prices, Hedged(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0)
     unhedged = run_options_backtest(
-        prices, Unhedged(), vol=0.2, rate=0.04, fee_bps=0, slippage_bps=0
+        prices, Unhedged(), surface=FlatSurface(0.2), rate=0.04, fee_bps=0, slippage_bps=0
     )
     hedged_move = abs(hedged.equity_curve.iloc[1] - hedged.equity_curve.iloc[0])
     unhedged_move = abs(unhedged.equity_curve.iloc[1] - unhedged.equity_curve.iloc[0])
@@ -147,7 +148,7 @@ def test_options_metrics_include_deflated_sharpe(flat_path: pd.Series) -> None:
         def on_bar(self, engine: OptionsEngine, t, spot) -> None:
             return None
 
-    result = run_options_backtest(flat_path, DoNothing(), vol=0.2, rate=0.04, n_trials=1)
+    result = run_options_backtest(flat_path, DoNothing(), surface=FlatSurface(0.2), rate=0.04, n_trials=1)
     assert "probabilistic_sharpe" in result.metrics
     assert "deflated_sharpe" in result.metrics
     assert result.config["n_trials"] == 1
