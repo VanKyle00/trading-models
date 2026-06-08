@@ -13,6 +13,8 @@ compares cleanly with tz-naive bars.
 
 from __future__ import annotations
 
+import math  # noqa: F401  used by passes_filter/tradeable_event (Task 5); pre-imported in sorted top block
+
 import numpy as np
 import pandas as pd
 

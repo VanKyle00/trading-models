@@ -22,6 +22,15 @@ signal = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(signal)
 
 
+def test_signal_module_imports_math() -> None:
+    # Task 4 Step 3 requires `math` in the top-of-module import block so Task 5's
+    # passes_filter/tradeable_event (which call math.isnan) never insert a mid-file
+    # import (which would violate ruff `I` sorting).
+    import math as _math
+
+    assert getattr(signal, "math", None) is _math
+
+
 def test_implied_move_is_straddle_over_spot() -> None:
     assert signal.implied_move(straddle_premium=6.0, spot=100.0) == pytest.approx(0.06)
 
