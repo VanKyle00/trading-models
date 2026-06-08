@@ -6,3 +6,25 @@ under ``models/options/``.
 """
 
 from __future__ import annotations
+
+from tradinglib.options.spread import NoSpread, ParametricSpread, SpreadModel
+from tradinglib.options.surface import (
+    FlatSurface,
+    ParametricSurface,
+    SurfaceParams,
+    VolSurface,
+    realistic_surface,
+    realized_vol,
+)
+
+__all__ = [
+    "FlatSurface",
+    "NoSpread",
+    "ParametricSpread",
+    "ParametricSurface",
+    "SpreadModel",
+    "SurfaceParams",
+    "VolSurface",
+    "realistic_surface",
+    "realized_vol",
+]
