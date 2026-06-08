@@ -181,11 +181,14 @@ def benjamini_hochberg_fdr(pvalues: list[float], alpha: float = 0.05) -> tuple[l
         return [], 0.0
 
     order = sorted(range(m), key=lambda i: pvalues[i])
-    threshold = 0.0
+    k = 0  # largest rank passing the step-up (0 = none); avoids overloading threshold==0.0
     for rank, i in enumerate(order, start=1):
         if pvalues[i] <= (rank / m) * alpha:
-            threshold = pvalues[i]
-    rejected = [p <= threshold and threshold > 0.0 for p in pvalues]
+            k = rank
+    if k == 0:
+        return [False] * m, 0.0
+    threshold = pvalues[order[k - 1]]
+    rejected = [p <= threshold for p in pvalues]
     return rejected, float(threshold)
 
 

@@ -68,6 +68,22 @@ def test_benjamini_hochberg_no_rejections() -> None:
     assert threshold == 0.0
 
 
+def test_benjamini_hochberg_zero_pvalue_is_rejected() -> None:
+    from tradinglib.validation import benjamini_hochberg_fdr
+
+    # p=0.0 is a valid p-value (permutation/analytic tests, or rounding). It must
+    # be rejected even when it is the only passing hypothesis and the threshold
+    # legitimately lands on 0.0 (regression: the old threshold>0.0 sentinel
+    # silently suppressed this maximally-significant rejection).
+    rejected_single, threshold_single = benjamini_hochberg_fdr([0.0], alpha=0.05)
+    assert rejected_single == [True]
+    assert threshold_single == 0.0
+
+    rejected, threshold = benjamini_hochberg_fdr([0.0, 0.7, 0.9], alpha=0.05)
+    assert rejected == [True, False, False]
+    assert threshold == 0.0
+
+
 def test_benjamini_hochberg_empty() -> None:
     from tradinglib.validation import benjamini_hochberg_fdr
 
