@@ -117,6 +117,56 @@ def _probabilistic_and_deflated_sharpe(
     return psr, dsr
 
 
+def bootstrap_t_test(
+    returns: pd.Series,
+    *,
+    n_boot: int = 2000,
+    confidence: float = 0.95,
+    seed: int | None = None,
+) -> tuple[float, float, float, float]:
+    """Non-parametric bootstrap of the mean per-trade return.
+
+    Returns ``(t_stat, ci_lower, ci_upper, p_value)``.
+
+    - ``p_value``: a *centered* bootstrap test of H0:mean=0 — resample the
+      mean-centered returns and count how often ``|boot_mean*| >= |observed_mean|``,
+      smoothed by ``1/(n_boot+1)`` so it is never exactly 0 (a bootstrap p-value
+      floor; report as ``< 1/n_boot`` when it hits the floor).
+    - ``(ci_lower, ci_upper)``: a percentile CI from the *uncentered* resampled
+      means — an interval estimate computed by a different (internally consistent)
+      procedure than the p-value; the two are not guaranteed to agree sign-for-sign
+      in finite samples.
+    - ``t_stat``: classic Student t (mean / (std/sqrt(n))), reported as a
+      descriptive statistic only — it is NOT the test statistic (per-trade returns
+      are fat-tailed and few, Ch. 4).
+
+    Tiny samples (n < 2) return the conservative sentinel ``(0.0, 0.0, 0.0, 1.0)``.
+    """
+    x = returns.to_numpy(dtype=float)
+    x = x[~np.isnan(x)]
+    n = len(x)
+    if n < 2:
+        return 0.0, 0.0, 0.0, 1.0
+
+    mean = float(x.mean())
+    std = float(x.std(ddof=1))
+    t_stat = float(mean / (std / math.sqrt(n))) if std > 0 else 0.0
+
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, n, size=(n_boot, n))
+    boot_means = x[idx].mean(axis=1)
+
+    alpha = 1.0 - confidence
+    ci_lower = float(np.quantile(boot_means, alpha / 2.0))
+    ci_upper = float(np.quantile(boot_means, 1.0 - alpha / 2.0))
+
+    # centered bootstrap p-value (H0: mean == 0)
+    shifted = boot_means - mean
+    extreme = int((np.abs(shifted) >= abs(mean)).sum())
+    p_value = (extreme + 1) / (n_boot + 1)
+    return t_stat, ci_lower, ci_upper, float(p_value)
+
+
 def _empty_metrics() -> dict:
     return {
         "annualized_return": 0.0,
