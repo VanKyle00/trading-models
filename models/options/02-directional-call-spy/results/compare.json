@@ -1,0 +1,41 @@
+{
+  "naive_flat": {
+    "metrics": {
+      "annualized_return": 0.023654051248602093,
+      "sharpe": 0.6075718318762454,
+      "sortino": 0.9669267946293875,
+      "max_drawdown": -0.02798937149095837,
+      "hit_rate": 0.5069860279441117,
+      "probabilistic_sharpe": 0.801485659730774,
+      "deflated_sharpe": 0.801485659730774,
+      "n_bars": 502
+    },
+    "final_equity": 104767.19650028125
+  },
+  "surface_no_spread": {
+    "metrics": {
+      "annualized_return": 0.03768950047964559,
+      "sharpe": 0.9208263956111794,
+      "sortino": 1.5378634140672205,
+      "max_drawdown": -0.022445857935349367,
+      "hit_rate": 0.48902195608782434,
+      "probabilistic_sharpe": 0.9003121018866642,
+      "deflated_sharpe": 0.9003121018866642,
+      "n_bars": 502
+    },
+    "final_equity": 107648.2021640618
+  },
+  "surface_with_spread": {
+    "metrics": {
+      "annualized_return": 0.036853408784878194,
+      "sharpe": 0.8998525793496125,
+      "sortino": 1.4998465016830316,
+      "max_drawdown": -0.022615564247958964,
+      "hit_rate": 0.48902195608782434,
+      "probabilistic_sharpe": 0.8950981431015772,
+      "deflated_sharpe": 0.8950981431015772,
+      "n_bars": 502
+    },
+    "final_equity": 107458.51480614457
+  }
+}
