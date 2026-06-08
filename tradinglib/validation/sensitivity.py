@@ -5,6 +5,7 @@ window so a chosen config can be read against its neighbours (plateau = robust,
 lonely spike = overfit). ``metrics_by_regime`` reports ``compute_metrics`` per
 sub-period (calendar year or a supplied label series).
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -35,15 +36,22 @@ def parameter_sensitivity(
     for params in expand_grid(param_grid):
         sig = make_signal(train, test, params)
         res = run_backtest(
-            test[price_col], sig, open_prices=test[open_col], fill="next_open",
-            fee_bps=fee_bps, slippage_bps=slippage_bps, periods_per_year=periods_per_year,
+            test[price_col],
+            sig,
+            open_prices=test[open_col],
+            fill="next_open",
+            fee_bps=fee_bps,
+            slippage_bps=slippage_bps,
+            periods_per_year=periods_per_year,
         )
-        rows.append({
-            **params,
-            "sharpe": res.metrics["sharpe"],
-            "annualized_return": res.metrics["annualized_return"],
-            "max_drawdown": res.metrics["max_drawdown"],
-        })
+        rows.append(
+            {
+                **params,
+                "sharpe": res.metrics["sharpe"],
+                "annualized_return": res.metrics["annualized_return"],
+                "max_drawdown": res.metrics["max_drawdown"],
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -77,5 +85,7 @@ def metrics_by_regime(
     rows: list[dict] = []
     for label, grp in returns.groupby(labels):
         eq = equity_curve.loc[grp.index]
-        rows.append({"regime": label, **compute_metrics(grp, eq, periods_per_year=periods_per_year)})
+        rows.append(
+            {"regime": label, **compute_metrics(grp, eq, periods_per_year=periods_per_year)}
+        )
     return pd.DataFrame(rows).set_index("regime")

@@ -64,8 +64,12 @@ def test_costs_drag_on_active_strategy(rising_prices: pd.Series) -> None:
         np.where(np.arange(len(rising_prices)) % 2 == 0, 1.0, -1.0),
         index=rising_prices.index,
     )
-    no_cost = run_backtest(rising_prices, flipping, fill="decision_close", fee_bps=0, slippage_bps=0)
-    with_cost = run_backtest(rising_prices, flipping, fill="decision_close", fee_bps=10, slippage_bps=5)
+    no_cost = run_backtest(
+        rising_prices, flipping, fill="decision_close", fee_bps=0, slippage_bps=0
+    )
+    with_cost = run_backtest(
+        rising_prices, flipping, fill="decision_close", fee_bps=10, slippage_bps=5
+    )
     assert with_cost.equity_curve.iloc[-1] < no_cost.equity_curve.iloc[-1]
 
 
@@ -123,7 +127,6 @@ def test_n_trials_lowers_deflated_sharpe(rising_prices: pd.Series) -> None:
     many = run_backtest(rising_prices, signals, fill="decision_close", n_trials=50)
     assert many.metrics["deflated_sharpe"] <= one.metrics["deflated_sharpe"]
     assert "n_trials" in many.config and many.config["n_trials"] == 50
-
 
 
 def test_next_open_is_default_and_requires_opens(rising_prices: pd.Series) -> None:

@@ -1,4 +1,5 @@
 """The SMA walk-forward adapter returns a test-indexed 0/1 signal."""
+
 from __future__ import annotations
 
 import importlib.util

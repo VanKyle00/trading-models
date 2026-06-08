@@ -1,4 +1,5 @@
 """Tests for walk-forward window generators."""
+
 from __future__ import annotations
 
 import pandas as pd

@@ -5,6 +5,7 @@ best parameters by in-sample-window backtest Sharpe, applies them to the
 out-of-sample window, and finally stitches all OOS slices into one continuous
 run scored with the Deflated Sharpe deflated by the parameter-grid size.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -29,15 +30,27 @@ class WalkForwardResult:
 
 
 def _in_sample_sharpe(
-    train: pd.DataFrame, make_signal: SignalFn, params: dict, *,
-    price_col: str, open_col: str, fee_bps: float, slippage_bps: float, periods_per_year: int,
+    train: pd.DataFrame,
+    make_signal: SignalFn,
+    params: dict,
+    *,
+    price_col: str,
+    open_col: str,
+    fee_bps: float,
+    slippage_bps: float,
+    periods_per_year: int,
 ) -> float:
     sig = make_signal(train, train, params)
     if not sig.index.equals(train.index):
         raise ValueError("make_signal must return a series indexed like the in-sample window")
     res = run_backtest(
-        train[price_col], sig, open_prices=train[open_col], fill="next_open",
-        fee_bps=fee_bps, slippage_bps=slippage_bps, periods_per_year=periods_per_year,
+        train[price_col],
+        sig,
+        open_prices=train[open_col],
+        fill="next_open",
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        periods_per_year=periods_per_year,
     )
     return float(res.metrics["sharpe"])
 
@@ -86,8 +99,14 @@ def walk_forward(
 
         def _score(p: dict, _train: pd.DataFrame = train) -> float:
             return _in_sample_sharpe(
-                _train, make_signal, p, price_col=price_col, open_col=open_col,
-                fee_bps=fee_bps, slippage_bps=slippage_bps, periods_per_year=periods_per_year,
+                _train,
+                make_signal,
+                p,
+                price_col=price_col,
+                open_col=open_col,
+                fee_bps=fee_bps,
+                slippage_bps=slippage_bps,
+                periods_per_year=periods_per_year,
             )
 
         search = grid_search(param_grid, _score)
@@ -95,25 +114,34 @@ def walk_forward(
         if not sig.index.equals(test.index):
             raise ValueError("make_signal must return a series indexed like test_df")
         oos_signals.append(sig)
-        rows.append({
-            "train_start": train_idx[0], "train_end": train_idx[-1],
-            "test_start": test_idx[0], "test_end": test_idx[-1],
-            "in_sample_sharpe": search.best_score,
-            **{f"param_{k}": v for k, v in search.best_params.items()},
-        })
+        rows.append(
+            {
+                "train_start": train_idx[0],
+                "train_end": train_idx[-1],
+                "test_start": test_idx[0],
+                "test_end": test_idx[-1],
+                "in_sample_sharpe": search.best_score,
+                **{f"param_{k}": v for k, v in search.best_params.items()},
+            }
+        )
 
     oos_signal = pd.concat(oos_signals)
     if oos_signal.index.has_duplicates:
         raise ValueError("overlapping test windows (use step >= test_size)")
     oos_result = run_backtest(
-        data.loc[oos_signal.index, price_col], oos_signal,
-        open_prices=data.loc[oos_signal.index, open_col], fill="next_open",
-        fee_bps=fee_bps, slippage_bps=slippage_bps, periods_per_year=periods_per_year,
+        data.loc[oos_signal.index, price_col],
+        oos_signal,
+        open_prices=data.loc[oos_signal.index, open_col],
+        fill="next_open",
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        periods_per_year=periods_per_year,
         n_trials=n_trials,
     )
     windows_df = pd.DataFrame(rows)
     return WalkForwardResult(
-        oos_result=oos_result, windows=windows_df,
+        oos_result=oos_result,
+        windows=windows_df,
         param_stability=_param_stability(windows_df, param_grid),
     )
 
