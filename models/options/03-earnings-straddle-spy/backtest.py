@@ -291,8 +291,9 @@ def run_for_gui(
 
     Runs the straddle on one illustrative event on ``symbol`` and returns the
     service contract (``data``, ``result``, ``symbol``, ``params``) plus the
-    distinctive ``report`` (filtered vs unfiltered synthetic comparison). The
-    service stashes ``report`` in ``BacktestRun.extra``.
+    distinctive ``report`` (filtered vs unfiltered synthetic comparison) and a
+    ``note`` set only when no earnings event exists in the window (e.g. SPY).
+    The service stashes ``report``/``note`` in ``BacktestRun.extra``.
 
     entry_lead/exit_offset are accepted to match the model.md param schema (the
     synthetic phase uses the module-level ENTRY_LEAD/EXIT_OFFSET timing).
@@ -307,6 +308,7 @@ def run_for_gui(
     ]
 
     report: dict | None = None
+    note: str | None = None
     if usable:
         traded = usable[len(usable) // 2]
         prior = events[pd.to_datetime(events, utc=True) < pd.Timestamp(traded, tz="UTC")]
@@ -321,8 +323,16 @@ def run_for_gui(
         )
     else:
         # No tradeable event in the window: plan against the (out-of-window) end
-        # so the strategy simply never trades and the result is flat equity.
+        # so the strategy simply never trades and the result is flat equity. Surface
+        # a note so the resulting flat curve reads as intentional, not broken — the
+        # default ticker (SPY) is an ETF with no earnings.
         traded = close.index[-1] + pd.Timedelta(days=365)
+        note = (
+            f"No earnings events found for {symbol} between {start} and {end}. "
+            f"This model trades single-name equities around earnings; index ETFs "
+            f"like SPY have none. Try a single name such as AAPL, MSFT, or NVDA, "
+            f"or widen the date range."
+        )
 
     result = _run_engine(close, traded, pre_iv, post_iv)
     data = pd.DataFrame({"close": close, "position": result.position})
@@ -330,6 +340,7 @@ def run_for_gui(
         "data": data,
         "result": result,
         "report": report,
+        "note": note,
         "symbol": symbol,
         "params": {
             "start": str(start),

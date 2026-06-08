@@ -176,7 +176,7 @@
 
     <section class="track" data-kind="model">
       <div class="track-head">
-        <span class="ttl"><span class="eyebrow">Track 1 · Empirical</span>Model Breakdowns<span class="count">5 papers</span></span>
+        <span class="ttl"><span class="eyebrow">Track 1 · Empirical</span>Model Breakdowns<span class="count">6 papers</span></span>
         <a class="more" href="models/index.html">full catalogue →</a>
       </div>
 
@@ -228,6 +228,17 @@
         dollar-gamma-weighted gap between realized and implied variance; it bleeds steadily through
         2023–2024 because realized sat below implied — a loss the theory predicts before any backtest.</p>
         <p class="stat">SPY daily, 2023–2024 · Sharpe <span class="neg">−6.94</span> · Max DD <span class="neg">−8%</span> · <b>demonstrator</b></p>
+      </a>
+
+      <a class="toc-item" href="models/06-earnings-straddle-spy.html"
+         data-kind="model" data-family="options" data-assets="equities" data-window="swing" data-status="demonstrator">
+        <span class="no">OPT-02 · Event Volatility</span>
+        <h3>When Is Earnings Volatility Cheap?</h3>
+        <p>A long ATM straddle into scheduled earnings, completing the options strategy SSRN 5921742
+        specifies but declines to implement. Buying earnings vol loses to the volatility risk premium and
+        the post-report IV crush; the only edge is a selection filter that trades only when the forecast
+        move beats the implied one. On a synthetic Phase-1 surface even the filtered trades do not beat it.</p>
+        <p class="stat">Synthetic, NVDA 7 trades, 2023–2024 · Profit factor <span class="neg">0.82</span> · bootstrap p <span class="neg">0.83</span> · <b>demonstrator</b></p>
       </a>
 
       </div>
