@@ -126,6 +126,20 @@
     .secondary b { color: var(--ink); font-weight: 500; }
     .secondary b { margin-right: 5px; }
 
+    .report { margin-top: 16px; border: 1px solid var(--line); padding: 12px 14px; }
+    .report-head { font-family: "Martian Mono", monospace; font-size: 9px; letter-spacing: .14em;
+                   text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+    .report-stats { display: flex; flex-wrap: wrap; gap: 18px; font-size: 11px;
+                    color: var(--muted); margin-bottom: 12px; }
+    .report-stats b { color: var(--ink); font-weight: 500; margin-right: 5px; }
+    .report-branches { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .report-branch { border: 1px solid var(--line); padding: 10px 12px; }
+    .rb-name { font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+    .rb-eq { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+    .rb-pnl { font-size: 12px; margin-top: 2px; color: var(--muted); }
+    .rb-pnl.up { color: var(--up); }
+    .rb-pnl.down { color: var(--down); }
+
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
     .chart { border: 1px solid var(--line); padding: 6px; min-width: 0; }
     .chart[data-chart="equity"], .chart[data-chart="trades_table"] { grid-column: 1 / -1; }
