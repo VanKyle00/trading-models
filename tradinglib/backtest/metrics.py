@@ -167,6 +167,28 @@ def bootstrap_t_test(
     return t_stat, ci_lower, ci_upper, float(p_value)
 
 
+def benjamini_hochberg_fdr(pvalues: list[float], alpha: float = 0.05) -> tuple[list[bool], float]:
+    """Benjamini-Hochberg FDR control over a set of hypotheses.
+
+    Returns ``(rejected, threshold)`` where ``rejected[i]`` corresponds to
+    ``pvalues[i]`` (input order preserved) and ``threshold`` is the largest
+    p-value passing the BH step-up (0.0 if none). Scans to the LARGEST rank i with
+    ``p(i) <= (i/m)*alpha`` and rejects all p <= that threshold. Controls the
+    expected false-discovery rate at ``alpha`` across the hypothesis set (Ch. 4).
+    """
+    m = len(pvalues)
+    if m == 0:
+        return [], 0.0
+
+    order = sorted(range(m), key=lambda i: pvalues[i])
+    threshold = 0.0
+    for rank, i in enumerate(order, start=1):
+        if pvalues[i] <= (rank / m) * alpha:
+            threshold = pvalues[i]
+    rejected = [p <= threshold and threshold > 0.0 for p in pvalues]
+    return rejected, float(threshold)
+
+
 def _empty_metrics() -> dict:
     return {
         "annualized_return": 0.0,
