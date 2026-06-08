@@ -90,3 +90,34 @@ def test_benjamini_hochberg_empty() -> None:
     rejected, threshold = benjamini_hochberg_fdr([], alpha=0.05)
     assert rejected == []
     assert threshold == 0.0
+
+
+def test_trade_metrics_basic() -> None:
+    from tradinglib.validation import trade_metrics
+
+    pnl = pd.Series([100.0, -50.0, 200.0, -100.0])  # 2 wins, 2 losses
+    holds = pd.Series([3, 1, 4, 2])
+    m = trade_metrics(pnl, holds=holds)
+
+    assert m["n_trades"] == 4
+    assert m["win_rate"] == pytest.approx(0.5)
+    assert m["profit_factor"] == pytest.approx(300.0 / 150.0)  # gross win / gross loss
+    assert m["expectancy"] == pytest.approx((100 - 50 + 200 - 100) / 4)
+    assert m["avg_win"] == pytest.approx(150.0)
+    assert m["avg_loss"] == pytest.approx(-75.0)
+    assert m["avg_hold"] == pytest.approx(2.5)
+
+
+def test_trade_metrics_empty_and_no_losses() -> None:
+    from tradinglib.validation import trade_metrics
+
+    empty = trade_metrics(pd.Series([], dtype=float))
+    assert empty["n_trades"] == 0
+    assert empty["win_rate"] == 0.0
+    assert empty["profit_factor"] == 0.0
+
+    # all wins -> profit_factor is inf (no losses); avg_loss 0.0
+    all_win = trade_metrics(pd.Series([10.0, 20.0]))
+    assert all_win["win_rate"] == 1.0
+    assert all_win["profit_factor"] == float("inf")
+    assert all_win["avg_loss"] == 0.0

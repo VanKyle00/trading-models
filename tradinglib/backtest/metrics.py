@@ -203,3 +203,47 @@ def _empty_metrics() -> dict:
         "deflated_sharpe": 0.0,
         "n_bars": 0,
     }
+
+
+def trade_metrics(pnl: pd.Series, *, holds: pd.Series | None = None) -> dict:
+    """Trade-level metrics over a per-trade P&L series (Ch. 4.3.5).
+
+    Returns a JSON-serializable dict: n_trades, win_rate, profit_factor
+    (gross wins / gross losses; ``inf`` when there are wins but no losses, 0.0
+    when empty), expectancy (mean P&L), avg_win, avg_loss (<= 0), avg_hold
+    (mean of ``holds`` if provided else 0.0).
+    """
+    x = pnl.to_numpy(dtype=float)
+    x = x[~np.isnan(x)]
+    n = len(x)
+    if n == 0:
+        return {
+            "n_trades": 0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "avg_hold": 0.0,
+        }
+
+    wins = x[x > 0]
+    losses = x[x < 0]
+    gross_win = float(wins.sum())
+    gross_loss = float(-losses.sum())
+    if gross_loss > 0:
+        profit_factor = gross_win / gross_loss
+    else:
+        profit_factor = float("inf") if gross_win > 0 else 0.0
+    avg_hold = (
+        float(holds.to_numpy(dtype=float).mean()) if holds is not None and len(holds) else 0.0
+    )
+    return {
+        "n_trades": int(n),
+        "win_rate": float(len(wins) / n),
+        "profit_factor": float(profit_factor),
+        "expectancy": float(x.mean()),
+        "avg_win": float(wins.mean()) if len(wins) else 0.0,
+        "avg_loss": float(losses.mean()) if len(losses) else 0.0,
+        "avg_hold": avg_hold,
+    }
