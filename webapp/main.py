@@ -113,6 +113,50 @@ def _metric_view(metrics: dict[str, Any]) -> tuple[list[dict[str, str]], list[di
     return hero, secondary
 
 
+def _fmt_money(value: Any, signed: bool = False) -> str:
+    if not isinstance(value, (int, float)):
+        return str(value)
+    s = f"${abs(value):,.0f}"
+    if value < 0:
+        return f"-{s}"
+    return f"+{s}" if signed and value > 0 else s
+
+
+def _report_view(report: Any) -> dict[str, Any] | None:
+    """Format the earnings-straddle synthetic report (``BacktestRun.extra['report']``)
+    into display rows: the implied/expected move + k stats, and a filtered-vs-
+    unfiltered equity/P&L comparison. Returns None for any model that emits no report.
+    """
+    if not isinstance(report, dict):
+        return None
+    fired = bool(report.get("filtered", {}).get("took_trade"))
+    stats = [
+        {"label": "Implied move", "value": _fmt(report.get("implied_move"), "pct")},
+        {"label": "Expected move", "value": _fmt(report.get("expected_move"), "pct")},
+        {"label": "Edge margin k", "value": _fmt(report.get("k"), "ratio")},
+        {"label": "Filter", "value": "fired" if fired else "sat out"},
+    ]
+    branches = []
+    for key, name in (
+        ("filtered", "Filtered (trade only on edge)"),
+        ("unfiltered", "Unfiltered (always trade)"),
+    ):
+        b = report.get(key) or {}
+        pnl = b.get("trade_pnl")
+        tone = "neutral"
+        if isinstance(pnl, (int, float)):
+            tone = "up" if pnl > 0 else "down" if pnl < 0 else "neutral"
+        branches.append(
+            {
+                "name": name,
+                "final_equity": _fmt_money(b.get("final_equity")),
+                "trade_pnl": _fmt_money(pnl, signed=True),
+                "pnl_tone": tone,
+            }
+        )
+    return {"stats": stats, "branches": branches}
+
+
 def _chat_context(raw: Any) -> str | None:
     """Format the frontend's on-screen run descriptor into a plain-text summary.
 
@@ -194,6 +238,7 @@ def create_app() -> FastAPI:
                 "symbol": br.symbol,
                 "model_name": spec.name,
                 "note": br.extra.get("note"),
+                "report": _report_view(br.extra.get("report")),
                 "hero": hero,
                 "secondary": secondary,
                 "figures": figures,

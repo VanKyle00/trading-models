@@ -21,6 +21,24 @@
 </div>
 {% endif %}
 
+{% if report %}
+<div class="report">
+  <div class="report-head">Synthetic earnings-vol edge</div>
+  <div class="report-stats">
+    {% for s in report.stats %}<span><b>{{ s.label }}</b> {{ s.value }}</span>{% endfor %}
+  </div>
+  <div class="report-branches">
+    {% for b in report.branches %}
+    <div class="report-branch">
+      <div class="rb-name">{{ b.name }}</div>
+      <div class="rb-eq">{{ b.final_equity }}</div>
+      <div class="rb-pnl {{ b.pnl_tone }}">{{ b.trade_pnl }} P&amp;L</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="charts">
   {% for name, html in figures.items() %}
   <div class="chart" data-chart="{{ name }}">{{ html|safe }}</div>
