@@ -1,4 +1,5 @@
 """Tests for grid search."""
+
 from __future__ import annotations
 
 from tradinglib.validation.search import SearchResult, expand_grid, grid_search

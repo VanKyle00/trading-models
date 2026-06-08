@@ -1,4 +1,5 @@
 """The XGBoost walk-forward adapter fits on train and returns a test-indexed signal."""
+
 from __future__ import annotations
 
 import importlib.util

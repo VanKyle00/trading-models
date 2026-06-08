@@ -1,4 +1,5 @@
 """Tests for sensitivity + regime diagnostics."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -25,8 +26,11 @@ def test_parameter_sensitivity_one_row_per_config() -> None:
     data = _data()
     grid = {"long": [True, False]}
     frame = parameter_sensitivity(
-        data, _make_signal, grid,
-        train_index=data.index[:60], test_index=data.index[60:],
+        data,
+        _make_signal,
+        grid,
+        train_index=data.index[:60],
+        test_index=data.index[60:],
     )
     assert len(frame) == 2
     assert {"long", "sharpe", "annualized_return", "max_drawdown"} <= set(frame.columns)

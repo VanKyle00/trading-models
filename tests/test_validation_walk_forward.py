@@ -1,4 +1,5 @@
 """Tests for the walk-forward harness."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -24,8 +25,12 @@ def test_walk_forward_selects_best_param_and_deflates() -> None:
     data = _data()
     grid = {"long": [True, False]}
     res = walk_forward(
-        data, _make_signal, param_grid=grid, mode="anchored",
-        initial_train=40, test_size=20,
+        data,
+        _make_signal,
+        param_grid=grid,
+        mode="anchored",
+        initial_train=40,
+        test_size=20,
     )
     assert isinstance(res, WalkForwardResult)
     # On a pure uptrend, "long" wins every window.
@@ -47,8 +52,14 @@ def test_walk_forward_rejects_misindexed_oos_signal() -> None:
         return pd.Series(1.0, index=test.index[:-1])
 
     with pytest.raises(ValueError, match="indexed like test"):
-        walk_forward(data, bad_signal, param_grid={"long": [True]}, mode="anchored",
-                     initial_train=40, test_size=20)
+        walk_forward(
+            data,
+            bad_signal,
+            param_grid={"long": [True]},
+            mode="anchored",
+            initial_train=40,
+            test_size=20,
+        )
 
 
 def test_walk_forward_rejects_misindexed_in_sample_signal() -> None:
@@ -58,8 +69,14 @@ def test_walk_forward_rejects_misindexed_in_sample_signal() -> None:
         return pd.Series(1.0, index=test.index[:-1])  # wrong length even in-sample
 
     with pytest.raises(ValueError, match="indexed like the in-sample window"):
-        walk_forward(data, bad_in_sample, param_grid={"long": [True]}, mode="anchored",
-                     initial_train=40, test_size=20)
+        walk_forward(
+            data,
+            bad_in_sample,
+            param_grid={"long": [True]},
+            mode="anchored",
+            initial_train=40,
+            test_size=20,
+        )
 
 
 def test_walk_forward_requires_window_sizing() -> None:
@@ -71,8 +88,12 @@ def test_walk_forward_requires_window_sizing() -> None:
 def test_walk_forward_rolling_mode() -> None:
     data = _data()
     res = walk_forward(
-        data, _make_signal, param_grid={"long": [True, False]}, mode="rolling",
-        train_size=40, test_size=20,
+        data,
+        _make_signal,
+        param_grid={"long": [True, False]},
+        mode="rolling",
+        train_size=40,
+        test_size=20,
     )
     assert isinstance(res, WalkForwardResult)
     assert res.oos_result.config["n_trials"] == 2
@@ -82,5 +103,11 @@ def test_walk_forward_rolling_mode() -> None:
 def test_walk_forward_rejects_empty_search_space() -> None:
     data = _data()
     with pytest.raises(ValueError, match="empty search space"):
-        walk_forward(data, _make_signal, param_grid={"long": []}, mode="anchored",
-                     initial_train=40, test_size=20)
+        walk_forward(
+            data,
+            _make_signal,
+            param_grid={"long": []},
+            mode="anchored",
+            initial_train=40,
+            test_size=20,
+        )

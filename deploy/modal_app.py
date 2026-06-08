@@ -60,6 +60,7 @@ _IGNORE = [
     "*.png",
 ]
 
+
 def _download_base_model() -> None:
     """Bake the base weights into the GPU image so cold starts don't download
     ~15 GB on the first request (which would blow the web request timeout)."""
@@ -82,16 +83,15 @@ base = (
 # Web image: CPU-only. Tell the app to reach the local model over Modal instead
 # of loading it in-process (the in-process path is for WSL2 / local GPU).
 web_image = (
-    base
-    .env({"ASSISTANT_LOCAL_BACKEND": "modal"})
-    .add_local_dir(str(ROOT), remote_path="/app", ignore=_IGNORE)  # last
+    base.env({"ASSISTANT_LOCAL_BACKEND": "modal"}).add_local_dir(
+        str(ROOT), remote_path="/app", ignore=_IGNORE
+    )  # last
 )
 
 # GPU image: inference stack + baked base weights (all build steps first),
 # then app code + the one adapter added last.
 gpu_image = (
-    base
-    .pip_install(
+    base.pip_install(
         "torch>=2.4",
         "transformers>=4.46,<5",  # pin: the model was trained on a 4.x stack; 5.x is untested here
         "peft>=0.13",
@@ -135,7 +135,7 @@ class LocalModel:
         self._provider = LocalAdapterProvider(adapter_path=adapter)
 
     @modal.method()
-    def complete(self, system, conversation, tools):  # noqa: ANN001 — neutral dataclasses, picklable
+    def complete(self, system, conversation, tools):
         return self._provider.complete(system, conversation, tools)
 
 

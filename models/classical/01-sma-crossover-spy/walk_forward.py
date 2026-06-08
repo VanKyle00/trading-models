@@ -4,6 +4,7 @@ Re-selects the (fast, slow) pair on each anchored in-sample window and reports
 the stitched out-of-sample equity deflated by the parameter-grid size — the
 honest counterpart to the single full-sample run in ``backtest.py``.
 """
+
 from __future__ import annotations
 
 import json
@@ -40,8 +41,13 @@ def main() -> None:
     data = bars[["open", "close"]].dropna()
 
     wf = walk_forward(
-        data, make_signal, param_grid=GRID, mode="anchored",
-        initial_train=756, test_size=126, step=126,  # ~3y train, ~6mo OOS
+        data,
+        make_signal,
+        param_grid=GRID,
+        mode="anchored",
+        initial_train=756,
+        test_size=126,
+        step=126,  # ~3y train, ~6mo OOS
     )
 
     # Naive full-sample Sharpe (the optimistic number we are correcting).
@@ -63,8 +69,11 @@ def main() -> None:
     # chosen pair can be read against its neighbours (plateau vs lucky spike).
     split = 756
     sensitivity = parameter_sensitivity(
-        data, make_signal, GRID,
-        train_index=data.index[:split], test_index=data.index[split:],
+        data,
+        make_signal,
+        GRID,
+        train_index=data.index[:split],
+        test_index=data.index[split:],
     )
     sensitivity.to_csv(RESULTS / "sensitivity.csv", index=False)
 

@@ -5,6 +5,7 @@ with a caller-supplied ``score_fn`` and returns the best configuration plus the
 number of configurations tried (``n_trials``) — the value to feed the Deflated
 Sharpe so the multiple-testing penalty reflects reality.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -25,7 +26,10 @@ def expand_grid(param_grid: dict[str, list]) -> list[dict]:
     if not param_grid:
         return [{}]
     keys = list(param_grid)
-    return [dict(zip(keys, values, strict=True)) for values in itertools.product(*(param_grid[k] for k in keys))]
+    return [
+        dict(zip(keys, values, strict=True))
+        for values in itertools.product(*(param_grid[k] for k in keys))
+    ]
 
 
 def grid_search(param_grid: dict[str, list], score_fn: Callable[[dict], float]) -> SearchResult:
@@ -33,4 +37,6 @@ def grid_search(param_grid: dict[str, list], score_fn: Callable[[dict], float]) 
     configs = expand_grid(param_grid)
     results = [(cfg, float(score_fn(cfg))) for cfg in configs]
     best_params, best_score = max(results, key=lambda pair: pair[1])
-    return SearchResult(best_params=best_params, best_score=best_score, n_trials=len(configs), results=results)
+    return SearchResult(
+        best_params=best_params, best_score=best_score, n_trials=len(configs), results=results
+    )

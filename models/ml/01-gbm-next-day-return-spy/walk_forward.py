@@ -4,6 +4,7 @@ Re-fits the regressor on each anchored in-sample window (re-selecting depth /
 n_estimators), predicts the OOS window, and reports the stitched OOS equity
 deflated by the hyperparameter-grid size.
 """
+
 from __future__ import annotations
 
 import json
@@ -60,8 +61,13 @@ def main() -> None:
     data = bars[["open", "close"]].dropna()
 
     wf = walk_forward(
-        data, make_signal, param_grid=GRID, mode="anchored",
-        initial_train=1008, test_size=126, step=126,  # ~4y train, ~6mo OOS
+        data,
+        make_signal,
+        param_grid=GRID,
+        mode="anchored",
+        initial_train=1008,
+        test_size=126,
+        step=126,  # ~4y train, ~6mo OOS
     )
 
     RESULTS.mkdir(parents=True, exist_ok=True)

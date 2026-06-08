@@ -5,6 +5,7 @@ windows grow the training span from a fixed start; rolling windows slide a
 fixed-size training span. With the default ``step == test_size`` the test
 segments are non-overlapping and tile the evaluable span exactly once.
 """
+
 from __future__ import annotations
 
 import pandas as pd
