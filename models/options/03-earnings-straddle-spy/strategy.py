@@ -29,8 +29,6 @@ NOT used to offset entry/exit in this synthetic phase (documented deviation).
 
 from __future__ import annotations
 
-import math  # noqa: F401  (pre-staged for size_contracts in Task 7; see module plan)
-
 import pandas as pd
 
 from tradinglib.backtest.options_engine import OptionsEngine
