@@ -13,7 +13,7 @@ compares cleanly with tz-naive bars.
 
 from __future__ import annotations
 
-import math  # noqa: F401  used by passes_filter/tradeable_event (Task 5); pre-imported in sorted top block
+import math
 
 import numpy as np
 import pandas as pd
@@ -65,3 +65,36 @@ def expected_move(
     if not moves:
         return float("nan")
     return float(np.mean(moves[-lookback:]))
+
+
+def passes_filter(expected: float, implied: float, k: float) -> bool:
+    """Selection gate: True iff expected_move > implied_move * k (k > 1)."""
+    if k <= 1.0:
+        raise ValueError(f"k must be > 1, got {k}")
+    if math.isnan(expected) or math.isnan(implied):
+        return False
+    return expected > implied * k
+
+
+def tradeable_event(
+    *,
+    implied: float,
+    expected: float,
+    spread_frac: float,
+    max_spread_frac: float,
+    has_expiry: bool,
+) -> bool:
+    """No-trade filters (Ch. 6): valid IV/move, a listed post-earnings expiry,
+    and a half-spread no wider than the cap. The k-gate is applied separately by
+    the caller; this returns whether the *chain* is even tradeable.
+
+    Greeks (vega/theta) diagnostics from Component 2 are deferred this phase —
+    these filters do not require them.
+    """
+    if math.isnan(implied) or implied <= 0.0:
+        return False
+    if math.isnan(expected):
+        return False
+    if not has_expiry:
+        return False
+    return spread_frac <= max_spread_frac

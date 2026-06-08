@@ -71,3 +71,28 @@ def test_expected_move_nan_when_no_history() -> None:
         close=close, earnings_datetimes=pd.Series([], dtype="datetime64[ns, UTC]"), lookback=3
     )
     assert np.isnan(em)
+
+
+def test_passes_filter_true_only_when_expected_beats_implied_times_k() -> None:
+    assert signal.passes_filter(expected=0.10, implied=0.06, k=1.5) is True
+    assert signal.passes_filter(expected=0.10, implied=0.06, k=1.7) is False
+
+
+def test_passes_filter_rejects_k_le_one() -> None:
+    with pytest.raises(ValueError):
+        signal.passes_filter(expected=0.10, implied=0.06, k=1.0)
+
+
+def test_passes_filter_false_on_nan_inputs() -> None:
+    assert signal.passes_filter(expected=float("nan"), implied=0.06, k=1.2) is False
+    assert signal.passes_filter(expected=0.10, implied=float("nan"), k=1.2) is False
+
+
+def test_tradeable_event_rejects_bad_chains() -> None:
+    base = dict(
+        implied=0.06, expected=0.10, spread_frac=0.05, max_spread_frac=0.20, has_expiry=True
+    )
+    assert signal.tradeable_event(**base) is True
+    assert signal.tradeable_event(**{**base, "implied": float("nan")}) is False
+    assert signal.tradeable_event(**{**base, "spread_frac": 0.25}) is False
+    assert signal.tradeable_event(**{**base, "has_expiry": False}) is False
