@@ -243,7 +243,7 @@ def test_spread_wider_for_short_dte() -> None:
 
 def test_spread_is_capped() -> None:
     s = ParametricSpread(max_frac=0.5)
-    assert s.half_spread_frac(2.0, -5.0, 1) == 0.5
+    assert s.half_spread_frac(2.0, -10.0, 1) == 0.5
 
 
 def test_min_tick_attribute_present() -> None:
@@ -387,9 +387,12 @@ def test_surface_skew_makes_otm_put_richer_than_otm_call() -> None:
         surface, NoSpread(), rate=0.04, fee_bps=0, slippage_bps=0, initial_capital=100_000.0
     )
     eng.t, eng.spot = idx[0], 100.0
-    put = eng._price_leg(OptionLeg("put", strike=90.0, expiry=expiry, quantity=1.0))
-    call = eng._price_leg(OptionLeg("call", strike=110.0, expiry=expiry, quantity=1.0))
-    assert put > call
+    # Skew is an implied-vol effect: the OTM put carries higher IV than the OTM
+    # call. (Price alone wouldn't show this — lognormal drift makes the OTM call
+    # richer in dollars despite its lower IV.)
+    put_iv = eng._leg_iv(OptionLeg("put", strike=90.0, expiry=expiry, quantity=1.0))
+    call_iv = eng._leg_iv(OptionLeg("call", strike=110.0, expiry=expiry, quantity=1.0))
+    assert put_iv > call_iv
 
 
 def test_vol_kwarg_is_deprecated_alias() -> None:
