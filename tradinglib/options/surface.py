@@ -14,6 +14,7 @@ with ``dte = (expiry - t).days`` and ``m = log(K / spot)`` (log-moneyness).
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -57,15 +58,24 @@ def realized_vol(prices: pd.Series, window: int = 21, periods_per_year: int = 25
 
 @dataclass
 class ParametricSurface:
-    """Realized-vol-anchored surface with parametric skew + term structure."""
+    """Realized-vol-anchored surface with parametric skew + term structure.
+
+    Not frozen because ``atm_vol`` is a mutable ``pd.Series`` (sorted in ``__post_init__``).
+    """
 
     atm_vol: pd.Series  # time-indexed ATM vol (annualized)
     params: SurfaceParams = field(default_factory=SurfaceParams)
+
+    def __post_init__(self) -> None:
+        if not self.atm_vol.index.is_monotonic_increasing:
+            self.atm_vol = self.atm_vol.sort_index()
 
     def iv(self, spot: float, strike: float, expiry: pd.Timestamp, t: pd.Timestamp) -> float:
         p = self.params
         atm = float(self.atm_vol.asof(t))
         if not math.isfinite(atm):
+            # NaN from asof means t is before the series start; use the earliest
+            # available ATM value as a pre-history estimate.
             valid = self.atm_vol.dropna()
             atm = float(valid.iloc[0]) if not valid.empty else p.iv_floor
         years = max((expiry - t).days, 0) / 365.0
@@ -93,4 +103,10 @@ def realistic_surface(
     """
     atm = realized_vol(prices, window=window, periods_per_year=periods_per_year) * vrp
     atm = atm.bfill()
+    if atm.isna().all():
+        warnings.warn(
+            f"realized vol is all-NaN (need > window={window} bars); "
+            "ATM vol defaults to the floor everywhere",
+            stacklevel=2,
+        )
     return ParametricSurface(atm_vol=atm, params=params or SurfaceParams())

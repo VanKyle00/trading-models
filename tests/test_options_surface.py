@@ -29,7 +29,7 @@ def test_flat_surface_is_constant() -> None:
 
 def test_realized_vol_recovers_input_scale() -> None:
     rv = realized_vol(_prices(n=2000, vol=0.2, seed=1), window=21).dropna()
-    assert 0.12 < rv.mean() < 0.30
+    assert 0.17 < rv.mean() < 0.23
 
 
 def test_parametric_surface_has_equity_skew() -> None:
@@ -47,8 +47,8 @@ def test_parametric_atm_equals_input_at_reference_window() -> None:
     # ATM (m=0) at the 21-day reference window: term_factor == 1, skew == 1.
     low = s.iv(100.0, 100.0, t0 + pd.Timedelta(days=21), t0)
     assert low == pytest.approx(0.15, abs=1e-9)
-    high = s.iv(100.0, 100.0, t0 + pd.Timedelta(days=31), t0 + pd.Timedelta(days=10))
-    assert high > low
+    high = s.iv(100.0, 100.0, t0 + pd.Timedelta(days=70), t0 + pd.Timedelta(days=10))
+    assert high > 0.35  # tracks the 0.40 ATM input, not the 0.15 earlier regime
 
 
 def test_long_dated_skew_is_flatter() -> None:
