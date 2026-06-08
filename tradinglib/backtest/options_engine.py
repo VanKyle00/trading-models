@@ -241,7 +241,7 @@ def run_options_backtest(
             "periods_per_year": periods_per_year,
             "n_trials": n_trials,
             "surface": type(surface).__name__,
-            "spread": type(spread).__name__,
+            "spread": type(spread_model).__name__,
             "rate": rate,
         },
     )

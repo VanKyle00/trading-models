@@ -91,3 +91,16 @@ def test_missing_surface_raises() -> None:
     prices = pd.Series(100.0, index=idx)
     with pytest.raises(ValueError, match="surface"):
         run_options_backtest(prices, _DoNothing())
+
+
+def test_config_records_resolved_models() -> None:
+    idx = pd.date_range("2024-01-01", periods=5, freq="B")
+    prices = pd.Series(100.0, index=idx)
+    # Default spread path resolves to NoSpread — config must record that, not 'NoneType'.
+    res = run_options_backtest(prices, _DoNothing(), surface=FlatSurface(0.2))
+    assert res.config["surface"] == "FlatSurface"
+    assert res.config["spread"] == "NoSpread"
+    explicit = run_options_backtest(
+        prices, _DoNothing(), surface=FlatSurface(0.2), spread=ParametricSpread()
+    )
+    assert explicit.config["spread"] == "ParametricSpread"
