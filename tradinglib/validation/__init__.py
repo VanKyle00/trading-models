@@ -7,6 +7,11 @@ from tradinglib.validation.sensitivity import (
     vol_regime,
 )
 from tradinglib.validation.splits import anchored_windows, rolling_windows
+from tradinglib.validation.stats import (
+    benjamini_hochberg_fdr,
+    bootstrap_t_test,
+    trade_metrics,
+)
 from tradinglib.validation.walk_forward import SignalFn, WalkForwardResult, walk_forward
 
 __all__ = [
@@ -14,11 +19,14 @@ __all__ = [
     "SignalFn",
     "WalkForwardResult",
     "anchored_windows",
+    "benjamini_hochberg_fdr",
+    "bootstrap_t_test",
     "expand_grid",
     "grid_search",
     "metrics_by_regime",
     "parameter_sensitivity",
     "rolling_windows",
+    "trade_metrics",
     "vol_regime",
     "walk_forward",
 ]

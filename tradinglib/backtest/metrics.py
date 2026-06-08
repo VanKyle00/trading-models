@@ -117,6 +117,81 @@ def _probabilistic_and_deflated_sharpe(
     return psr, dsr
 
 
+def bootstrap_t_test(
+    returns: pd.Series,
+    *,
+    n_boot: int = 2000,
+    confidence: float = 0.95,
+    seed: int | None = None,
+) -> tuple[float, float, float, float]:
+    """Non-parametric bootstrap of the mean per-trade return.
+
+    Returns ``(t_stat, ci_lower, ci_upper, p_value)``.
+
+    - ``p_value``: a *centered* bootstrap test of H0:mean=0 — resample the
+      mean-centered returns and count how often ``|boot_mean*| >= |observed_mean|``,
+      smoothed by ``1/(n_boot+1)`` so it is never exactly 0 (a bootstrap p-value
+      floor; report as ``< 1/n_boot`` when it hits the floor).
+    - ``(ci_lower, ci_upper)``: a percentile CI from the *uncentered* resampled
+      means — an interval estimate computed by a different (internally consistent)
+      procedure than the p-value; the two are not guaranteed to agree sign-for-sign
+      in finite samples.
+    - ``t_stat``: classic Student t (mean / (std/sqrt(n))), reported as a
+      descriptive statistic only — it is NOT the test statistic (per-trade returns
+      are fat-tailed and few, Ch. 4).
+
+    Tiny samples (n < 2) return the conservative sentinel ``(0.0, 0.0, 0.0, 1.0)``.
+    """
+    x = returns.to_numpy(dtype=float)
+    x = x[~np.isnan(x)]
+    n = len(x)
+    if n < 2:
+        return 0.0, 0.0, 0.0, 1.0
+
+    mean = float(x.mean())
+    std = float(x.std(ddof=1))
+    t_stat = float(mean / (std / math.sqrt(n))) if std > 0 else 0.0
+
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, n, size=(n_boot, n))
+    boot_means = x[idx].mean(axis=1)
+
+    alpha = 1.0 - confidence
+    ci_lower = float(np.quantile(boot_means, alpha / 2.0))
+    ci_upper = float(np.quantile(boot_means, 1.0 - alpha / 2.0))
+
+    # centered bootstrap p-value (H0: mean == 0)
+    shifted = boot_means - mean
+    extreme = int((np.abs(shifted) >= abs(mean)).sum())
+    p_value = (extreme + 1) / (n_boot + 1)
+    return t_stat, ci_lower, ci_upper, float(p_value)
+
+
+def benjamini_hochberg_fdr(pvalues: list[float], alpha: float = 0.05) -> tuple[list[bool], float]:
+    """Benjamini-Hochberg FDR control over a set of hypotheses.
+
+    Returns ``(rejected, threshold)`` where ``rejected[i]`` corresponds to
+    ``pvalues[i]`` (input order preserved) and ``threshold`` is the largest
+    p-value passing the BH step-up (0.0 if none). Scans to the LARGEST rank i with
+    ``p(i) <= (i/m)*alpha`` and rejects all p <= that threshold. Controls the
+    expected false-discovery rate at ``alpha`` across the hypothesis set (Ch. 4).
+    """
+    m = len(pvalues)
+    if m == 0:
+        return [], 0.0
+
+    order = sorted(range(m), key=lambda i: pvalues[i])
+    k = 0  # largest rank passing the step-up (0 = none); avoids overloading threshold==0.0
+    for rank, i in enumerate(order, start=1):
+        if pvalues[i] <= (rank / m) * alpha:
+            k = rank
+    if k == 0:
+        return [False] * m, 0.0
+    threshold = pvalues[order[k - 1]]
+    rejected = [p <= threshold for p in pvalues]
+    return rejected, float(threshold)
+
+
 def _empty_metrics() -> dict:
     return {
         "annualized_return": 0.0,
@@ -127,4 +202,48 @@ def _empty_metrics() -> dict:
         "probabilistic_sharpe": 0.0,
         "deflated_sharpe": 0.0,
         "n_bars": 0,
+    }
+
+
+def trade_metrics(pnl: pd.Series, *, holds: pd.Series | None = None) -> dict:
+    """Trade-level metrics over a per-trade P&L series (Ch. 4.3.5).
+
+    Returns a JSON-serializable dict: n_trades, win_rate, profit_factor
+    (gross wins / gross losses; ``inf`` when there are wins but no losses, 0.0
+    when empty), expectancy (mean P&L), avg_win, avg_loss (<= 0), avg_hold
+    (mean of ``holds`` if provided else 0.0).
+    """
+    x = pnl.to_numpy(dtype=float)
+    x = x[~np.isnan(x)]
+    n = len(x)
+    if n == 0:
+        return {
+            "n_trades": 0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "avg_hold": 0.0,
+        }
+
+    wins = x[x > 0]
+    losses = x[x < 0]
+    gross_win = float(wins.sum())
+    gross_loss = float(-losses.sum())
+    if gross_loss > 0:
+        profit_factor = gross_win / gross_loss
+    else:
+        profit_factor = float("inf") if gross_win > 0 else 0.0
+    avg_hold = (
+        float(holds.to_numpy(dtype=float).mean()) if holds is not None and len(holds) else 0.0
+    )
+    return {
+        "n_trades": int(n),
+        "win_rate": float(len(wins) / n),
+        "profit_factor": float(profit_factor),
+        "expectancy": float(x.mean()),
+        "avg_win": float(wins.mean()) if len(wins) else 0.0,
+        "avg_loss": float(losses.mean()) if len(losses) else 0.0,
+        "avg_hold": avg_hold,
     }

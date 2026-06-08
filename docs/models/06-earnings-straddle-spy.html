@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>When Is Earnings Volatility Cheap? — trading-models</title>
+<link rel="stylesheet" href="paper.css">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], tags: 'ams', packages: {'[+]': ['ams']} },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+</head>
+<body>
+<div class="paper">
+
+  <div class="preprint-bar"><span>trading-models <span class="tag">· working paper VI</span></span><span>Options · Event Volatility</span></div>
+
+  <div class="title-block">
+    <h1 class="paper-title">When Is Earnings Volatility Cheap?</h1>
+    <p class="subtitle"><em>A long straddle into scheduled earnings is a bet that the realized move beats the implied one. Owning that bet indiscriminately loses to the volatility risk premium; the only edge is the <span style="font-style:normal;font-weight:600">selection rule</span> that decides when not to play.</em></p>
+    <p class="byline"><span class="who">trading-models</span> research notes · Options family, model 03</p>
+    <p class="dateline">Compiled 2026-06-08 · SPY/AAPL/MSFT/AMZN/NVDA daily, 2023–2024 · Phase-1 synthetic surface</p>
+    <div class="meta-tags">
+      <span class="meta-tag"><b>Family</b> options</span>
+      <span class="meta-tag"><b>Window</b> event (T−3 → T+1)</span>
+      <span class="meta-tag"><b>Assets</b> equities</span>
+      <span class="meta-tag"><b>Data</b> yfinance daily + synthetic IV</span>
+      <span class="meta-tag"><b>Structure</b> ATM straddle</span>
+      <span class="meta-tag"><b>Edge</b> selection filter</span>
+      <span class="meta-tag"><b>Status</b> Phase-1 synthetic · not tradeable</span>
+    </div>
+  </div>
+
+  <div class="abstract">
+    <h2>Abstract</h2>
+    <p>Scheduled earnings announcements are the cleanest volatility events a retail trader can position around: the date is known weeks ahead, and a single report compresses a quarter of information into one overnight gap. The textbook expression is a long at-the-money straddle — a call and a put at the same strike and expiry — bought before the report and sold after, profiting from a large move in either direction. We complete the options strategy that Poudel's (2025) small-cap dissertation specifies and then explicitly declines to implement, and in doing so make one point precisely: <em>buying earnings volatility is, on average, a losing trade,</em> because the implied move priced into the straddle already embeds a positive volatility risk premium and is then crushed the instant the announcement removes the uncertainty it was charging for.</p>
+    <p>The strategy's only source of edge is therefore not owning the straddle but <em>selecting</em> which earnings to own it for. We forecast each event's realized move from the name's own past earnings reactions and enter only when that forecast exceeds the straddle's implied move by a margin, \(\widehat{m}_{\text{exp}}>m_{\text{imp}}\cdot k\) with \(k>1\). The filter, not the option, is the alpha. We pair it with a non-parametric validation battery — a centered bootstrap test for the per-trade mean and a Benjamini–Hochberg false-discovery correction across the candidate universe — precisely because a handful of earnings trades on a hand-picked watchlist is exactly the setting in which spurious edges are manufactured.</p>
+    <p>The model runs on a deliberately <em>synthetic</em> volatility surface (an elevated pre-earnings implied vol that collapses to a lower post-earnings level), so the Phase-1 numbers test mechanism, not tradeability. Over 2023–2024 the filter admitted only NVDA from a five-name watchlist; the four large-caps were sat out. Across NVDA's seven fired earnings trades the synthetic straddle returned a per-trade expectancy of \(-\$30.79\), a profit factor of \(0.82\), and a bootstrap \(p\)-value of \(0.825\) — a mean indistinguishable from zero whose \(95\%\) confidence interval, \([-\$276,\,+\$250]\), straddles it comfortably. No name survives the FDR threshold. The result is the honest one the design predicted: the selection filter is <em>necessary</em> to avoid the premium, but on synthetic, crush-modelled data it is not <em>sufficient</em> to overcome it.</p>
+    <p class="keywords"><b>Keywords.</b> earnings announcements, implied move, long straddle, volatility risk premium, IV crush, selection filter, bootstrap inference, Benjamini–Hochberg FDR, event-driven volatility.</p>
+  </div>
+
+  <h2>Introduction</h2>
+  <p class="lead">Every other options strategy in this catalogue trades volatility as a continuous quantity. An earnings straddle trades it as a <em>scheduled discrete event</em>, and that changes the economics entirely. The market knows the report is coming; it bids implied volatility up in the days before, building a premium that prices the expected overnight jump; and it lets that premium evaporate the moment the report lands and the uncertainty resolves. A trader who simply buys the straddle is buying the most expensive insurance in the equity market at the exact moment it is most expensive, and watching it lose value whether or not the stock moves. The interesting question is never "should I buy the earnings straddle" — almost always the answer is no — but "for which earnings, if any, is the implied move cheap relative to what the stock will actually do."</p>
+  <p>This paper takes the event-volatility strategy from Poudel (2025), <em>Small-Cap Stock Trading Strategies for Retail Traders</em> (SSRN 5921742), Strategy Family E. That work describes the long-strangle-around-earnings trade and then steps back from it: <em>"For simplicity, this section focuses on equity-based event trading rather than options."</em> Strategy E was also the dissertation's weakest result (an out-of-sample Sharpe of 0.54, the lowest of its six families) — and that is not a coincidence to paper over but the central fact to build around. Naïve long earnings vol underperforms because the premium it pays usually exceeds the move it collects. We implement the options version the dissertation omitted, but with the selection discipline that its own results imply is mandatory.</p>
+  <p>Our claim, as with the delta-hedged paper that precedes this one, is not that the strategy prints money. It is that the strategy's profitability is <em>conditional and forecastable</em>: it lives or dies on whether a simple forecast of the realized earnings move can beat the implied move embedded in the straddle, net of an unforgiving four-legged transaction cost and a modelled volatility crush. We build the mechanism, we state exactly where the theory is sound and where it is fragile, and we validate the small-sample result with inference tools chosen to resist the very overfitting this kind of strategy invites.</p>
+
+  <h2>The Instrument: an At-the-Money Straddle Around the Report</h2>
+  <p>Let \(S_t\) be the underlying close on bar \(t\) and \(E\) the scheduled earnings datetime. A long straddle is one long call and one long put, struck together at the money and sharing the nearest listed expiry strictly after the report. With the strike snapped to the nearest grid increment, \(K=\operatorname{snap}(S_t)\), and both legs priced by Black–Scholes–Merton at an implied volatility \(\sigma\), the per-share premium is the sum of the two,</p>
+  \begin{equation}
+    P_{\text{straddle}}(S,K,T,\sigma) = C_{\text{BS}}(S,K,T,\sigma) + \mathrm{Put}_{\text{BS}}(S,K,T,\sigma),
+  \end{equation}
+  <p>and the position is delta-neutral at inception (an ATM call's \(+\Delta\approx+0.5\) is offset by the ATM put's \(-\Delta\approx-0.5\)), long gamma, long vega, and short theta on both legs. Its payoff at expiry is the familiar V: the holder profits if the underlying finishes far enough from \(K\) in either direction to recover the combined premium.</p>
+
+  <figure>
+    <svg viewBox="0 0 600 270" width="100%" style="border:1px solid #d9d4c7;background:#fff;border-radius:2px" font-family="IBM Plex Mono, monospace" role="img" aria-label="Long straddle payoff: a V-shaped profit-and-loss against the underlying price at expiry, with the minimum at the strike equal to minus the premium, and two breakevens at the strike plus and minus the premium.">
+      <line x1="60" y1="210" x2="560" y2="210" stroke="#8a857a" stroke-width="1"/>
+      <line x1="310" y1="30" x2="310" y2="225" stroke="#d9d4c7" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="60" y1="150" x2="560" y2="150" stroke="#e7e3d8" stroke-width="1"/>
+      <!-- payoff: V with floor at -premium -->
+      <polyline points="60,70 215,150 310,180 405,150 560,70" fill="none" stroke="#8a2b2b" stroke-width="2.5"/>
+      <!-- breakeven dots -->
+      <circle cx="215" cy="150" r="3.5" fill="#2f6b46"/>
+      <circle cx="405" cy="150" r="3.5" fill="#2f6b46"/>
+      <circle cx="310" cy="180" r="3.5" fill="#a23a2e"/>
+      <text x="305" y="248" fill="#44423c" font-size="12" text-anchor="middle">K (strike ≈ spot)</text>
+      <text x="215" y="143" fill="#2f6b46" font-size="11" text-anchor="middle">K − P</text>
+      <text x="405" y="143" fill="#2f6b46" font-size="11" text-anchor="middle">K + P</text>
+      <text x="318" y="196" fill="#a23a2e" font-size="11" text-anchor="start">max loss = −premium</text>
+      <text x="70" y="60" fill="#2f6b46" font-size="11">profit on a large move…</text>
+      <text x="470" y="60" fill="#2f6b46" font-size="11" text-anchor="end">…either way</text>
+      <text x="40" y="125" fill="#8a857a" font-size="11" text-anchor="middle" transform="rotate(-90 40 125)">P&amp;L at expiry</text>
+      <text x="560" y="228" fill="#8a857a" font-size="11" text-anchor="end">underlying at expiry →</text>
+    </svg>
+    <figcaption>The long-straddle payoff at expiry. The position needs the underlying to finish beyond either breakeven, \(K\pm P\), to profit; inside that band it loses, with the maximum loss equal to the premium paid at the strike. The width of the breakeven band, \(P/S\), is the <em>implied move</em> — the realized move the trade must beat just to break even.</figcaption>
+  </figure>
+
+  <h2>The Implied Move, the Risk Premium, and the Crush</h2>
+  <p>The single number that governs the trade is the breakeven width above, the <em>implied move</em>. For an ATM straddle it is well approximated by the premium as a fraction of spot,</p>
+  \begin{equation}
+    m_{\text{imp}} \;=\; \frac{P_{\text{straddle}}}{S} \;\approx\; 0.8\,\sigma\sqrt{T},
+  \end{equation}
+  <p>which is the option market's priced-in expected absolute move through expiry — explicitly the mean-absolute move \(\mathbb E|R|\), not the one-sigma move \(\sigma\sqrt{T}\) (the \(0.8\approx\sqrt{2/\pi}\) is the half-normal factor). Held through the announcement to a same-week exit, the straddle's profit-and-loss is, to first order,</p>
+  \begin{equation}
+    \Pi \;\approx\; M\cdot\big(\,|R_{\text{event}}|\;-\;m_{\text{imp}}\,\big)\;-\;\text{(theta + crush + costs)},
+  \end{equation}
+  <p>with \(M=100\) the contract multiplier and \(R_{\text{event}}\) the realized announcement return. The trade wins when the realized move clears the implied move by enough to cover the carry. Two forces make that hard, and both are structural rather than incidental.</p>
+  <p><b>The volatility risk premium.</b> Implied volatility is, on average across names and time, a biased-high forecast of subsequent realized volatility — sellers of options demand compensation for bearing variance risk. Bakshi &amp; Kapadia (2003) document that delta-hedged option positions earn negative average returns precisely because of this premium; Carr &amp; Wu (2009) measure variance risk premia as robustly negative for the buyer. Around earnings the premium is at its largest: implied vol is bid up specifically to price the event. The long straddle is the leveraged long side of exactly this losing average bet.</p>
+  <p><b>The crush.</b> The instant the report is released, the uncertainty the pre-earnings implied vol was charging for disappears, and implied vol collapses from an elevated pre-event level to a lower post-event one. The straddle's remaining time value — its vega — is repriced down at the new, lower vol the moment you would exit. This is the "IV crush," and it is why a stock can move and the straddle still lose: the intrinsic gain from the move is offset by the vega loss from the vol collapse.</p>
+
+  <figure>
+    <svg viewBox="0 0 600 250" width="100%" style="border:1px solid #d9d4c7;background:#fff;border-radius:2px" font-family="IBM Plex Mono, monospace" role="img" aria-label="Implied volatility timeline: implied vol rises into the earnings date and then drops sharply afterward; the straddle is entered three bars before earnings and exited one bar after.">
+      <line x1="55" y1="200" x2="565" y2="200" stroke="#8a857a" stroke-width="1"/>
+      <text x="35" y="120" fill="#8a857a" font-size="11" text-anchor="middle" transform="rotate(-90 35 120)">implied vol</text>
+      <!-- earnings line -->
+      <line x1="400" y1="40" x2="400" y2="210" stroke="#8a2b2b" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="400" y="32" fill="#8a2b2b" font-size="11" text-anchor="middle">earnings (E)</text>
+      <!-- IV path: rising into E (pre_iv 45%), crush to post_iv 25% -->
+      <polyline points="70,150 200,135 320,110 400,75 401,165 470,170 540,172" fill="none" stroke="#b06a52" stroke-width="2.5"/>
+      <text x="330" y="98" fill="#b06a52" font-size="11">pre-earnings IV ↑ (45%)</text>
+      <text x="470" y="160" fill="#a23a2e" font-size="11" text-anchor="middle">crush → 25%</text>
+      <!-- entry / exit markers -->
+      <line x1="320" y1="200" x2="320" y2="110" stroke="#2f6b46" stroke-width="1" stroke-dasharray="2 2"/>
+      <circle cx="320" cy="110" r="3.5" fill="#2f6b46"/>
+      <text x="320" y="220" fill="#2f6b46" font-size="11" text-anchor="middle">enter T−3</text>
+      <line x1="470" y1="200" x2="470" y2="170" stroke="#2f6b46" stroke-width="1" stroke-dasharray="2 2"/>
+      <circle cx="470" cy="170" r="3.5" fill="#2f6b46"/>
+      <text x="470" y="220" fill="#2f6b46" font-size="11" text-anchor="middle">exit T+1</text>
+      <text x="120" y="220" fill="#8a857a" font-size="11" text-anchor="middle">time →</text>
+    </svg>
+    <figcaption>The stylised earnings IV path the Phase-1 surface models. Implied vol is elevated entering the report and crushes immediately after. A straddle entered at T−3 pays the inflated pre-event vol; exited at T+1 it is marked at the crushed post-event vol. The buyer must collect enough realized move at the vertical line to offset this vega give-back plus three-plus days of theta.</figcaption>
+  </figure>
+
+  <h2>The Selection Filter — the Only Edge</h2>
+  <p>Because owning the straddle is a losing average bet, the strategy's profitability must come entirely from <em>declining most of them</em>. We forecast each event's realized move from the name's own history: the mean absolute close-to-next-bar return across its last \(\ell\) earnings dates, using prior events only,</p>
+  \begin{equation}
+    \widehat{m}_{\text{exp}} \;=\; \frac{1}{\ell}\sum_{j=1}^{\ell}\bigl|R_{E_j}\bigr|,\qquad E_j < E,
+  \end{equation}
+  <p>and we take the straddle only when this forecast exceeds the implied move by a margin governed by a single parameter \(k>1\):</p>
+
+  <div class="keybox accent"><span class="lab">Decision rule — the alpha</span>
+  \begin{equation}
+    \text{enter the straddle} \iff \widehat{m}_{\text{exp}} \;>\; m_{\text{imp}}\cdot k, \qquad k>1.
+  \end{equation}
+  The two sides are deliberately like-for-like: \(m_{\text{imp}}=P/S\) is the option market's mean-absolute move, and \(\widehat{m}_{\text{exp}}\) is the realized mean-absolute move. The margin \(k\) is the cushion the realized history must clear to pay for the premium and the crush. Setting \(k>1\) is what enforces "only when implied vol looks cheap," not merely "whenever the stock has moved before."</div>
+
+  <p>On top of the k-gate sit hard no-trade filters that reject the event outright when the chain is untradeable: a non-positive or undefined implied vol, no listed expiry after the report, or a quoted half-spread wider than a cap. These are the operational safeguards of Poudel's Chapter 6, scoped to what Phase 1 can see.</p>
+
+  <figure>
+    <svg viewBox="0 0 600 220" width="100%" style="border:1px solid #d9d4c7;background:#fff;border-radius:2px" font-family="IBM Plex Mono, monospace" role="img" aria-label="Selection filter comparison: for NVDA the expected move of 10.4 percent exceeds the implied move times k of 9.0 percent, so the trade fires; for a large-cap example the expected move is below the threshold, so the trade is declined.">
+      <text x="20" y="34" fill="#1c1b18" font-size="12" font-weight="600">NVDA</text>
+      <!-- implied*k bar -->
+      <rect x="120" y="22" width="270" height="16" fill="#f3f0e8" stroke="#d9d4c7"/>
+      <rect x="120" y="22" width="270" height="16" fill="none" stroke="#8a857a"/>
+      <line x1="390" y1="14" x2="390" y2="78" stroke="#8a2b2b" stroke-width="1.5" stroke-dasharray="3 2"/>
+      <text x="395" y="20" fill="#8a2b2b" font-size="10">m_imp · k = 9.0%</text>
+      <!-- expected bar (exceeds) -->
+      <rect x="120" y="46" width="313" height="16" fill="#2f6b46" opacity="0.8"/>
+      <text x="440" y="59" fill="#2f6b46" font-size="11">exp = 10.4% ✓ FIRE</text>
+      <text x="20" y="59" fill="#44423c" font-size="10">m_exp</text>
+
+      <line x1="120" y1="92" x2="565" y2="92" stroke="#e7e3d8"/>
+
+      <text x="20" y="126" fill="#1c1b18" font-size="12" font-weight="600">large-cap</text>
+      <rect x="120" y="114" width="230" height="16" fill="#f3f0e8" stroke="#8a857a"/>
+      <line x1="350" y1="106" x2="350" y2="170" stroke="#8a2b2b" stroke-width="1.5" stroke-dasharray="3 2"/>
+      <text x="355" y="112" fill="#8a2b2b" font-size="10">m_imp · k</text>
+      <rect x="120" y="138" width="150" height="16" fill="#a23a2e" opacity="0.55"/>
+      <text x="360" y="151" fill="#a23a2e" font-size="11">exp &lt; threshold ✗ DECLINE</text>
+      <text x="20" y="151" fill="#44423c" font-size="10">m_exp</text>
+      <text x="120" y="196" fill="#8a857a" font-size="11">forecast vs. priced move — wider expected bar than the oxblood line means trade →</text>
+    </svg>
+    <figcaption>The selection filter in action on the 2023–2024 watchlist. NVDA's forecast move (10.4%) cleared the \(k=1.2\) threshold over its implied move (\(7.5\%\times1.2=9.0\%\)) and was traded; the large-cap names, whose muted earnings histories sat below their implied moves, were declined. The filter admitted one name of five — the discipline working as intended, even if the admitted name still lost.</figcaption>
+  </figure>
+
+  <h2>Trade Construction, Frictions, and Sizing</h2>
+  <p>An admitted event is traded on a strict, bar-counted schedule, deliberately independent of the calendar so that holidays and gaps do not misplace the legs. Entry is the third actual price bar before the earnings bar (T−3); exit is the first bar after (T+1). The legs are opened ATM at entry with a tenor placed beyond the exit, marked to market each bar by the engine, and closed at exit.</p>
+  <figure>
+    <svg viewBox="0 0 600 130" width="100%" style="border:1px solid #d9d4c7;background:#fff;border-radius:2px" font-family="IBM Plex Mono, monospace" role="img" aria-label="Trade timeline: enter the straddle three bars before earnings, hold through the earnings bar, and exit one bar after.">
+      <line x1="40" y1="70" x2="560" y2="70" stroke="#8a857a" stroke-width="1"/>
+      <!-- bars -->
+      <g fill="#8a857a" font-size="10" text-anchor="middle">
+        <circle cx="90"  cy="70" r="3" fill="#2f6b46"/><text x="90"  y="96" fill="#2f6b46">T−3 ENTER</text>
+        <circle cx="190" cy="70" r="3"/><text x="190" y="92">T−2</text>
+        <circle cx="290" cy="70" r="3"/><text x="290" y="92">T−1</text>
+        <circle cx="390" cy="70" r="4" fill="#8a2b2b"/><text x="390" y="96" fill="#8a2b2b">E earnings</text>
+        <circle cx="490" cy="70" r="3" fill="#2f6b46"/><text x="490" y="96" fill="#2f6b46">T+1 EXIT</text>
+      </g>
+      <path d="M90 55 Q290 28 490 55" fill="none" stroke="#b06a52" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="290" y="34" fill="#b06a52" font-size="11" text-anchor="middle">long straddle held across the event</text>
+      <text x="300" y="120" fill="#8a857a" font-size="10" text-anchor="middle">bars counted on the actual price index, not business-day offsets</text>
+    </svg>
+    <figcaption>The event window. Entry and exit are counted in actual trading bars around the earnings bar, so a gapped or holiday-shortened calendar never lands a leg on a non-trading date.</figcaption>
+  </figure>
+  <p><b>Frictions.</b> A straddle is two legs, and the engine crosses a bid/ask spread on each — so the position pays the spread four times over its life (call and put at entry, call and put at exit). For a strategy whose entire edge is a few percentage points of move, this four-legged cost is not a footnote; it is one of the largest line items, and a realistic spread model is what keeps the backtest honest. Costs here are \(1.0\) bp fee plus \(0.5\) bp slippage per leg-crossing.</p>
+  <p><b>Sizing.</b> A long option is defined-risk — the most you can lose is the premium — so position size is fixed-fractional against that premium: \(n=\big\lfloor (\text{capital}\cdot f)\,/\,(P\cdot M)\big\rfloor\) contracts for a risk fraction \(f\), with a cap on the number of concurrent open straddles. No stop-loss is needed below the premium floor; the option's own convexity is the risk control.</p>
+
+  <h2>The Phase-1 Synthetic Experiment</h2>
+  <p>This model runs without any real options-chain data. In place of quoted marks it uses a synthetic <code>EventVolSurface</code>: a single elevated implied vol before the report (\(\sigma_{\text{pre}}=45\%\)) that crushes to a lower level after (\(\sigma_{\text{post}}=25\%\)), with the invariant \(\sigma_{\text{pre}}>\sigma_{\text{post}}>0\) enforced at construction. The realized move that the straddle actually collects comes from the true underlying bars (yfinance daily); only the volatility it is priced at is synthetic.</p>
+  <p>This buys clarity at the price of tradeability. The experiment can validate the full pipeline end to end — calendar → event selection → straddle construction → frictioned mark-to-market → validation report — and it can show the <em>mechanism</em> by which the crush erodes a long straddle. What it cannot do is measure a real edge: the entry premium and the crush magnitude are assumptions, not market observations, so a profit here would prove nothing and a loss here indicts the assumptions, not the market. The Phase-1 numbers below are therefore framed as a mechanism check, explicitly <em>not tradeable</em>. The real chain (Phase 2/3) is what turns the same code into a tradeable test.</p>
+
+  <h2>Results — the Filter Is Necessary, Not Sufficient</h2>
+  <p>The held-out window is the 502 daily bars of 2023–2024, run over a five-name watchlist (SPY, AAPL, MSFT, AMZN, NVDA). The selection filter admitted exactly one name. SPY and the three large-cap single names were declined: their muted realized earnings histories did not clear the \(k=1.2\) cushion over their implied moves. NVDA — the watchlist's high-volatility name — cleared it, with a forecast move of \(10.4\%\) against an implied move of \(7.5\%\) (threshold \(9.0\%\)), and was traded across its seven in-window earnings events.</p>
+
+  <figure>
+    <img src="../../models/options/03-earnings-straddle-spy/results/equity_curve.png" alt="Equity curves of the filtered and unfiltered earnings-straddle branches on NVDA over 2023–2024, both drifting modestly below the starting capital as the synthetic straddle bleeds against the modelled volatility crush.">
+    <figcaption>Filtered vs. unfiltered straddle equity on NVDA, synthetic Phase-1 surface, 2023–2024. The branches coincide where NVDA cleared the gate (the filter took the same trades the unfiltered branch did); the modest erosion is the synthetic premium-and-crush drag the design predicts for long earnings vol.</figcaption>
+  </figure>
+
+  <div class="table-wrap">
+    <p class="tcap">Earnings-straddle Phase-1 synthetic results, NVDA, seven fired events, 2023–2024 (results/validation.json, metrics.json).</p>
+    <table class="data">
+      <thead><tr><th>Metric</th><th class="r">Value</th><th>Reading</th></tr></thead>
+      <tbody>
+        <tr><td>Trades fired (k-gate)</td><td class="r">7</td><td>only NVDA cleared the filter</td></tr>
+        <tr><td>Win rate</td><td class="r neg">42.9%</td><td>fewer than half the moves beat the premium</td></tr>
+        <tr><td>Profit factor</td><td class="r neg">0.82</td><td>&lt; 1 — gross losses exceed gross wins</td></tr>
+        <tr><td>Expectancy / trade</td><td class="r neg">−$30.79</td><td>avg win $327.77 vs avg loss −$299.70</td></tr>
+        <tr><td>Bootstrap mean P&amp;L p-value</td><td class="r">0.825</td><td>indistinguishable from zero</td></tr>
+        <tr><td>Bootstrap 95% CI</td><td class="r">[−$276, +$250]</td><td>straddles zero — no detectable edge</td></tr>
+        <tr><td>FDR survivors (BH, α=0.05)</td><td class="r neg">0 of 1</td><td>nothing survives multiple-testing control</td></tr>
+        <tr><td>Representative event Sharpe</td><td class="r neg">−0.86</td><td>synthetic, single-event mark</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The honest reading is the one the design anticipated. The selection filter did its job — it refused four of five names and only played the one with a genuinely elevated move history. But on synthetic data that explicitly models the crush, even the admitted trades returned a per-trade expectancy of \(-\$30.79\) and a profit factor below one, and the bootstrap cannot distinguish their mean from zero (\(p=0.825\); the \(95\%\) interval comfortably contains zero). The selection filter is <em>necessary</em> to avoid systematically overpaying for volatility; it is not, by itself, <em>sufficient</em> to extract a positive edge once the premium and the four-legged cost are charged. A strategy that reports this rather than a curve-fit positive is doing exactly what the validation harness exists to enforce.</p>
+
+  <div class="remark"><span class="lab">Result.</span> Long earnings volatility, even gated by a realized-vs-implied selection filter, does not beat the premium on the synthetic Phase-1 surface. The edge — if one exists — must come from a real chain where implied moves are sometimes genuinely mispriced, not from a modelled surface where the crush is assumed. The filter narrows the field correctly; whether the survivors pay is an empirical question only real data can answer.</div>
+
+  <h2>Validation Methodology</h2>
+  <p>Seven trades on a hand-chosen watchlist is the textbook setting for a spurious edge, so the inference is deliberately conservative. Two tools, ported from Poudel's Chapter 4 into the project's validation harness, do the work.</p>
+  <p><b>Centered bootstrap.</b> Earnings P&amp;L is fat-tailed, bimodal (a few large wins, many small losses), and scarce — Student's \(t\) is the wrong instrument. We test \(H_0:\ \mathbb E[\Pi]=0\) by resampling the per-trade P&amp;L with replacement, centering the bootstrap distribution at the null, and reporting the share of resamples whose mean is at least as extreme as observed, smoothed as \((c+1)/(B+1)\). The \(p=0.825\) above says the observed losing mean is well within what pure noise would produce.</p>
+  <p><b>Benjamini–Hochberg FDR.</b> When a watchlist is screened, each name is a hypothesis, and testing many inflates the chance that one looks significant by luck. The Benjamini–Hochberg step-up procedure controls the false-discovery rate: sort the \(p\)-values ascending and reject up to the largest rank \(i\) with \(p_{(i)}\le (i/m)\,\alpha\). Here no name clears it — a guard that, on a real multi-name run, prevents the one lucky ticker from being mistaken for a strategy. The harness also deflates the Sharpe for the number of configurations tried (Bailey &amp; López de Prado, 2014), so a grid search cannot inflate the headline.</p>
+
+  <h2>Scenarios Where the Strategy Can Be Profitable</h2>
+  <p>The Phase-1 loss is not a verdict that the trade can never pay — it is a verdict on the synthetic surface. There are concrete, theory-backed conditions under which a real-chain version of this exact machinery could earn:</p>
+  <ul>
+    <li><b>Systematically underpriced names.</b> Some stocks repeatedly move more on earnings than their options imply — small/mid-caps with thin options markets, names with a history of large surprises, or sectors where market-makers under-price tail events. The filter is built precisely to find these; it just needs a real implied move to compare against, not a synthetic one.</li>
+    <li><b>Regimes where realized earnings vol rises faster than implied.</b> When the market is complacent into a turning point (e.g. an unexpected macro or sector shock landing on an earnings date), implied moves lag the realized ones, and the long straddle's premise — \(R_{\text{event}}>m_{\text{imp}}\) — holds across many names at once.</li>
+    <li><b>Skew and strangle expression.</b> Buying an out-of-the-money strangle instead of the ATM straddle cheapens the premium and pushes the breakevens out, which pays when moves are large and fat-tailed; trading the put/call skew directly targets the asymmetry the straddle ignores.</li>
+    <li><b>The mirror trade.</b> The variance risk premium says the structurally favored side is <em>selling</em> earnings vol, not buying it. A short-straddle or iron-condor variant — capped-risk, harvesting the crush the long side suffers — is the more natural way to monetize the same mechanism, with the selection filter inverted to <em>sell</em> only when the implied move looks rich relative to history. Our long-side result is, in effect, indirect evidence that the short side carries the premium.</li>
+  </ul>
+  <p>In every case the load-bearing requirement is the same: a <em>real</em> implied move to compare the forecast against. That is the entire purpose of the deferred chain loader.</p>
+
+  <h2>What Holds, and What Fails</h2>
+  <p>It is worth stating plainly which parts of the theory the model validates and which parts are fragile.</p>
+  <h3>Valid</h3>
+  <ul>
+    <li><b>The mechanics.</b> ATM straddle construction, the premium-as-implied-move identity \(m_{\text{imp}}=P/S\approx0.8\,\sigma\sqrt T\), the four-legged spread accounting, and defined-risk sizing are all correct and unit-tested.</li>
+    <li><b>The crush is real and dominant.</b> The post-announcement collapse in implied vol is one of the most robust empirical regularities in options (Patell &amp; Wolfson, 1979/1981; Dubinsky et al., 2019). Modelling it is what makes the long-straddle loss appear; ignoring it is how naïve backtests manufacture phantom profits.</li>
+    <li><b>The volatility risk premium.</b> That implied exceeds realized on average, and most at events, is well-documented (Bakshi &amp; Kapadia, 2003; Carr &amp; Wu, 2009). The strategy's average-losing nature is a feature of correct economics, not a bug.</li>
+    <li><b>Selection is the right lever.</b> Conditioning entry on a realized-vs-implied comparison is the theoretically sound response to an average-losing trade — it is the difference between Strategy E's 0.54 Sharpe and a disciplined filter.</li>
+  </ul>
+  <h3>Fragile or unproven</h3>
+  <ul>
+    <li><b>The forecast.</b> The expected move is a mean of the name's past earnings reactions — but earnings <em>surprises</em> have low autocorrelation. Past move magnitude is a weak and unstable predictor of the next one; the filter's central input is its weakest link, and a better forecast (IV term-structure, analyst dispersion, options skew) is the obvious upgrade.</li>
+    <li><b>The synthetic surface.</b> The \(45\%\to25\%\) crush is an assumption. Real pre/post implied vols vary enormously by name and regime; the entire Phase-1 P&amp;L is conditional on numbers no market quoted. This is why the result is labelled not-tradeable.</li>
+    <li><b>Sample size and power.</b> Seven trades on one name yield no statistical power — the \(p=0.825\) is as consistent with a small real edge as with none. Only dozens of names over many seasons would resolve it, which a real calendar and chain make possible.</li>
+    <li><b>Selection of the watchlist itself.</b> Choosing five liquid names is its own data-snooping surface; the honest version screens a broad, point-in-time universe, which is exactly what the FDR control is there to police.</li>
+    <li><b>Costs.</b> The four-legged spread is punishing, and the Phase-1 spread is parametric, not quoted. On illiquid names — the very ones most likely to be mispriced — real spreads can erase the edge the filter finds.</li>
+  </ul>
+
+  <h2>Limitations and Extensions</h2>
+  <p>The phase-1 model is a mechanism, deliberately stripped to what free daily data and a synthetic surface allow. The decisive next step is the real options-chain loader (Phase 2/3): forward-snapshotting end-of-day chains for a liquid-earnings universe so that the implied move and the crush are <em>observed</em>, not assumed, at which point the same signal, sizing, and validation code becomes a tradeable test. Beyond that: replace the historical-move forecast with an IV-term-structure or skew signal; widen the universe to dozens of names so the FDR control has something to control; add the short-premium mirror that the variance risk premium argues is the favored side; snap expiries to listed weeklies and use the parsed BMO/AMC session timing (currently parsed but unused) to place entry and exit around the exact session. The honest summary is that this paper builds the apparatus and proves it works end to end on a synthetic surface — and reports, without flinching, that buying earnings volatility loses to the premium unless a real chain reveals a move the market genuinely under-prices.</p>
+
+  <h2 class="nonum">References</h2>
+  <ol class="references">
+    <li>Poudel, S. (2025). <em>Small-Cap Stock Trading Strategies for Retail Traders.</em> Bachelor's dissertation, Metropolitan State University. SSRN 5921742. (Strategy Family E, the event-volatility strategy this model completes for options.)</li>
+    <li>Patell, J. M. &amp; Wolfson, M. A. (1979, 1981). <em>Anticipated Information Releases Reflected in Call Option Prices; The Ex Ante and Ex Post Price Effects of Quarterly Earnings Announcements.</em> Journal of Accounting Research. (The earnings IV run-up and crush.)</li>
+    <li>Bakshi, G. &amp; Kapadia, N. (2003). <em>Delta-Hedged Gains and the Negative Market Volatility Risk Premium.</em> Review of Financial Studies, 16(2), 527–566.</li>
+    <li>Carr, P. &amp; Wu, L. (2009). <em>Variance Risk Premiums.</em> Review of Financial Studies, 22(3), 1311–1341.</li>
+    <li>Dubinsky, A., Johannes, M., Kaeck, A. &amp; Seeger, N. J. (2019). <em>Option Pricing of Earnings Announcement Risks.</em> Review of Financial Studies, 32(2), 646–687.</li>
+    <li>Efron, B. &amp; Tibshirani, R. J. (1993). <em>An Introduction to the Bootstrap.</em> Chapman &amp; Hall. (The resampling test used for the per-trade mean.)</li>
+    <li>Benjamini, Y. &amp; Hochberg, Y. (1995). <em>Controlling the False Discovery Rate.</em> Journal of the Royal Statistical Society B, 57(1), 289–300.</li>
+    <li>Bailey, D. H. &amp; López de Prado, M. (2014). <em>The Deflated Sharpe Ratio.</em> Journal of Portfolio Management, 40(5), 94–107.</li>
+    <li>Black, F. &amp; Scholes, M. (1973); Merton, R. C. (1973). <em>Option pricing foundations</em> (the BSM pricer both legs are marked on).</li>
+  </ol>
+
+  <div class="footnotes">
+    <ol>
+      <li>The implied-move approximation \(P/S\approx 0.8\,\sigma\sqrt T\) uses \(\sqrt{2/\pi}\approx0.7979\), the ratio of the mean absolute value to the standard deviation of a zero-mean normal; it is the mean-absolute move, deliberately matched to the mean-absolute forecast so the k-gate compares like with like.</li>
+      <li>The synthetic surface marks both legs at \(\sigma_{\text{pre}}=0.45\) before the report and \(\sigma_{\text{post}}=0.25\) after, with \(\sigma_{\text{pre}}>\sigma_{\text{post}}>0\) enforced at construction. These are illustrative, not quoted; the Phase-1 result is conditional on them.</li>
+      <li>Entry/exit are counted in actual price bars (T−3, T+1) around the first bar at or after the earnings datetime, not as business-day offsets, so gapped or holiday-shortened calendars never misplace a leg. The strategy requires the bar schedule up front because the entry bar precedes the earnings bar.</li>
+      <li>The headline metrics.json keys off the default ticker (SPY) when it trades, else the first ticker whose gate fired (here NVDA); full per-ticker detail, the pooled bootstrap, and the FDR result live in validation.json.</li>
+    </ol>
+  </div>
+
+  <nav class="paper-nav"><a href="05-delta-hedged-long-option-spy.html">← Paper V · Delta-Hedging</a><a href="index.html">Index ·</a></nav>
+
+  <footer class="colophon">
+    <p>SOURCE: models/options/03-earnings-straddle-spy/ · REPRODUCE: uv run python models/options/03-earnings-straddle-spy/backtest.py</p>
+    <p>trading-models · working paper · 2026-06-08 · Phase-1 synthetic, not tradeable</p>
+  </footer>
+
+</div>
+</body>
+</html>
