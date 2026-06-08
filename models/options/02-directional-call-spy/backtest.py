@@ -6,6 +6,7 @@ synthetic realized-vol surface without spread, and the surface plus a bid/ask
 spread — so the headline is the P&L gap: the cost of paying real skew and spread
 on a 2w-6mo option trade.
 """
+
 from __future__ import annotations
 
 import json
