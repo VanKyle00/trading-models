@@ -34,9 +34,7 @@ import math  # noqa: F401  (pre-staged for size_contracts in Task 7; see module 
 import pandas as pd
 
 from tradinglib.backtest.options_engine import OptionsEngine
-from tradinglib.options.instruments import (  # noqa: F401  (pre-staged for Task 7 sizing)
-    CONTRACT_MULTIPLIER,
-)
+from tradinglib.options.instruments import CONTRACT_MULTIPLIER
 from tradinglib.options.straddle import atm_straddle_legs
 
 
@@ -106,3 +104,22 @@ class EarningsStraddle:
             if engine.position.legs:
                 engine.close_all_options()
             self.exited_on = t
+
+
+def size_contracts(capital: float, risk_fraction: float, straddle_premium: float) -> float:
+    """Fixed-fractional sizing: contracts = floor(risk_budget / cost_per_contract).
+
+    Long options are defined-risk (max loss = premium paid), so the risk budget
+    is ``capital * risk_fraction`` and per-contract cost is
+    ``straddle_premium * CONTRACT_MULTIPLIER``.
+    """
+    if straddle_premium <= 0:
+        return 0.0
+    budget = capital * risk_fraction
+    cost_per_contract = straddle_premium * CONTRACT_MULTIPLIER
+    return float(int(budget // cost_per_contract))
+
+
+def can_open(open_count: int, max_concurrent: int) -> bool:
+    """Portfolio cap: True iff fewer than ``max_concurrent`` straddles are open."""
+    return open_count < max_concurrent

@@ -132,3 +132,20 @@ def test_straddle_pays_spread_on_both_legs() -> None:
 
     assert frictioned.equity_curve.iloc[-1] < frictionless.equity_curve.iloc[-1]
     assert (frictioned.turnover > 0).sum() >= 2
+
+
+def test_size_contracts_uses_fixed_fraction_of_capital() -> None:
+    # 1% of $100k = $1000 budget; premium $5.00/share * 100 = $500/contract -> 2
+    n = strat.size_contracts(capital=100_000.0, risk_fraction=0.01, straddle_premium=5.0)
+    assert n == 2.0
+
+
+def test_size_contracts_zero_when_premium_exceeds_budget() -> None:
+    n = strat.size_contracts(capital=100_000.0, risk_fraction=0.001, straddle_premium=50.0)
+    assert n == 0.0
+
+
+def test_portfolio_cap_blocks_when_at_capacity() -> None:
+    assert strat.can_open(open_count=2, max_concurrent=2) is False
+    assert strat.can_open(open_count=1, max_concurrent=2) is True
+    assert strat.can_open(open_count=0, max_concurrent=1) is True
