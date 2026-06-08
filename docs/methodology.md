@@ -146,3 +146,19 @@ A model adopts it by writing one `make_signal(train, test, params)` adapter; the
 harness re-optimizes parameters per window and deflates the out-of-sample Sharpe
 by the grid size. See `models/classical/01-sma-crossover-spy/walk_forward.py`
 and `models/ml/01-gbm-next-day-return-spy/walk_forward.py`.
+
+## Realistic options frictions — synthetic vol surface & spread
+
+The options engine prices and fills through a `VolSurface` and a `SpreadModel`
+(`tradinglib/options/surface.py`, `spread.py`) instead of a single constant vol.
+`realistic_surface(prices)` anchors ATM implied vol to the underlying's trailing
+realized vol (× a volatility-risk premium) and overlays parametric skew and term
+structure; `ParametricSpread` fills option legs by crossing a bid/ask that widens
+for out-of-the-money and short-dated contracts. The legacy `vol=` argument is a
+deprecated alias for `surface=FlatSurface(vol)`.
+
+This is a **stress / plausibility model, not a market-calibrated one**: it tests
+whether an edge survives realistic-shaped vol regimes and frictions, not the exact
+historical P&L of a specific contract (which needs real options-chain data). See
+`models/options/02-directional-call-spy/backtest.py` for a frictionless-vs-realistic
+comparison.
