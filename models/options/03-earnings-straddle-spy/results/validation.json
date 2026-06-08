@@ -1,0 +1,71 @@
+{
+  "phase": "1-synthetic-not-tradeable",
+  "per_ticker": {
+    "NVDA": {
+      "implied_move": 0.07510526043842254,
+      "expected_move": 0.10436422769742223,
+      "k": 1.2,
+      "filtered": {
+        "took_trade": true,
+        "metrics": {
+          "annualized_return": -0.0027447986134685465,
+          "sharpe": -0.8622991970884405,
+          "sortino": -0.9069512204400856,
+          "max_drawdown": -0.006672475462698335,
+          "hit_rate": 0.2,
+          "probabilistic_sharpe": 0.03754911092438229,
+          "deflated_sharpe": 0.03754911092438229,
+          "n_bars": 502
+        },
+        "final_equity": 99453.96314103228,
+        "trade_pnl": -546.0368589677237,
+        "implied_move": 0.07510526043842254,
+        "expected_move": 0.10436422769742223
+      },
+      "unfiltered": {
+        "took_trade": true,
+        "metrics": {
+          "annualized_return": -0.0027447986134685465,
+          "sharpe": -0.8622991970884405,
+          "sortino": -0.9069512204400856,
+          "max_drawdown": -0.006672475462698335,
+          "hit_rate": 0.2,
+          "probabilistic_sharpe": 0.03754911092438229,
+          "deflated_sharpe": 0.03754911092438229,
+          "n_bars": 502
+        },
+        "final_equity": 99453.96314103228,
+        "trade_pnl": -546.0368589677237,
+        "implied_move": 0.07510526043842254,
+        "expected_move": 0.10436422769742223
+      }
+    }
+  },
+  "pooled_filtered": {
+    "bootstrap_t_stat": -0.21370948982726928,
+    "bootstrap_ci_lower": -276.2433412021292,
+    "bootstrap_ci_upper": 250.16599271714637,
+    "bootstrap_p_value": 0.8250874562718641
+  },
+  "fdr": {
+    "tickers": [
+      "NVDA"
+    ],
+    "p_values": [
+      0.8250874562718641
+    ],
+    "rejected": [
+      false
+    ],
+    "threshold": 0.0
+  },
+  "trade_metrics": {
+    "n_trades": 7,
+    "win_rate": 0.42857142857142855,
+    "profit_factor": 0.8202321202760127,
+    "expectancy": -30.786667310052767,
+    "avg_win": 327.7661802896425,
+    "avg_loss": -299.7013030098242,
+    "avg_hold": 0.0
+  }
+}
