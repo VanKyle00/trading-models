@@ -15,10 +15,12 @@ import logging
 
 import pandas as pd
 
+from tradinglib.assistant.provider import LLMProvider
 from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.loaders.events.earnings import get_earnings_dates
 from tradinglib.loaders.fundamentals.yfinance import get_fundamental_snapshot
 from tradinglib.loaders.universe.sp500 import get_sp500_constituents
+from tradinglib.scanner.briefs import brief_candidates
 from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.fa_gate import score_fundamentals
 from tradinglib.scanner.rank import rank_candidates
@@ -33,7 +35,7 @@ def _now() -> pd.Timestamp:
     return pd.Timestamp.now("UTC")
 
 
-def run_scan(config: ScanConfig, provider: object | None = None) -> dict:
+def run_scan(config: ScanConfig, provider: LLMProvider | None = None) -> dict:
     """Run the full funnel and return the report-ready result dict."""
     asof = _now()
     start = (asof - pd.Timedelta(days=config.lookback_days)).strftime("%Y-%m-%d")
@@ -103,6 +105,10 @@ def run_scan(config: ScanConfig, provider: object | None = None) -> dict:
             )
         except Exception as exc:
             errors.append({"ticker": ticker, "stage": "bars", "error": str(exc)})
+
+    if provider is not None and not config.skip_llm and candidates:
+        ciks = dict(zip(universe["ticker"], universe["cik"], strict=True))
+        brief_candidates(provider, candidates, ciks=ciks, errors=errors, refresh=config.refresh)
 
     return {
         "asof": asof.strftime("%Y-%m-%d"),

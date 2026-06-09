@@ -144,3 +144,38 @@ def test_run_scan_respects_limit(patched_pipeline) -> None:
     result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, limit=1, skip_llm=True))
 
     assert result["funnel"]["universe"] == 1
+
+
+def test_run_scan_briefs_candidates_when_provider_given(
+    patched_pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict = {}
+
+    def fake_briefs(provider, candidates, *, ciks, errors, refresh=False):
+        seen["ciks"] = ciks
+        for c in candidates:
+            c["qualitative_score"] = 9.0
+            c["stance"] = "favorable"
+            c["brief"] = {"thesis": "good"}
+
+    monkeypatch.setattr(patched_pipeline, "brief_candidates", fake_briefs)
+
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=3), provider=object())
+
+    assert result["candidates"][0]["qualitative_score"] == 9.0
+    assert result["candidates"][0]["brief"]["thesis"] == "good"
+    assert seen["ciks"]["DRIFT"] == 1  # cik map comes from the universe
+
+
+def test_run_scan_skips_briefs_with_skip_llm(
+    patched_pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called = {"n": 0}
+    monkeypatch.setattr(
+        patched_pipeline, "brief_candidates", lambda *a, **k: called.update(n=called["n"] + 1)
+    )
+
+    patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True), provider=object())
+    patched_pipeline.run_scan(ScanConfig(fa_keep=3), provider=None)
+
+    assert called["n"] == 0

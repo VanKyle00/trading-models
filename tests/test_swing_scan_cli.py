@@ -83,3 +83,26 @@ def test_cli_writes_report_and_passes_config(
 
     printed = capsys.readouterr().out
     assert "AAPL" in printed
+
+
+def test_cli_builds_claude_provider_unless_skipped(
+    swing_scan, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tradinglib.assistant.provider as provider_module
+
+    class _StubClaude:
+        pass
+
+    monkeypatch.setattr(provider_module, "ClaudeProvider", _StubClaude)
+
+    seen: dict = {}
+
+    def fake_run_scan(config, provider=None):
+        seen["provider"] = provider
+        return _canned_result()
+
+    monkeypatch.setattr(swing_scan, "run_scan", fake_run_scan)
+
+    swing_scan.main(["--out-dir", str(tmp_path)])
+
+    assert isinstance(seen["provider"], _StubClaude)

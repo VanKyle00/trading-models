@@ -41,7 +41,14 @@ def main(argv: list[str] | None = None) -> int:
         skip_llm=args.skip_llm,
     )
 
-    result = run_scan(config, None)
+    provider = None
+    if not args.skip_llm:
+        # lazy import: --skip-llm runs need neither the anthropic SDK nor a key
+        from tradinglib.assistant.provider import ClaudeProvider
+
+        provider = ClaudeProvider()
+
+    result = run_scan(config, provider)
 
     base = args.out_dir if args.out_dir is not None else processed_dir("scans")
     json_path, md_path = write_report(result, base / result["asof"])
