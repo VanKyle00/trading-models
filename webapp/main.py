@@ -22,6 +22,7 @@ from fastapi.templating import Jinja2Templates
 from tradinglib.assistant import Budget, RateLimiter, run_chat
 from tradinglib.assistant import provider as _assistant_provider
 from tradinglib.service import RequestError, list_specs, model_spec, run, run_to_dict
+from webapp import scans as _scans
 from webapp.charts import build_all
 from webapp.events import events_for_assets
 from webapp.forms import request_from_payload
@@ -206,6 +207,21 @@ def create_app() -> FastAPI:
         events_by_model = {s.id: events_for_assets(s.assets) for s in specs}
         return _TEMPLATES.TemplateResponse(
             request, "index.html", {"specs": specs, "events_by_model": events_by_model}
+        )
+
+    @app.get("/scans", response_class=HTMLResponse)
+    def scans_latest(request: Request) -> HTMLResponse:
+        dates = _scans.list_scan_dates()
+        scan = _scans.load_scan(dates[0]) if dates else None
+        return _TEMPLATES.TemplateResponse(request, "scans.html", {"dates": dates, "scan": scan})
+
+    @app.get("/scans/{scan_date}", response_class=HTMLResponse)
+    def scans_by_date(request: Request, scan_date: str) -> HTMLResponse:
+        scan = _scans.load_scan(scan_date)
+        if scan is None:
+            return HTMLResponse("<p>scan not found</p>", status_code=404)
+        return _TEMPLATES.TemplateResponse(
+            request, "scans.html", {"dates": _scans.list_scan_dates(), "scan": scan}
         )
 
     @app.post("/run", response_class=HTMLResponse)

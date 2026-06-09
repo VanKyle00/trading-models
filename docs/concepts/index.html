@@ -95,10 +95,12 @@
       <div class="facet">
         <span class="flab">Topic</span>
         <button class="chip" data-facet="topic" data-value="microstructure">microstructure</button>
+        <button class="chip" data-facet="topic" data-value="machine-learning">machine-learning</button>
       </div>
       <div class="facet">
         <span class="flab">Level</span>
         <button class="chip" data-facet="level" data-value="foundational">foundational</button>
+        <button class="chip" data-facet="level" data-value="survey">survey</button>
       </div>
       <button class="chip clear" id="clearFilters" hidden>✕ clear filters</button>
     </div>
@@ -131,6 +133,19 @@
       liquidity in a crash. The theory behind Paper III.</p>
       <p class="stat">first-principles primer · companion: Paper III (OFI on BTC) · <b>foundational</b></p>
       <div class="tags"><span>microstructure</span><span>liquidity</span><span>price impact</span><span>foundational</span></div>
+    </a>
+    <a class="toc-item" href="02-jane-street-key-concepts.html"
+       data-topic="machine-learning" data-level="survey" data-order="2"
+       data-title="What Actually Matters in Jane Street's Prediction Problems">
+      <span class="no">CON-02 · Non-stationarity</span>
+      <h3>What Actually Matters in Jane Street's Prediction Problems</h3>
+      <p class="desc">A scraped survey of the winning write-ups from Jane Street's two Kaggle competitions
+      (run on real anonymized trading data) plus the firm's own problem framing, ranking the concepts
+      authors explicitly credit. Adapting to non-stationarity dominates — online learning was worth
+      ~10× more than ensembling in the '24 winner's own ledger — followed by purged time-series CV,
+      autoencoder denoising of low signal-to-noise features, and training on the true objective.</p>
+      <p class="stat">scraped survey · sources: '21 + '24 Kaggle write-ups, Jane Street brief · <b>survey</b></p>
+      <div class="tags"><span>machine-learning</span><span>non-stationarity</span><span>validation</span><span>denoising</span><span>survey</span></div>
     </a>
   </nav>
 
