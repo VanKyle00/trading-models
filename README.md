@@ -12,6 +12,26 @@ metrics. The shared library in `tradinglib/` provides a unified backtest
 engine so every model is measured the same way and the results in the
 table below are directly comparable.
 
+## Key features
+
+- **Unified backtest engine** (`tradinglib.backtest`) — one vectorized core
+  every model runs through, so PnL and metrics are directly comparable across
+  families. Signals are lagged one bar and fill at the **next bar's open** by
+  default (no look-ahead, no overnight-gap capture), with linear bps
+  transaction costs. An event-driven front-end and a dedicated options engine
+  (Greeks, multi-leg payoffs) feed the same core, so a callback-style strategy
+  and a vectorized one are scored identically.
+- **Standardized metrics** — annualized return, Sharpe, Sortino, max drawdown,
+  hit rate, and turnover on every model; assumptions documented in
+  [`docs/methodology.md`](docs/methodology.md).
+- **Negative results are first-class** — hypotheses that the data rejects ship
+  with the same rigor as the winners, inverse direction included.
+- **Our own trained assistant model** — the workbench's chat assistant runs on
+  a provider abstraction that swaps between the Anthropic API and a self-hosted
+  **Qwen2.5-7B** fine-tuned in-house (QLoRA, see below).
+- **Live, deployed workbench** — themed FastAPI UI with Plotly charts,
+  market-event presets, and the grounded LLM console, running on Modal.
+
 ## Live demo
 
 **▶ [Open the workbench →](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run)**
@@ -42,6 +62,39 @@ environment to enable `/api/v1/chat`. The model defaults to Claude Haiku 4.5;
 override with `ASSISTANT_MODEL` (e.g. `claude-sonnet-4-6`). The assistant is a
 bounded agent: it can only list models, read a model's spec, and run backtests —
 no code execution — with per-session token/run caps and per-IP rate limiting.
+
+### Our own trained model
+
+The assistant is built on an `LLMProvider` protocol (`tradinglib/assistant/`),
+so the agent loop never depends on a specific vendor. `ClaudeProvider` is the
+default; `LocalAdapterProvider` serves a **self-hosted Qwen2.5-7B-Instruct**
+fine-tuned in-house — both implement the same interface and drop in with no
+changes to `agent.py` or `tools.py`.
+
+The training track lives under `tradinglib/training/` and `scripts/`:
+
+- **QLoRA fine-tune** — Qwen2.5-7B in 4-bit on a single 16 GB consumer GPU
+  (RTX 5080, WSL2), `r=16`/`alpha=32` LoRA across all attention + MLP
+  projections. Hyperparameters are pinned dataclasses in
+  `tradinglib/training/config.py`.
+- **Grounded SFT dataset** — built from real backtest traces
+  (`scripts/build_dataset.py`, `tradinglib/dataset/`) so the model learns to
+  ground every numeric claim in tool output, matching the bounded-agent
+  contract.
+- **Swap-in serving** — `LocalAdapterProvider` parses Qwen-style
+  `<tool_call>` blocks and speaks the same neutral turn type the agent loop
+  expects; heavy deps (torch/peft/bitsandbytes) are lazily imported so CI stays
+  GPU-free.
+
+Full runbook (install, smoke test, full run) is in
+[`docs/training-assistant.md`](docs/training-assistant.md). Train with:
+
+```bash
+uv sync --extra train
+uv run python scripts/build_dataset.py
+uv run python scripts/train_assistant.py --train data/dataset/train.jsonl \
+    --eval data/dataset/eval.jsonl --out adapters/qwen25-7b-assistant
+```
 
 ### Deploy the workbench
 
@@ -114,7 +167,11 @@ auto-generated from each model's `model.md` frontmatter.
 | `app/` | Streamlit GUI for browsing models + running backtests interactively |
 | `deploy/` | `modal_app.py` — Modal deployment of the workbench (see [`docs/DEPLOY.md`](docs/DEPLOY.md)) |
 | `tradinglib/` | Shared package — data, features, backtest engine, metrics, viz |
+| `tradinglib/backtest/` | Vectorized + event-driven engines, options engine, standardized metrics |
 | `tradinglib/loaders/` | Data loaders, one subpackage per asset class |
+| `tradinglib/assistant/` | Bounded LLM agent loop + provider abstraction (Claude / own Qwen adapter) |
+| `tradinglib/training/` | QLoRA fine-tuning glue + pinned hyperparameter config |
+| `tradinglib/dataset/` | Grounded SFT dataset builder from real backtest traces |
 | `data/ingestion/` | Documentation of each data source |
 | `models/classical/` | Mean reversion, momentum, pairs trading, statistical arbitrage |
 | `models/ml/` | Gradient boosting, LSTMs, transformers |
@@ -186,6 +243,9 @@ from the [research index](https://vankyle00.github.io/trading-models/docs/index.
 
 ## Status
 
-Foundation + two seed models live. The structure is ready to absorb
-additional models in any of the four families — see the roadmap above for
-what's next.
+Six models live across all five families (classical, ML, microstructure,
+options, alt-data), including intentional negative results. The shared
+backtest engine, the deployed FastAPI workbench, and the bounded LLM
+assistant are all in production; the own-trained Qwen2.5-7B provider is the
+active track. The structure is ready to absorb additional models — see the
+roadmap above for what's next.
