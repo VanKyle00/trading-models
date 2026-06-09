@@ -44,8 +44,11 @@ def main(argv: list[str] | None = None) -> int:
     provider = None
     if not args.skip_llm:
         # lazy import: --skip-llm runs need neither the anthropic SDK nor a key
+        from dotenv import load_dotenv
+
         from tradinglib.assistant.provider import ClaudeProvider
 
+        load_dotenv()  # pick up ANTHROPIC_API_KEY from a local .env
         provider = ClaudeProvider()
 
     result = run_scan(config, provider)
