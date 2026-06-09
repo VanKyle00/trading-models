@@ -16,9 +16,11 @@ checked directly and ``signal.passes_filter`` already maps NaN -> gate off.
 
 Timing mirrors ``strategy.py``: the earnings bar is the first bar at/after the
 earnings datetime; entry is ``entry_lead`` bars before it, exit is
-``exit_offset`` bars after it. Expiry selection is *strictly after* the
-earnings datetime: a same-day expiry settles at that day's close, before an
-AMC announcement move is realized, so it cannot capture the event.
+``exit_offset`` bars after it. Expiry selection is *strictly after* the later
+of the earnings datetime and the exit bar: the contract must capture the event
+AND still exist at exit (e.g. earnings Thursday AMC with a Friday weekly expiry
+and a Monday exit — the Friday contract lapses before exit, so the next expiry
+is selected instead).
 
 Fees mirror Phase 1's ``fee_bps=1.0``: each crossing pays fee_bps on its
 notional, so ``fees = (entry_cost + exit_value) * 100 * fee_bps / 1e4``.
@@ -66,11 +68,13 @@ def _load_signal():
 _SIG = _load_signal()
 
 
-def pick_expiry(chain: pd.DataFrame, earnings_datetime: pd.Timestamp) -> pd.Timestamp | None:
-    """Nearest available expiration STRICTLY after the earnings datetime."""
+def pick_expiry(chain: pd.DataFrame, cutoff: pd.Timestamp) -> pd.Timestamp | None:
+    """Nearest available expiration STRICTLY after ``cutoff`` (the later of the
+    earnings datetime and the exit bar — the contract must capture the event AND
+    still exist at exit)."""
     if chain.empty:
         return None
-    after = sorted(e for e in set(chain["expiration"]) if e > earnings_datetime)
+    after = sorted(e for e in set(chain["expiration"]) if e > cutoff)
     return after[0] if after else None
 
 
@@ -159,6 +163,8 @@ def run_event(
     ``close`` must be tz-naive; ``prior_moves`` are abs moves of PRIOR events
     only (leakage discipline is the caller's contract, as in Phase 1).
     """
+    if entry_lead < 1:
+        raise ValueError(f"entry_lead must be >= 1 (entry precedes earnings), got {entry_lead}")
     bars = close.index
     after = bars >= earnings_datetime
     if not after.any():
@@ -176,7 +182,7 @@ def run_event(
     entry_chain = load_chain(ticker, entry_date)
     if entry_chain.empty:
         return {"skip_reason": SKIP_NO_ENTRY_CHAIN}
-    expiry = pick_expiry(entry_chain, earnings_datetime)
+    expiry = pick_expiry(entry_chain, max(earnings_datetime, pd.Timestamp(exit_date)))
     if expiry is None:
         return {"skip_reason": SKIP_NO_EXPIRY}
     strike = pick_atm_strike(entry_chain, expiry, spot)
@@ -227,7 +233,9 @@ def run_event(
 
 
 def gate_pnls(events: list[dict], *, k: float, lookback: int) -> list[float]:
-    """Recompute gate membership from stored rows (pnl is k/lookback-independent)."""
+    """Recompute gate membership from stored rows (pnl is k/lookback-independent).
+    ``lookback`` values above ``_MAX_LOOKBACK`` (20) are effectively capped —
+    stored ``prior_moves`` are trimmed to the last 20."""
     fired: list[float] = []
     for ev in events:
         window = ev["prior_moves"][-lookback:]

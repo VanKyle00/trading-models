@@ -246,3 +246,49 @@ def test_gate_pnls_recomputes_gate_from_stored_rows() -> None:
     assert rc.gate_pnls(events, k=1.2, lookback=8) == [100.0]
     # tighter k excludes everything
     assert rc.gate_pnls(events, k=2.5, lookback=8) == []
+
+
+# ---------- Issue 1: expiry must survive to exit bar ----------
+
+
+def test_run_event_skips_expiry_that_lapses_before_exit() -> None:
+    """Earnings Thu AMC, weekly expiry Fri, exit Mon: the Fri contract cannot be
+    held to exit, so the later expiry must be selected instead."""
+    entry = _chain(
+        [
+            ("2026-03-06", 100, "call", 4.8, 5.0),  # Friday: after earnings, before Mon exit
+            ("2026-03-06", 100, "put", 3.8, 4.0),
+            ("2026-03-13", 100, "call", 4.8, 5.0),
+            ("2026-03-13", 100, "put", 3.8, 4.0),
+        ]
+    )
+    rec = _run(entry, _exit_chain())
+    assert "skip_reason" not in rec
+    assert rec["expiry"] == "2026-03-13"
+
+
+# ---------- Issue 2: NaN exit bids and missing-contract-rows exit skip ----------
+
+
+def test_run_event_nan_exit_bids_are_total_loss_not_skip() -> None:
+    exit_ = _exit_chain()
+    exit_.loc[:, "bid"] = float("nan")  # DoltHub NULL bids arrive as NaN
+    rec = _run(_entry_chain(), exit_)
+    assert "skip_reason" not in rec
+    assert rec["exit_value"] == 0.0
+    assert rec["pnl"] == pytest.approx(-900.09)
+
+
+def test_run_event_skip_exit_chain_missing_contract_rows() -> None:
+    """Exit chain non-empty but lists only a different expiry -> no_exit_chain."""
+    exit_ = _chain([("2026-04-17", 100, "call", 1.0, 1.2), ("2026-04-17", 100, "put", 1.0, 1.2)])
+    rec = _run(_entry_chain(), exit_)
+    assert rec["skip_reason"] == rc.SKIP_NO_EXIT_CHAIN
+
+
+# ---------- Issue 3: entry_lead validation ----------
+
+
+def test_run_event_entry_lead_zero_raises() -> None:
+    with pytest.raises(ValueError, match="entry_lead"):
+        _run(_entry_chain(), _exit_chain(), entry_lead=0)
