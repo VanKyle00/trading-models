@@ -212,7 +212,7 @@ def run_event(
     expirations: the contract traded continuously in reality, but the dataset's
     rolling ~3-expiry visibility window must list it at BOTH marking dates —
     a data-availability workaround, not price lookahead (see module docstring;
-    held tenors shift longer, ~3-4w vs the nominal ~2w, as a result).
+    held tenors shift longer, median ~7.5w (53d) vs the nominal ~2w, as a result).
 
     ``split_factor`` is the cumulative ratio of all splits AFTER the entry date
     (e.g. 20.0 for AMZN before 2022-06-06): ``spot = adjusted_close *
