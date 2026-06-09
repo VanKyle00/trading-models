@@ -164,6 +164,8 @@ def main() -> None:
             "lookback": LOOKBACK,
             "entry_lead": ENTRY_LEAD,
             "exit_offset": EXIT_OFFSET,
+            "entry_snap": 2,
+            "exit_snap": 3,
             "max_spread_frac": MAX_SPREAD_FRAC,
             "fee_bps": FEE_BPS,
         },
