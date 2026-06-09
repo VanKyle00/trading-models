@@ -31,9 +31,10 @@ candidates to expirations present in BOTH the entry chain and the exit chain
 before applying ``pick_expiry``. This is a data-availability workaround for
 MARKING the position at both dates, not price lookahead: it conditions on which
 rows the dataset happens to publish, never on quote values. Side effect, stated
-honestly: the tenor actually held shifts longer (~3-4 weeks) than the nominal
-spec (~2 weeks), because the shared expiration is usually the second-nearest
-slot rather than the rolling front slot.
+honestly: the tenor actually held shifts much longer than the nominal spec
+(~2 weeks) — empirically 16-64 calendar days, median 53 (~7.5 weeks), because
+the shared expiration is usually the far monthly slot rather than the rolling
+front slot.
 
 Split handling: DoltHub strikes/quotes are contemporaneous (never
 retro-adjusted) while the yfinance closes feeding ``run_event`` are fully
