@@ -3,7 +3,7 @@ name: Earnings Event-Vol Straddle on SPY
 family: options
 window: swing
 assets: [equities]
-data_sources: [yfinance_daily_bars, yfinance_earnings_calendar]
+data_sources: [yfinance_daily_bars, yfinance_earnings_calendar, dolthub_option_chains]
 tickers: any
 default_ticker: SPY
 supports_costs: false
@@ -29,12 +29,21 @@ absolute returns) exceeds the move implied by the straddle premium
 post-earnings level, constrained `post_iv < pre_iv`); the realized move comes from real
 yfinance daily bars and `expected_move` from **prior earnings events only** (leakage-free,
 verified). It is **not tradeable** — the IV it is priced at is assumed, not quoted.
+Phase 2 (below) replaces the synthetic surface with **real DoltHub EOD chain quotes**
+for the canonical result; the verdict does not change.
 
 > **Verdict up front.** The thorough backtest does **not** demonstrate a tradeable edge.
 > The naive (unfiltered) long-straddle program loses significantly; the filtered branch is
 > a small, **statistically insignificant** gain whose sign is an **artifact of the assumed
 > synthetic IV**; and the selection filter the model is built around is **mechanically
 > inoperative in Phase 1**. Viability score is at the bottom.
+>
+> **Phase 2 (real chains, quote-to-quote) gives that verdict real-data legs.** On market
+> quotes the unfiltered program loses **−$412.30/event (p = 0.004)** — the VRP/IV-crush
+> headwind measured, not assumed — and the k-gate as designed fired **twice in six
+> years**: it compares a one-day forecast against a multi-week implied move, so it is
+> **structurally mis-tenored** on real data, and its n = 2 filtered branch can support
+> no claim. Status stays `negative-result`.
 
 ## Thorough backtest
 
@@ -165,6 +174,133 @@ exist yet, so this remains a well-built hypothesis, not a strategy. (A short-pre
 "mirror" — selling the rich earnings vol the long side overpays for — is the structurally
 favored expression and the more natural next experiment.)
 
+## Phase 2 — real chain (DoltHub), quote-to-quote
+
+Reproduce: `uv run python scripts/earnings_straddle_real_chain_backtest.py`
+(writes `results/real_chain_backtest.json`; chains cached under
+`data/processed/options/dolthub/` — untracked, rebuilt from the free API on a cold run).
+
+Pricing contains **no model**: entry buys the ATM straddle at the real ask, exit sells
+both legs at the real bid (DoltHub `post-no-preference/options`, EOD quotes). The
+implied move is the real `(call_mid + put_mid) / spot` at entry — **name-specific for
+the first time**, so the decisive Phase-1 blocker (assumed IV) is gone. Expiry is a
+real listed expiration; strikes require both legs quoted; fees 1 bp per crossing;
+spread capped at 20% of mid premium. Same 9 names, same 216 events, same
+`k=1.2, lookback=8` defaults as Phase 1. The run is deterministic: a warm re-run
+reproduces the JSON byte-for-byte (identical SHA256, ~2.7 s), and cached parquets were
+spot-checked against the live API (exact match).
+
+### Headline (113 of 216 events tradeable on real quotes)
+
+| Branch | n | Expectancy | Median | Win | Profit factor | Total P&L | Bootstrap p (H₀: mean = 0) | 95% CI |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| **Unfiltered** (every tradeable event) | 113 | −$412.30 | −$310.22 | 22.1% | 0.36 | **−$46,590** | **0.004** | [−$683, −$169] |
+| **Filtered** (k-gate fired) | 2 | +$3,634.74 | +$3,634.74 | 100% | — (no losers) | +$7,269 | 0.000 — **degenerate** | [+$3,526, +$3,744] |
+
+(Medians computed from the per-event `pnl` values in the JSON's `events` array; at
+n = 2 the filtered "median" is just the midpoint of the two trades.)
+
+- **The unfiltered long-straddle program loses significantly on real quotes**: the CI
+  sits entirely below zero. Phase 1's −$125.65/event (p = 0.052) was a synthetic
+  *understatement* of this headwind.
+- **The filtered branch is two trades** — META 2024-02-01 (+$3,743.97) and NFLX
+  2024-01-23 (+$3,525.52), both winners. The bootstrap p ≈ 0.000 at n = 2 is
+  **degenerate** (resampling two positive numbers can never straddle zero) — **no
+  significance claim of any kind is possible from 2 trades.** FDR is empty: no ticker
+  reached the 2-filtered-trade minimum.
+
+Skip accounting (113 traded + 103 skipped = 216 ✓):
+
+| Reason | n | Note |
+|---|---:|---|
+| `contract_missing_at_exit` | 68 | strike row vanished from the re-sampled exit grid; these stay skipped — we refuse to approximate exit quotes off neighbor strikes |
+| `no_post_earnings_expiry` | 26 | no expiration visible on both entry and exit chains strictly after the event |
+| `no_exit_chain` | 5 | every exit candidate date empty (dataset holes) |
+| `no_entry_chain` | 2 | every entry candidate date empty (TSLA 2020 gaps) |
+| `spread_over_cap` | 2 | straddle spread > 20% of mid premium |
+| `no_quoted_atm`, `strike_grid_mismatch`, `window_out_of_range` | 0 | guards present, never tripped |
+
+### Findings
+
+1. **The structural finding: the k-gate as designed is mis-tenored on real chains — it
+   fired twice in six years (2/113 vs Phase 1's 33/216).** The real implied move is the
+   **full-tenor** straddle cost: the dataset's holdable expirations put the held tenor at
+   16–64 calendar days entry→expiry (median 53; 81 of 113 events at 7–9 weeks), so
+   `implied_move` prices *weeks* of movement (pooled mean 0.125), while `expected_move`
+   forecasts **one earnings day** (mean 0.065, median 0.060). `expected > 1.2 × implied`
+   therefore demands that a single day's forecast move exceed 1.2× a multi-week straddle
+   — which happened exactly twice in six years (META 2024-02-01: expected 0.149 vs
+   implied 0.084; NFLX 2024-01-23: 0.142 vs 0.116), both monster prints that won.
+   Phase 1's ~0.075 synthetic implied accidentally sat low enough to make the gate look
+   operative; on real data the *comparison itself* is structurally mismatched. A
+   tenor-consistent gate (an event-isolated implied move, or a term-structure
+   correction) is the Phase-3 design question.
+
+2. **Implied moves are name-specific now — the decisive Phase-1 blocker is gone.**
+   Mean implied move per ticker:
+
+   | AAPL | AMZN | GOOGL | MSFT | NFLX | META | AMD | NVDA | TSLA |
+   |---:|---:|---:|---:|---:|---:|---:|---:|---:|
+   | 0.0702 | 0.0929 | 0.0976 | 0.0991 | 0.1177 | 0.1262 | 0.1568 | 0.1573 | 0.1763 |
+
+   Quiet names at the bottom, high-vol names at the top — exactly the ordering a real
+   surface should produce. Phase 1's ticker-independent 0.0753–0.0797 band is dead.
+
+3. **The unfiltered loss is broad, not one bad name.** 8 of 9 names lose: MSFT
+   −$512.86/event (p = 0.000), AAPL −$195.84 (p = 0.000), GOOGL −$709.80 (p = 0.043),
+   AMZN −$1,057.55, NFLX −$1,577.01, NVDA −$337.06, TSLA −$325.54, META −$210.14. Only
+   AMD is positive (+$181.99, p = 0.50 — noise). This is the volatility risk premium
+   plus IV crush, now measured on market quotes instead of bundled into a synthetic
+   surface.
+
+4. **The k × lookback sweep is sensitivity, not evidence** — 12 unadjusted looks at the
+   same event pool, no multiple-testing penalty. `n_fired` ranges 0–5; the loosest cell
+   (k = 1.05, lookback = 8) fires 5 times (PF 2.94, p = 0.277); k ≥ 1.5 fires on at most
+   one event. Nothing is remotely significant, and with so few firings nothing could be.
+
+### Dataset constraints (DoltHub `post-no-preference/options`) and mitigations
+
+All discovered empirically during the run; none are hidden in the results:
+
+- **EOD quotes**, with **Mon/Wed/Fri-only coverage before ~Oct 2024** (daily after).
+  Mitigation: entry/exit snap to the nearest covered chain date within a bounded window
+  (entry alternates nearer/farther, never closer than 1 bar before the earnings bar;
+  exit only moves forward). Offsets actually used in this run:
+  `entry_lead_used {3: 95, 2: 17, 4: 1}`, `exit_offset_used {1: 82, 2: 30, 3: 1}` —
+  recorded per event.
+- **Each (date, symbol) lists only ~3 Friday expirations** at tenor-anchored slots
+  (~2w/4w/7w out); the front week is **never** listed, and the visibility window rolls
+  day to day. Mitigation: expiry is chosen from the **intersection** of entry-chain and
+  exit-chain expirations — a workaround for *marking* the position at both dates, **not
+  price lookahead** (the contract traded continuously; the selection conditions only on
+  which rows the dataset publishes, never on quote values). Stated side effect: the held
+  tenor is multi-week (median 53 days) rather than the nominal 2-week spec.
+- **The ~27-strike band is re-sampled daily around spot** and the grid phase can shift,
+  so a strike present at entry can be absent at exit. Mitigation: none possible without
+  fabricating quotes — those 68 events are skipped as `contract_missing_at_exit`.
+- **Strikes are contemporaneous, never retro-adjusted for splits**, while yfinance
+  closes are fully adjusted. Mitigation: an explicit `SPLITS` table in the runner
+  rescales spot to contemporaneous dollars (verified against every cached chain), plus
+  a 15% strike-grid guard that skips any event where the factor could be wrong (it
+  never tripped).
+- **Pre-rename META is keyed under FB.** Mitigation: the loader aliases dates before
+  2022-06-09.
+- **Known holes**: 2024-08-01..06 are empty table-wide; TSLA has 2020 gaps. Mitigation:
+  the 7-reason skip taxonomy, with per-ticker counts in the JSON.
+
+### What would promote it further
+
+- **A tenor-consistent gate on the same data** (Phase 3): isolate the event component
+  of the implied move, or correct the multi-week straddle cost for the term structure,
+  so `expected_move` and `implied_move` price the same horizon — then re-test
+  filtered-vs-unfiltered.
+- **Out-of-sample via the accruing yfinance snapshots**
+  (`scripts/collect_chain_snapshots.py` runs daily; the snapshots are the only true
+  point-in-time OOS data this model will ever have).
+- **The short-premium mirror** (unchanged from Phase 1, now with a measured number):
+  the −$412/event unfiltered bleed is what the short side would have *collected* —
+  before its unmodeled tail and margin risk.
+
 ## Viability: 3 / 10
 
 Scored as a **tradeable strategy**, not as infrastructure.
@@ -179,5 +315,11 @@ Scored as a **tradeable strategy**, not as infrastructure.
   reusable validation scaffolding; and a concrete real-chain path that *could* turn the same
   code into a real test.
 
-The infrastructure would score considerably higher; the **strategy's demonstrated,
-tradeable edge is essentially zero**, which is what this 3/10 reflects.
+Phase 2 does not move the score. Against: the unfiltered loss became **real and
+significant** (−$412.30/event, p = 0.004 on market quotes), and the filter the model is
+built around proved **structurally mis-tenored** on real chains (2 fires in six years —
+no measurable selection edge). For: the decisive Phase-1 blocker (assumed IV) is gone,
+the validation now runs on real quotes end-to-end, and the failure mode is a precise,
+fixable design question (a tenor-consistent gate) rather than an artifact. The
+infrastructure improved; across both phases the **strategy's demonstrated, tradeable
+edge is still essentially zero**, which is what this 3/10 reflects.

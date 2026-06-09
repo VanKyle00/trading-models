@@ -15,6 +15,10 @@ gate fires) against the **unfiltered** branch (trade every event).
 > The thorough backtest (216 events) finds the filtered edge **statistically
 > insignificant** (p = 0.78) and its sign an **artifact of the assumed IV**. Treat
 > "the filter is the alpha" as a hypothesis for the real-chain phase, not a result.
+>
+> **Phase 2 ran that real-chain test** (see below): the unfiltered loss is real and
+> significant (−$412.30/event, p = 0.004), and the gate as designed is **structurally
+> mis-tenored** on real chains — it fired twice in six years. Still `negative-result`.
 
 ## What it tests
 
@@ -59,37 +63,71 @@ earnings). Full per-ticker breakdown and sensitivity tables in
 
 ## Viability: 3 / 10
 
-Scored as a *tradeable strategy*, not as infrastructure. It is short the VRP, the
-selection "alpha" is mechanically un-demonstrable in Phase 1, the edge is
-statistically insignificant and artifact-driven, and it is not tradeable as built
-(synthetic vol, no real chain). It avoids a 1–2 only because the economics are
-sound and honestly reported and the validation scaffolding (leakage-free signal,
-bootstrap, FDR, deflated-Sharpe machinery) is genuinely good, with a concrete
-real-chain path forward. Full rationale at the bottom of [`model.md`](model.md).
+Scored as a *tradeable strategy*, not as infrastructure. Across both phases: it is
+short the VRP (Phase 2 measures the bleed at −$412.30/event on real quotes,
+p = 0.004), the selection "alpha" was mechanically un-demonstrable in Phase 1 and
+structurally mis-tenored in Phase 2 (2 fires in six years), and no statistically
+defensible positive edge exists anywhere. It avoids a 1–2 only because the
+economics are sound and honestly reported, the validation scaffolding (leakage-free
+signal, bootstrap, FDR, deflated-Sharpe machinery) is genuinely good, and the
+failure mode is now a precise, fixable design question. Full rationale at the
+bottom of [`model.md`](model.md).
 
-## Phase 1 is synthetic — NOT yet tradeable
+## Phase 2 — real chain (DoltHub), quote-to-quote
 
-Pricing uses an explicit pre-earnings IV and a parameterized post-earnings crush
-(`EventVolSurface`, constrained `post_iv < pre_iv` so the synthetic premium can
-never be tuned into a fake IV expansion). The **realized** move comes from real
-yfinance daily bars; expected move is computed from **prior earnings events
-only** (no leakage). This mirrors the repo's SP2 synthetic-frictions treatment.
-Real forward chain snapshots (Phase 2, free) and paid chain history (Phase 3)
-are out of scope here.
+Phase 1's pricing was synthetic (`EventVolSurface`, assumed pre/post IV — see the
+caveat above; the Streamlit/GUI path still uses it). Phase 2 replaces it for the
+canonical result: entry buys the ATM straddle at the **real ask**, exit sells at
+the **real bid** (DoltHub `post-no-preference/options`, EOD quotes), and the
+implied move is the real `(call_mid + put_mid)/spot` — name-specific for the
+first time (0.070 AAPL → 0.176 TSLA). 113 of 216 events were tradeable on real
+quotes; every skip is counted. Full write-up in [`model.md`](model.md); canonical
+numbers in `results/real_chain_backtest.json`.
+
+| Branch | n | Expectancy | Median | Win | PF | Total | Bootstrap p |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Unfiltered (every tradeable event) | 113 | −$412.30 | −$310.22 | 22.1% | 0.36 | **−$46,590** | **0.004** |
+| Filtered (k-gate) | 2 | +$3,634.74 | +$3,634.74 | 100% | — | +$7,269 | 0.000 (**degenerate at n = 2**) |
+
+- **The unfiltered loss is real and significant** — the VRP / IV-crush headwind,
+  measured on market quotes instead of assumed.
+- **The k-gate as designed is structurally mis-tenored.** The real implied move
+  prices the full multi-week tenor the dataset's expirations force (median 53
+  calendar days held), while `expected_move` forecasts **one earnings day** — so
+  `expected > 1.2 × implied` fired **twice in six years** (META 2024-02-01 and
+  NFLX 2024-01-23, both winners, +$7,269 total). **No significance claim is
+  possible from 2 trades.** Phase 1's ~0.075 synthetic implied accidentally made
+  the gate look operative (33 fires); the real chain reveals the comparison
+  itself was mismatched. A tenor-consistent gate is the Phase-3 design question.
+
+Reproduce:
+
+```bash
+uv run python scripts/earnings_straddle_real_chain_backtest.py  # quote-to-quote backtest (DoltHub, parquet-cached)
+uv run python scripts/collect_chain_snapshots.py                # daily forward snapshots (accruing OOS data)
+```
 
 ## Deferred (stated, not silently dropped)
 
+- **Tenor-consistent gate (Phase 3)**: the Phase-2 structural finding — compare
+  the one-day `expected_move` against an *event-isolated* implied move (or a
+  term-structure-corrected one) instead of a multi-week straddle cost.
 - **Greeks diagnostics** (vega/theta) from Component 2: the no-trade filters gate
   on implied-move validity, a post-earnings expiry, and the spread cap only —
   they do not require greeks this phase.
-- **Walk-forward across earnings seasons**: the existing `validation/walk_forward`
-  harness is built on the vectorized equity engine and is incompatible with the
-  `OptionsEngine` path this model uses. An options-aware walk-forward is a
-  separate design cycle; the Deflated-Sharpe `n_trials` hook is the future wiring
-  point for a parameter grid.
-- **Listed-expiry snap**: expiry is approximated as `earnings + 14 calendar days`
-  rather than snapped to the nearest listed weekly Friday; the snap arrives with
-  the real chain.
+- **BMO/AMC-aware entry/exit timing**: the earnings session is parsed but unused.
+- **OOS via snapshot accrual / options-aware walk-forward**: the snapshot
+  collector is accumulating the only true point-in-time OOS data; an
+  options-aware walk-forward is a separate design cycle, and the Deflated-Sharpe
+  `n_trials` hook is the future wiring point for a parameter grid.
+- **Short-premium mirror**: the −$412/event unfiltered bleed is what the short
+  side would have collected — before its (unmodeled) tail/margin risk, which the
+  engine cannot yet represent.
+- **Consuming the yfinance snapshots in the backtest**: the collector only
+  accumulates data this cycle; the source switch lands when enough history exists.
+- ~~**Listed-expiry snap**~~ — **done in Phase 2**: expiries are real listed
+  expirations from the chain (the nearest holdable one given the dataset's
+  rolling expiry visibility), not `earnings + 14 calendar days`.
 
 ## Reproduce
 

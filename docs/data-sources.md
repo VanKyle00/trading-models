@@ -30,6 +30,64 @@ Paid / keyed sources are documented as upgrades.
   date in the path, so no future leak). Provider is pluggable behind the
   same schema. See [`data/ingestion/events/README.md`](../data/ingestion/events/README.md).
 
+### DoltHub — historical option chains (`post-no-preference/options`)
+
+- **What**: EOD option-chain quotes (bid/ask/IV per contract) for US single
+  names, from the community DoltHub database via its free SQL API. Drives the
+  earnings-straddle Phase-2 quote-to-quote backtest.
+- **Cost**: Free.
+- **Setup**: None — no API key required.
+- **Loader**: [`tradinglib.loaders.options.dolthub`](../tradinglib/loaders/options/dolthub.py)
+- **Cache**: `data/processed/options/dolthub/<ticker>/<date>.parquet` —
+  untracked (`data/processed/` is gitignored) and fully reproducible from the
+  API; an empty API result caches an empty frame so the miss is remembered.
+- **Query discipline**: every query must filter on exact `date` AND
+  `act_symbol` (the table's PK prefix). Anything else scans a ~1e9-row table
+  and times out (`context deadline exceeded`, observed live 2026-06-09).
+- **Constraints** (all verified empirically against the live API; consumers
+  must handle every one):
+  - EOD quotes only — no intraday.
+  - **Mon/Wed/Fri-only coverage before ~Oct 2024** (Tue/Thu have zero rows
+    table-wide in that era); daily coverage after. Consumers must snap to
+    covered dates (see the bounded snapping in
+    `models/options/03-earnings-straddle-spy/real_chain.py`).
+  - Each (date, symbol) lists only **~3 Friday expirations** at tenor-anchored
+    slots (~2/4/7 weeks out); the front week is **never** listed, and the
+    visibility window rolls day to day.
+  - The **~27-strike band is re-sampled daily** around spot; the grid phase can
+    shift between days, so a strike present one day can be absent the next.
+  - Strikes/quotes are **contemporaneous, never retro-adjusted for splits** —
+    consumers pairing them with adjusted closes need an explicit split table
+    (see `SPLITS` in `scripts/earnings_straddle_real_chain_backtest.py`).
+  - Pre-rename tickers are keyed under the old symbol (META before 2022-06-09
+    is `FB`; the loader aliases this).
+  - Known holes: 2024-08-01..06 are empty table-wide; TSLA has 2020 gaps.
+
+### yfinance — forward option-chain snapshots
+
+- **What**: Point-in-time snapshots of the live chain (per-strike bid/ask/IV,
+  expirations ≤ 45 calendar days out) in the same canonical schema as the
+  DoltHub loader plus a `spot` column, so the backtest can consume either
+  source once enough forward history accrues. Purpose: this is the only true
+  **point-in-time OOS dataset** the earnings straddle will ever have — value
+  accrues with calendar time.
+- **Cost**: Free.
+- **Setup**: None — no API key required.
+- **Loader**: [`tradinglib.loaders.options.yf_chain`](../tradinglib/loaders/options/yf_chain.py);
+  runner: [`scripts/collect_chain_snapshots.py`](../scripts/collect_chain_snapshots.py)
+  (the model's 9-name watchlist).
+- **Cache**: `data/processed/options/yf_snapshots/<ticker>/<snapshot-date>.parquet`,
+  dated in **US Eastern** so an evening UTC run does not stamp tomorrow's date.
+- **Notes**: Idempotent per (ticker, ET day) — an existing file is never
+  re-fetched. Failure semantics (return sentinels): `-1` already snapshotted
+  today (skipped), `-2` fetch failed (nothing written — re-run retries), `0`
+  no expirations in window (nothing written — re-run retries), `> 0` rows
+  written. Suggested cadence: once per trading day in the **16:15–19:59 ET**
+  window — after the options close, comfortably inside the same ET calendar
+  day — so the snapshot is stamped with the trading day it represents.
+  E.g. Windows Task Scheduler:
+  `schtasks /create /tn chain-snapshots /tr "uv run python scripts/collect_chain_snapshots.py" /sc daily /st 16:30`.
+
 ## Planned / not yet wired in
 
 ### Polygon.io — higher-quality equities
