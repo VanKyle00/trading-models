@@ -70,7 +70,11 @@ def _canonicalize(rows: list[dict], ticker: str) -> pd.DataFrame:
 
 
 def _query(sql: str) -> list[dict]:
-    """One SQL query against the DoltHub API; one retry on transient failure."""
+    """One SQL query against the DoltHub API; one retry on transient failure.
+
+    Retries cover httpx errors, non-JSON 200 bodies (JSONDecodeError/ValueError),
+    and query execution errors.
+    """
     last_err: Exception | None = None
     for attempt in range(2):
         try:
@@ -82,7 +86,7 @@ def _query(sql: str) -> list[dict]:
                     f"DoltHub query failed: {payload.get('query_execution_message', 'unknown')}"
                 )
             return payload.get("rows", [])
-        except (httpx.HTTPError, RuntimeError) as err:
+        except (httpx.HTTPError, RuntimeError, ValueError) as err:
             last_err = err
             if attempt == 0:
                 time.sleep(1.0)

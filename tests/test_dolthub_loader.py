@@ -132,3 +132,50 @@ def test_query_error_status_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
     with pytest.raises(RuntimeError, match="context deadline exceeded"):
         dolthub.load_chain("AAPL", "2026-06-06")
+
+
+def test_bad_json_payload_is_retried_then_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.options import dolthub
+
+    monkeypatch.setattr(dolthub, "processed_dir", lambda source: tmp_path / source)
+    monkeypatch.setattr(dolthub.time, "sleep", lambda s: None)
+
+    class _BadJsonResponse:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    responses = [_BadJsonResponse(), _ok(_FAKE_ROWS)]
+
+    def fake_get(url: str, params: dict, timeout: float):
+        return responses.pop(0)
+
+    monkeypatch.setattr(dolthub.httpx, "get", fake_get)
+
+    df = dolthub.load_chain("AAPL", "2026-06-04")
+    assert len(df) == 2  # recovered on the retry
+
+
+def test_bad_json_payload_exhausts_retry_and_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.options import dolthub
+
+    monkeypatch.setattr(dolthub, "processed_dir", lambda source: tmp_path / source)
+    monkeypatch.setattr(dolthub.time, "sleep", lambda s: None)
+
+    class _BadJsonResponse:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    monkeypatch.setattr(dolthub.httpx, "get", lambda url, params, timeout: _BadJsonResponse())
+
+    with pytest.raises(RuntimeError, match="failed after retry"):
+        dolthub.load_chain("AAPL", "2026-06-03")
