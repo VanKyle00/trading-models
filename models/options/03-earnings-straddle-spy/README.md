@@ -29,6 +29,44 @@ gate fires) against the **unfiltered** branch (trade every event).
   P&L plus Benjamini-Hochberg FDR control across the watchlist (so a single
   lucky ticker does not masquerade as edge).
 
+## Results (thorough backtest — 216 events, 9 names, 2020–2026)
+
+Universe: AAPL, AMZN, MSFT, NVDA, TSLA, META, GOOGL, NFLX, AMD (SPY has no
+earnings). Full per-ticker breakdown and sensitivity tables in
+[`model.md`](model.md) and `results/thorough_backtest.json`.
+
+| Branch | n | Expectancy | Median | Win | PF | Total | Bootstrap p |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Unfiltered (every event) | 216 | −$125.65 | −$215.61 | 32.4% | 0.68 | **−$27,140** | 0.052 |
+| Filtered (k-gate) | 33 | +$56.69 | **−$117.35** | 39.4% | 1.15 | +$1,871 | **0.778** |
+
+**Findings:**
+
+- The filter lifts the *relative* numbers, but the filtered edge is
+  **statistically insignificant** (p = 0.78, CI crosses zero) and the unfiltered
+  branch is actually the *more* significant of the two (p = 0.052). The positive
+  filtered mean is a **fat tail** — the median trade loses $117 and two names
+  (META, NFLX) supply the entire positive contribution.
+- **The k-gate is a realized-vol screen, not a mispricing detector** in Phase 1:
+  the synthetic implied move is ticker-independent (~0.075 for every name), so
+  the gate just selects names whose past earnings moves were large.
+- **The result's sign is an artifact of the assumed `pre_iv`** — profit factor
+  swings 4.60 (p = 0.001) → 0.29 as `pre_iv` goes 0.30 → 0.65.
+- **No significant positive edge anywhere.** The only FDR survivor (NVDA) is a
+  significant *loser* (−$391.82, 0/3 wins).
+- Structurally **short the volatility risk premium** — the unfiltered
+  −$125.65/trade bleed is that headwind (≈56% synthetic crush, ≈44% spread).
+
+## Viability: 3 / 10
+
+Scored as a *tradeable strategy*, not as infrastructure. It is short the VRP, the
+selection "alpha" is mechanically un-demonstrable in Phase 1, the edge is
+statistically insignificant and artifact-driven, and it is not tradeable as built
+(synthetic vol, no real chain). It avoids a 1–2 only because the economics are
+sound and honestly reported and the validation scaffolding (leakage-free signal,
+bootstrap, FDR, deflated-Sharpe machinery) is genuinely good, with a concrete
+real-chain path forward. Full rationale at the bottom of [`model.md`](model.md).
+
 ## Phase 1 is synthetic — NOT yet tradeable
 
 Pricing uses an explicit pre-earnings IV and a parameterized post-earnings crush
