@@ -104,10 +104,13 @@ or after the earnings datetime; entry = `entry_lead`(3) bars before it; exit =
    the unchanged `signal.implied_move`.
 3. **Gate:** `signal.expected_move` (prior events only, unchanged) and
    `signal.passes_filter(expected, implied, k)` with default `k=1.2`, `lookback=8`.
-   Chain-tradeability via `signal.tradeable_event` with the straddle's relative
-   spread (`(asks − bids) / mid premium`) capped at `max_spread_frac=0.20` — the
-   value the existing signal tests use; Phase 1 never wired this cap into a backtest,
-   so this is its first live use. The cap is a parameter recorded in run metadata.
+   Chain-tradeability is checked **directly** (spread cap `max_spread_frac=0.20` on
+   `(asks − bids) / mid premium`); `signal.tradeable_event` is deliberately NOT used
+   because it returns False on NaN `expected` (no prior history), which would drop
+   forecast-less events from the *unfiltered* baseline. The gate itself goes through
+   `signal.passes_filter`, which maps NaN → no-fire. Phase 1 never wired this cap
+   into a backtest, so this is its first live use; the cap is a parameter recorded
+   in run metadata.
 4. **Exit chain:** `load_chain(ticker, exit_date)`; the *same* contracts (expiry,
    strike) are valued at `call_bid + put_bid`. A zero exit bid is a **valid
    total-loss outcome** (post-crush worthless leg), not missing data — only absent
@@ -179,3 +182,29 @@ into the real-chain path.
 - All new unit tests pass with the network fully mocked; `uv run pytest` stays green.
 - `model.md` / `README.md` report the real-chain results honestly, including a negative
   result if that is what the data says.
+
+## Post-implementation deviations (2026-06-09)
+
+Discovered against the live dataset during Tasks 3–5; all documented in
+`real_chain.py` docstrings and `model.md`:
+
+- **Intersection expiry selection**: candidates are restricted to expirations listed on
+  BOTH the entry and exit chains, because the dataset's ~3-expiry visibility window
+  rolls daily and the entry-nearest expiry is frequently absent from the exit chain
+  even though the contract traded continuously — a marking workaround, not price
+  lookahead; side effect: held tenor is multi-week (median 53 days) vs the nominal 2w.
+- **Bounded entry/exit date snapping**: before ~Oct 2024 DoltHub carries chains only on
+  Mon/Wed/Fri, so each leg snaps to the nearest covered chain date within a bounded
+  window (entry ±2 bars alternating, exit forward-only +3); actual offsets recorded
+  per event (`entry_lead_used`/`exit_offset_used`).
+- **Split correction + strike-grid guard**: DoltHub strikes are contemporaneous (never
+  retro-adjusted) while yfinance closes are split-adjusted, so an explicit `SPLITS`
+  table rescales spot, and a 15% nearest-strike-vs-spot guard skips events where the
+  factor could be wrong (`strike_grid_mismatch`, never tripped).
+- **META/FB symbol alias**: pre-2022-06-09 chains are keyed under `FB`; the loader
+  queries the contemporaneous symbol and canonicalizes to META.
+- **7-reason skip taxonomy** (vs the spec's 5): live data added
+  `strike_grid_mismatch` (split-factor guard) and `contract_missing_at_exit` (the
+  daily re-sampled ~27-strike band can drop the entry strike from the exit grid —
+  68/216 events, skipped rather than approximated off neighbor strikes; the spec's
+  `no_exit_chain` now means only "every exit candidate date empty").
