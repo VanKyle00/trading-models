@@ -19,5 +19,6 @@ class ScanConfig:
     limit: int | None = None
     refresh: bool = False
     skip_llm: bool = False
+    edgar_enrich: bool = True
     lookback_days: int = 450
     earnings_warn_days: int = 14

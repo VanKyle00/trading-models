@@ -27,6 +27,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--top", type=int, default=15, help="max names in the ranked watchlist")
     parser.add_argument("--refresh", action="store_true", help="bust today's data caches")
     parser.add_argument("--skip-llm", action="store_true", help="stop after setup detection")
+    parser.add_argument(
+        "--skip-edgar", action="store_true", help="skip the EDGAR quarterly-trend gate pass"
+    )
     parser.add_argument("--out-dir", type=Path, default=None, help="report directory")
     return parser.parse_args(argv)
 
@@ -39,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         limit=args.limit,
         refresh=args.refresh,
         skip_llm=args.skip_llm,
+        edgar_enrich=not args.skip_edgar,
     )
 
     provider = None

@@ -104,6 +104,17 @@ def patched_pipeline(monkeypatch: pytest.MonkeyPatch):
                 rows.append({"ticker": t, "earnings_datetime": next_earnings, "session": "amc"})
         return pd.DataFrame(rows, columns=["ticker", "earnings_datetime", "session"])
 
+    trend_calls = {"n": 0}
+
+    def fake_trends(cik, *, refresh=False, client=None):
+        trend_calls["n"] += 1
+        return {
+            "revenue_yoy": 0.10,
+            "revenue_yoy_prev": 0.05,
+            "revenue_accel": 0.05,
+            "eps_change_yoy": 0.2,
+        }
+
     monkeypatch.setattr(pipeline, "get_sp500_constituents", lambda *, refresh=False: _universe())
     monkeypatch.setattr(
         pipeline,
@@ -112,6 +123,8 @@ def patched_pipeline(monkeypatch: pytest.MonkeyPatch):
     )
     monkeypatch.setattr(pipeline, "load_daily", fake_load_daily)
     monkeypatch.setattr(pipeline, "get_earnings_dates", fake_earnings)
+    monkeypatch.setattr(pipeline, "get_quarterly_trends", fake_trends)
+    pipeline._test_trend_calls = trend_calls  # for assertions
     monkeypatch.setattr(
         pipeline, "_now", lambda: pd.Timestamp(_pead_bars("x").index[-1]) + pd.Timedelta(days=1)
     )
@@ -144,6 +157,20 @@ def test_run_scan_respects_limit(patched_pipeline) -> None:
     result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, limit=1, skip_llm=True))
 
     assert result["funnel"]["universe"] == 1
+
+
+def test_run_scan_edgar_enrichment_runs_by_default(patched_pipeline) -> None:
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))
+
+    # one companyfacts fetch per pass-1 survivor (all 3 fixture tickers)
+    assert patched_pipeline._test_trend_calls["n"] == 3
+    assert result["funnel"]["fa_shortlist"] == 3
+
+
+def test_run_scan_skip_edgar_flag(patched_pipeline) -> None:
+    patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True, edgar_enrich=False))
+
+    assert patched_pipeline._test_trend_calls["n"] == 0
 
 
 def test_run_scan_briefs_candidates_when_provider_given(

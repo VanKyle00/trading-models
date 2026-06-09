@@ -18,11 +18,12 @@ import pandas as pd
 from tradinglib.assistant.provider import LLMProvider
 from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.loaders.events.earnings import get_earnings_dates
+from tradinglib.loaders.fundamentals.edgar import get_quarterly_trends
 from tradinglib.loaders.fundamentals.yfinance import get_fundamental_snapshot
 from tradinglib.loaders.universe.sp500 import get_sp500_constituents
 from tradinglib.scanner.briefs import brief_candidates
 from tradinglib.scanner.config import ScanConfig
-from tradinglib.scanner.fa_gate import score_fundamentals
+from tradinglib.scanner.fa_gate import apply_edgar_trends, score_fundamentals
 from tradinglib.scanner.rank import rank_candidates
 from tradinglib.scanner.setups import detect_all
 
@@ -44,11 +45,39 @@ def run_scan(config: ScanConfig, provider: LLMProvider | None = None) -> dict:
     if config.limit is not None:
         universe = universe.head(config.limit)
 
-    fundamentals = get_fundamental_snapshot(universe["ticker"].tolist(), refresh=config.refresh)
-    scored = score_fundamentals(universe, fundamentals, keep=config.fa_keep)
-    shortlist = scored[scored["passed_gate"]]
-
     errors: list[dict] = []
+    ciks = dict(zip(universe["ticker"], universe["cik"], strict=True))
+
+    fundamentals = get_fundamental_snapshot(universe["ticker"].tolist(), refresh=config.refresh)
+    # pass 1 keeps a wider slate when the EDGAR pass will narrow it back down
+    prelim_keep = config.fa_keep * 2 if config.edgar_enrich else config.fa_keep
+    scored = score_fundamentals(universe, fundamentals, keep=prelim_keep)
+
+    if config.edgar_enrich:
+        rows: list[dict] = []
+        for ticker in scored.loc[scored["passed_gate"], "ticker"]:
+            try:
+                rows.append(
+                    {
+                        "ticker": ticker,
+                        **get_quarterly_trends(int(ciks[ticker]), refresh=config.refresh),
+                    }
+                )
+            except Exception as exc:
+                errors.append({"ticker": ticker, "stage": "edgar", "error": str(exc)})
+        trends = pd.DataFrame(
+            rows,
+            columns=[
+                "ticker",
+                "revenue_yoy",
+                "revenue_yoy_prev",
+                "revenue_accel",
+                "eps_change_yoy",
+            ],
+        )
+        scored = apply_edgar_trends(scored, trends, keep=config.fa_keep)
+
+    shortlist = scored[scored["passed_gate"]]
     try:
         benchmark_close = load_daily(_BENCHMARK, start=start)["close"]
     except Exception as exc:  # benchmark is optional context, not a hard dependency
@@ -107,7 +136,6 @@ def run_scan(config: ScanConfig, provider: LLMProvider | None = None) -> dict:
             errors.append({"ticker": ticker, "stage": "bars", "error": str(exc)})
 
     if provider is not None and not config.skip_llm and candidates:
-        ciks = dict(zip(universe["ticker"], universe["cik"], strict=True))
         brief_candidates(provider, candidates, ciks=ciks, errors=errors, refresh=config.refresh)
 
     return {
@@ -117,6 +145,7 @@ def run_scan(config: ScanConfig, provider: LLMProvider | None = None) -> dict:
             "top": config.top,
             "limit": config.limit,
             "skip_llm": config.skip_llm,
+            "edgar_enrich": config.edgar_enrich,
             "lookback_days": config.lookback_days,
             "earnings_warn_days": config.earnings_warn_days,
         },

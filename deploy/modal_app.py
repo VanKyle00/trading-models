@@ -155,3 +155,26 @@ def fastapi_app():
     from webapp.main import app as web_app
 
     return web_app
+
+
+@app.function(
+    image=web_image,
+    volumes={"/app/data": data_volume},
+    secrets=[modal.Secret.from_name("trading-models-secrets")],  # LLM briefs need the key
+    # 22:00 UTC weekdays = 17:00/18:00 ET — after the US close year-round, so
+    # the scan sees the day's final bars. The report lands on the shared data
+    # Volume, which the /scans page in fastapi_app reads.
+    schedule=modal.Cron("0 22 * * 1-5"),
+    timeout=3600,  # ~500 .info fetches + EDGAR + ~15 LLM briefs fits comfortably
+)
+def scheduled_swing_scan() -> None:
+    from tradinglib.assistant.provider import ClaudeProvider
+    from tradinglib.data.paths import processed_dir
+    from tradinglib.scanner.config import ScanConfig
+    from tradinglib.scanner.pipeline import run_scan
+    from tradinglib.scanner.report import write_report
+
+    result = run_scan(ScanConfig(), ClaudeProvider())
+    json_path, _ = write_report(result, processed_dir("scans") / result["asof"])
+    data_volume.commit()  # persist before the container scales down
+    print(f"swing scan {result['asof']}: {result['funnel']} -> {json_path}")

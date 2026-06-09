@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from tradinglib.scanner.fa_gate import score_fundamentals
+from tradinglib.scanner.fa_gate import apply_edgar_trends, score_fundamentals
 
 
 def _universe(tickers: list[str], sectors: list[str]) -> pd.DataFrame:
@@ -122,6 +122,65 @@ def test_nonpositive_revenue_fails_gate() -> None:
 
     assert bool(out.loc["OK", "passed_gate"])
     assert not bool(out.loc["NOREV", "passed_gate"])
+
+
+def _trends(rows: dict[str, dict]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [{"ticker": t, **vals} for t, vals in rows.items()],
+        columns=["ticker", "revenue_yoy", "revenue_yoy_prev", "revenue_accel", "eps_change_yoy"],
+    )
+
+
+def test_edgar_trends_rerank_the_gate() -> None:
+    # YF metrics put A barely ahead of B; B's accelerating revenue and EPS
+    # momentum from EDGAR must overtake A in the blended score.
+    uni = _universe(["A", "B"], ["Tech", "Tech"])
+    fnd = _fundamentals({"A": {"revenue_growth": 0.12}, "B": {"revenue_growth": 0.11}})
+    scored = score_fundamentals(uni, fnd, keep=2)
+    trends = _trends(
+        {
+            "A": {"revenue_yoy": 0.02, "revenue_accel": -0.05, "eps_change_yoy": -0.2},
+            "B": {"revenue_yoy": 0.30, "revenue_accel": 0.10, "eps_change_yoy": 0.5},
+        }
+    )
+
+    out = apply_edgar_trends(scored, trends, keep=1).set_index("ticker")
+
+    assert out.loc["B", "fa_score"] > out.loc["A", "fa_score"]
+    assert bool(out.loc["B", "passed_gate"])
+    assert not bool(out.loc["A", "passed_gate"])
+
+
+def test_edgar_trends_missing_ticker_keeps_yf_score() -> None:
+    uni = _universe(["A", "B"], ["Tech", "Tech"])
+    fnd = _fundamentals({"A": {}, "B": {}})
+    scored = score_fundamentals(uni, fnd, keep=2)
+    before = scored.set_index("ticker").loc["A", "fa_score"]
+
+    out = apply_edgar_trends(scored, _trends({"B": {"revenue_yoy": 0.2}}), keep=2)
+    out = out.set_index("ticker")
+
+    assert out.loc["A", "fa_score"] == before  # no EDGAR data -> unblended
+    assert bool(out.loc["A", "passed_gate"])  # still ranked, not dropped
+
+
+def test_edgar_trends_only_reranks_pass_one_survivors() -> None:
+    uni = _universe(["A", "B", "C"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "A": {"revenue_growth": 0.30},
+            "B": {"revenue_growth": 0.20},
+            "C": {"total_revenue": 0.0},  # hard-filtered in pass 1
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=3)
+
+    out = apply_edgar_trends(
+        scored, _trends({"C": {"revenue_yoy": 9.9, "revenue_accel": 9.9}}), keep=2
+    ).set_index("ticker")
+
+    assert not bool(out.loc["C", "passed_gate"])  # great EDGAR data can't resurrect it
+    assert out["passed_gate"].sum() == 2
 
 
 def test_missing_metric_does_not_zero_the_score() -> None:
