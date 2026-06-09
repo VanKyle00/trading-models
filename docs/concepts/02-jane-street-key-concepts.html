@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What Actually Matters — Jane Street Model Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,600;9..144,900&family=IBM+Plex+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0b1220;
+    --panel: #111a2c;
+    --panel-2: #0e1626;
+    --line: #21314e;
+    --paper: #e8e3d5;
+    --dim: #8d99b2;
+    --amber: #f5b83d;
+    --cyan: #57c7e3;
+    --jsblue: #008abc;
+    --red: #e06c5b;
+    --green: #6fbf8b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(0,138,188,.14), transparent 60%),
+      radial-gradient(900px 500px at -10% 30%, rgba(245,184,61,.07), transparent 55%),
+      var(--ink);
+    color: var(--paper);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 300;
+    line-height: 1.55;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 80%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1060px; margin: 0 auto; padding: 56px 28px 80px; }
+
+  header { border-bottom: 1px solid var(--line); padding-bottom: 34px; margin-bottom: 44px; }
+  .kicker {
+    color: var(--amber); letter-spacing: .28em; text-transform: uppercase;
+    font-size: 11px; font-weight: 600; margin-bottom: 18px;
+  }
+  .kicker::before { content: "▮▮ "; color: var(--jsblue); }
+  h1 {
+    font-family: "Fraunces", serif; font-weight: 900; font-size: clamp(34px, 5.4vw, 58px);
+    line-height: 1.04; letter-spacing: -.01em; max-width: 18ch;
+  }
+  h1 em { font-style: italic; font-weight: 300; color: var(--cyan); }
+  .standfirst { margin-top: 20px; max-width: 70ch; color: var(--dim); font-size: 14px; }
+  .standfirst b { color: var(--paper); font-weight: 600; }
+  .meta { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 22px; font-size: 11px; color: var(--dim); letter-spacing: .08em; }
+  .meta span b { color: var(--amber); font-weight: 600; }
+
+  section { margin-bottom: 60px; }
+  h2 {
+    font-family: "Fraunces", serif; font-weight: 600; font-size: 27px; margin-bottom: 6px;
+  }
+  h2 .no { color: var(--jsblue); font-feature-settings: "tnum"; margin-right: 10px; }
+  .sub { color: var(--dim); font-size: 12.5px; margin-bottom: 22px; max-width: 80ch; }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line); border-radius: 6px; padding: 26px 22px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.35);
+  }
+  svg text { font-family: "IBM Plex Mono", monospace; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+    border-radius: 4px; padding: 18px 18px 16px; position: relative;
+  }
+  .card.cyan { border-left-color: var(--cyan); }
+  .card.blue { border-left-color: var(--jsblue); }
+  .card .who { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+  .card .who b { color: var(--paper); font-weight: 600; }
+  .card blockquote { font-family: "Fraunces", serif; font-size: 16.5px; font-weight: 300; font-style: italic; line-height: 1.45; }
+  .card .tag { margin-top: 12px; font-size: 11px; color: var(--amber); }
+  .card.cyan .tag { color: var(--cyan); }
+  .card.blue .tag { color: var(--jsblue); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; color: var(--dim); font-weight: 400; letter-spacing: .1em; text-transform: uppercase; font-size: 10.5px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px; border-bottom: 1px solid rgba(33,49,78,.55); vertical-align: top; }
+  td a { color: var(--cyan); text-decoration: none; border-bottom: 1px dotted rgba(87,199,227,.5); }
+  td a:hover { color: var(--amber); border-color: var(--amber); }
+  .rk { color: var(--amber); font-weight: 600; white-space: nowrap; }
+
+  footer { border-top: 1px solid var(--line); padding-top: 20px; color: var(--dim); font-size: 11px; max-width: 86ch; }
+  footer b { color: var(--paper); }
+
+  @media (max-width: 720px) { .wrap { padding: 36px 14px 60px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Research note · trading-models desk</div>
+  <h1>What actually matters in <em>Jane Street’s</em> prediction problems</h1>
+  <p class="standfirst">
+    Jane Street doesn’t publish its internal models — the closest public artifacts are its two Kaggle
+    competitions built on <b>real (anonymized) production trading data</b>, the winning write-ups, and the firm’s own
+    framing of the problem. We scraped those sources and ranked the concepts that authors
+    <b>explicitly state</b> were the most important to performance.
+  </p>
+  <div class="meta">
+    <span>SOURCES <b>6</b></span>
+    <span>COMPETITIONS <b>2</b> (2020–21, 2024–25)</span>
+    <span>TEAMS COVERED <b>~8,000</b></span>
+    <span>COMPILED <b>2026-06-09</b></span>
+  </div>
+</header>
+
+<!-- ===================== 1. RANKED BAR CHART ===================== -->
+<section>
+  <h2><span class="no">01</span>Concept ranking — stated importance across write-ups</h2>
+  <p class="sub">
+    Emphasis index: 3 pts when a source explicitly calls the concept “most important / biggest gain,”
+    1 pt when it is used and credited as material. Normalized to 10. Chips mark which sources cite it:
+    <b style="color:var(--jsblue)">JS</b> = Jane Street’s own framing ·
+    <b style="color:var(--amber)">’21</b> = Market Prediction top write-ups ·
+    <b style="color:var(--cyan)">’24</b> = Real-Time Forecasting write-ups ·
+    <b style="color:var(--green)">MLC</b> = ML Contests 2025 meta-review.
+  </p>
+  <div class="panel">
+  <svg viewBox="0 0 980 560" role="img" aria-label="Bar chart ranking concepts by stated importance">
+    <defs>
+      <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#f5b83d"/><stop offset="1" stop-color="#c97f1e"/>
+      </linearGradient>
+      <linearGradient id="bar2" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#57c7e3"/><stop offset="1" stop-color="#2a7f9c"/>
+      </linearGradient>
+    </defs>
+    <!-- gridlines -->
+    <g stroke="#21314e" stroke-dasharray="2 4">
+      <line x1="330" y1="14" x2="330" y2="520"/><line x1="475" y1="14" x2="475" y2="520"/>
+      <line x1="620" y1="14" x2="620" y2="520"/><line x1="765" y1="14" x2="765" y2="520"/>
+      <line x1="910" y1="14" x2="910" y2="520"/>
+    </g>
+    <g fill="#8d99b2" font-size="10">
+      <text x="330" y="540" text-anchor="middle">2.5</text>
+      <text x="475" y="540" text-anchor="middle">5.0</text>
+      <text x="620" y="540" text-anchor="middle">7.5</text>
+      <text x="765" y="540" text-anchor="middle">10</text>
+      <text x="910" y="540" text-anchor="middle">cited by</text>
+    </g>
+
+    <!-- rows: y step 56, bar h 26, x0=185, scale 58px per point -->
+    <!-- 1 Adapt to non-stationarity 10 -->
+    <g>
+      <text x="178" y="36" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">Adapt to non-stationarity</text>
+      <text x="178" y="50" text-anchor="end" fill="#8d99b2" font-size="10">online learning · regime switching</text>
+      <rect x="185" y="24" width="580" height="26" rx="2" fill="url(#bar)"/>
+      <text x="773" y="42" fill="#f5b83d" font-size="12" font-weight="600">10.0</text>
+      <text x="910" y="42" text-anchor="middle" font-size="10"><tspan fill="#008abc">JS </tspan><tspan fill="#f5b83d">’21 </tspan><tspan fill="#57c7e3">’24</tspan></text>
+    </g>
+    <!-- 2 Purged time-series CV 8.5 -->
+    <g>
+      <text x="178" y="92" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">Overfitting control</text>
+      <text x="178" y="106" text-anchor="end" fill="#8d99b2" font-size="10">purged / embargoed time-series CV</text>
+      <rect x="185" y="80" width="493" height="26" rx="2" fill="url(#bar)"/>
+      <text x="686" y="98" fill="#f5b83d" font-size="12" font-weight="600">8.5</text>
+      <text x="910" y="98" text-anchor="middle" font-size="10"><tspan fill="#008abc">JS </tspan><tspan fill="#f5b83d">’21 </tspan><tspan fill="#57c7e3">’24</tspan></text>
+    </g>
+    <!-- 3 Denoising 8 -->
+    <g>
+      <text x="178" y="148" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">Denoise low signal-to-noise</text>
+      <text x="178" y="162" text-anchor="end" fill="#8d99b2" font-size="10">supervised autoencoder · noise aug</text>
+      <rect x="185" y="136" width="464" height="26" rx="2" fill="url(#bar)"/>
+      <text x="657" y="154" fill="#f5b83d" font-size="12" font-weight="600">8.0</text>
+      <text x="910" y="154" text-anchor="middle" font-size="10"><tspan fill="#008abc">JS </tspan><tspan fill="#f5b83d">’21</tspan></text>
+    </g>
+    <!-- 4 True objective 6.5 -->
+    <g>
+      <text x="178" y="204" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">Train on the true objective</text>
+      <text x="178" y="218" text-anchor="end" fill="#8d99b2" font-size="10">utility regularizer · sample weights</text>
+      <rect x="185" y="192" width="377" height="26" rx="2" fill="url(#bar)"/>
+      <text x="570" y="210" fill="#f5b83d" font-size="12" font-weight="600">6.5</text>
+      <text x="910" y="210" text-anchor="middle" font-size="10"><tspan fill="#f5b83d">’21</tspan></text>
+    </g>
+    <!-- 5 Ensembling 6 -->
+    <g>
+      <text x="178" y="260" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">Ensembling</text>
+      <text x="178" y="274" text-anchor="end" fill="#8d99b2" font-size="10">seeds × architectures · median blends</text>
+      <rect x="185" y="248" width="348" height="26" rx="2" fill="url(#bar)"/>
+      <text x="541" y="266" fill="#f5b83d" font-size="12" font-weight="600">6.0</text>
+      <text x="910" y="266" text-anchor="middle" font-size="10"><tspan fill="#f5b83d">’21 </tspan><tspan fill="#57c7e3">’24 </tspan><tspan fill="#6fbf8b">MLC</tspan></text>
+    </g>
+    <!-- 6 Aux targets 4.5 -->
+    <g>
+      <text x="178" y="316" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">Multi-task auxiliary targets</text>
+      <text x="178" y="330" text-anchor="end" fill="#8d99b2" font-size="10">predict several responders at once</text>
+      <rect x="185" y="304" width="261" height="26" rx="2" fill="url(#bar2)"/>
+      <text x="454" y="322" fill="#57c7e3" font-size="12" font-weight="600">4.5</text>
+      <text x="910" y="322" text-anchor="middle" font-size="10"><tspan fill="#f5b83d">’21 </tspan><tspan fill="#57c7e3">’24</tspan></text>
+    </g>
+    <!-- 7 Context features 4 -->
+    <g>
+      <text x="178" y="372" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">Context features</text>
+      <text x="178" y="386" text-anchor="end" fill="#8d99b2" font-size="10">lags · market averages · rolling stats</text>
+      <rect x="185" y="360" width="232" height="26" rx="2" fill="url(#bar2)"/>
+      <text x="425" y="378" fill="#57c7e3" font-size="12" font-weight="600">4.0</text>
+      <text x="910" y="378" text-anchor="middle" font-size="10"><tspan fill="#57c7e3">’24</tspan></text>
+    </g>
+    <!-- 8 NN+GBDT 3.5 -->
+    <g>
+      <text x="178" y="428" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">NN sequence models (+GBDT)</text>
+      <text x="178" y="442" text-anchor="end" fill="#8d99b2" font-size="10">GRU / MLP won; GBDT in blends</text>
+      <rect x="185" y="416" width="203" height="26" rx="2" fill="url(#bar2)"/>
+      <text x="396" y="434" fill="#57c7e3" font-size="12" font-weight="600">3.5</text>
+      <text x="910" y="434" text-anchor="middle" font-size="10"><tspan fill="#f5b83d">’21 </tspan><tspan fill="#57c7e3">’24 </tspan><tspan fill="#6fbf8b">MLC</tspan></text>
+    </g>
+    <!-- 9 Real-time 2.5 -->
+    <g>
+      <text x="178" y="484" text-anchor="end" fill="#e8e3d5" font-size="12.5" font-weight="600">Real-time inference budget</text>
+      <text x="178" y="498" text-anchor="end" fill="#8d99b2" font-size="10">latency shapes model size</text>
+      <rect x="185" y="472" width="145" height="26" rx="2" fill="url(#bar2)"/>
+      <text x="338" y="490" fill="#57c7e3" font-size="12" font-weight="600">2.5</text>
+      <text x="910" y="490" text-anchor="middle" font-size="10"><tspan fill="#008abc">JS </tspan><tspan fill="#f5b83d">’21</tspan></text>
+    </g>
+  </svg>
+  </div>
+</section>
+
+<!-- ===================== 2. CONCEPT MAP ===================== -->
+<section>
+  <h2><span class="no">02</span>Challenge → technique map</h2>
+  <p class="sub">
+    Jane Street states four structural challenges in its competition briefs. Every top write-up is,
+    in effect, an answer to one or more of them.
+  </p>
+  <div class="panel">
+  <svg viewBox="0 0 980 470" role="img" aria-label="Concept map linking stated challenges to winning techniques">
+    <defs>
+      <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L8,4 L0,8 z" fill="#3d557f"/>
+      </marker>
+    </defs>
+    <text x="120" y="28" fill="#8d99b2" font-size="11" letter-spacing="3">STATED CHALLENGE (JANE STREET)</text>
+    <text x="640" y="28" fill="#8d99b2" font-size="11" letter-spacing="3">WINNING RESPONSE (WRITE-UPS)</text>
+
+    <!-- challenge boxes -->
+    <g font-size="12.5">
+      <rect x="60" y="55"  width="300" height="74" rx="4" fill="#0e1626" stroke="#008abc"/>
+      <text x="80" y="86" fill="#e8e3d5" font-weight="600">Non-stationarity</text>
+      <text x="80" y="106" fill="#8d99b2" font-size="11">“feature–response relationships</text>
+      <text x="80" y="120" fill="#8d99b2" font-size="11">are constantly changing”</text>
+
+      <rect x="60" y="160" width="300" height="74" rx="4" fill="#0e1626" stroke="#008abc"/>
+      <text x="80" y="191" fill="#e8e3d5" font-weight="600">Low signal-to-noise</text>
+      <text x="80" y="211" fill="#8d99b2" font-size="11">weak signal, heavy noise,</text>
+      <text x="80" y="225" fill="#8d99b2" font-size="11">multicollinear features, fat tails</text>
+
+      <rect x="60" y="265" width="300" height="74" rx="4" fill="#0e1626" stroke="#008abc"/>
+      <text x="80" y="296" fill="#e8e3d5" font-weight="600">Easy to overfit history</text>
+      <text x="80" y="316" fill="#8d99b2" font-size="11">“a strategy that worked in the past</text>
+      <text x="80" y="330" fill="#8d99b2" font-size="11">is unlikely to keep working”</text>
+
+      <rect x="60" y="370" width="300" height="74" rx="4" fill="#0e1626" stroke="#008abc"/>
+      <text x="80" y="401" fill="#e8e3d5" font-weight="600">Real-time decisions</text>
+      <text x="80" y="421" fill="#8d99b2" font-size="11">predictions scored one-at-a-time</text>
+      <text x="80" y="435" fill="#8d99b2" font-size="11">under a latency budget</text>
+    </g>
+
+    <!-- technique boxes -->
+    <g font-size="12.5">
+      <rect x="580" y="48"  width="340" height="50" rx="4" fill="#16233c" stroke="#f5b83d"/>
+      <text x="600" y="69" fill="#f5b83d" font-weight="600">Online learning</text>
+      <text x="600" y="86" fill="#8d99b2" font-size="11">daily one-day refits — biggest single gain in ’24</text>
+
+      <rect x="580" y="112" width="340" height="50" rx="4" fill="#16233c" stroke="#f5b83d"/>
+      <text x="600" y="133" fill="#f5b83d" font-weight="600">Regime-aware models + recency weighting</text>
+      <text x="600" y="150" fill="#8d99b2" font-size="11">switch models on volatility; weight recent days</text>
+
+      <rect x="580" y="176" width="340" height="50" rx="4" fill="#16233c" stroke="#57c7e3"/>
+      <text x="600" y="197" fill="#57c7e3" font-weight="600">Supervised autoencoder denoising</text>
+      <text x="600" y="214" fill="#8d99b2" font-size="11">bottleneck features + Gaussian-noise aug — won ’21</text>
+
+      <rect x="580" y="240" width="340" height="50" rx="4" fill="#16233c" stroke="#57c7e3"/>
+      <text x="600" y="261" fill="#57c7e3" font-weight="600">Multi-task targets + ensembles</text>
+      <text x="600" y="278" fill="#8d99b2" font-size="11">several responders; average seeds & architectures</text>
+
+      <rect x="580" y="304" width="340" height="50" rx="4" fill="#16233c" stroke="#6fbf8b"/>
+      <text x="600" y="325" fill="#6fbf8b" font-weight="600">Purged time-series CV + true-objective loss</text>
+      <text x="600" y="342" fill="#8d99b2" font-size="11">PurgedGroupTimeSeriesSplit; utility-metric finetuning</text>
+
+      <rect x="580" y="382" width="340" height="50" rx="4" fill="#16233c" stroke="#e06c5b"/>
+      <text x="600" y="403" fill="#e06c5b" font-weight="600">Small, fast networks</text>
+      <text x="600" y="420" fill="#8d99b2" font-size="11">300–400k-param MLPs sized for the inference loop</text>
+    </g>
+
+    <!-- links -->
+    <g fill="none" stroke="#3d557f" stroke-width="1.4" marker-end="url(#arr)">
+      <path d="M360,92  C470,80 470,73 576,73"/>
+      <path d="M360,92  C470,110 470,137 576,137"/>
+      <path d="M360,197 C470,197 470,201 576,201"/>
+      <path d="M360,197 C470,230 470,265 576,265"/>
+      <path d="M360,302 C470,310 470,329 576,329"/>
+      <path d="M360,302 C460,290 480,270 576,265" stroke-dasharray="3 4"/>
+      <path d="M360,407 C470,407 470,407 576,407"/>
+    </g>
+  </svg>
+  </div>
+</section>
+
+<!-- ===================== 3. IN THEIR OWN WORDS ===================== -->
+<section>
+  <h2><span class="no">03</span>In their own words</h2>
+  <p class="sub">What each source explicitly singled out as the thing that mattered.</p>
+  <div class="cards">
+    <div class="card blue">
+      <div class="who"><b>Jane Street</b> · competition brief</div>
+      <blockquote>“A strategy that works well with past data is unlikely to do so in the future… the relationship of the features with the response is constantly changing.”</blockquote>
+      <div class="tag">→ non-stationarity is the named enemy</div>
+    </div>
+    <div class="card">
+      <div class="who"><b>Yirun Zhang</b> · 1st place, ’21 Market Prediction</div>
+      <blockquote>Supervised autoencoder trained jointly with the MLP — bottleneck features reject “random relations”; Gaussian-noise augmentation and sample weights credited with the score boost.</blockquote>
+      <div class="tag">→ denoising + true-objective weighting won it</div>
+    </div>
+    <div class="card">
+      <div class="who"><b>scaomath</b> · top 6%, ’21 Market Prediction</div>
+      <blockquote>Most important: a utility-function regularizer (train on the metric you’re paid on), dynamic model selection for volatile vs. calm days, and median-of-middle-60% ensemble blending.</blockquote>
+      <div class="tag">→ objective alignment + regime switching</div>
+    </div>
+    <div class="card cyan">
+      <div class="who"><b>E. Volkova</b> · ’24 Real-Time Forecasting</div>
+      <blockquote>“This approach [online learning] significantly improved the model’s performance on CV (+0.008)… one-day updates for almost a year is enough.” Ensembling added only +0.0007.</blockquote>
+      <div class="tag">→ adaptation beat ensembling ~10:1</div>
+    </div>
+    <div class="card cyan">
+      <div class="who"><b>GRU + auxiliary targets</b> · ’24 Real-Time Forecasting</div>
+      <blockquote>Time-series GRU over each day’s sequence, four auxiliary responders (multi-task), market-average and rolling-window features, strict time-series CV with a 200-date holdout.</blockquote>
+      <div class="tag">→ sequence context + multi-task learning</div>
+    </div>
+    <div class="card blue">
+      <div class="who"><b>ML Contests</b> · 2025 meta-review</div>
+      <blockquote>“GBDTs remain the go-to tabular winner’s tool, sometimes as part of an ensemble alongside neural nets” — yet both Jane Street competitions were won by neural networks.</blockquote>
+      <div class="tag">→ JS data is the exception that proves NNs</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. GAIN ATTRIBUTION ===================== -->
+<section>
+  <h2><span class="no">04</span>Where the score actually came from — ’24 winner’s ledger</h2>
+  <p class="sub">
+    The only top write-up that publishes a component-by-component attribution (CV/LB deltas, same scale).
+    Note the shape: adaptation dwarfs everything else.
+  </p>
+  <div class="panel">
+  <svg viewBox="0 0 980 240" role="img" aria-label="Waterfall of score contributions in the 2024 solution">
+    <g stroke="#21314e" stroke-dasharray="2 4">
+      <line x1="60" y1="190" x2="930" y2="190"/>
+    </g>
+    <!-- bars: scale 60px per +0.001 -->
+    <rect x="90"  y="190" width="120" height="0" fill="none"/>
+    <g>
+      <rect x="100" y="40"  width="130" height="150" fill="#f5b83d" opacity=".92" rx="2"/>
+      <text x="165" y="30"  text-anchor="middle" fill="#f5b83d" font-size="13" font-weight="600">+0.0080</text>
+      <text x="165" y="212" text-anchor="middle" fill="#e8e3d5" font-size="11.5">online learning</text>
+      <text x="165" y="227" text-anchor="middle" fill="#8d99b2" font-size="10">daily refits</text>
+    </g>
+    <g>
+      <rect x="320" y="134" width="130" height="56" fill="#57c7e3" opacity=".9" rx="2"/>
+      <text x="385" y="124" text-anchor="middle" fill="#57c7e3" font-size="13" font-weight="600">~+0.0030</text>
+      <text x="385" y="212" text-anchor="middle" fill="#e8e3d5" font-size="11.5">feature work</text>
+      <text x="385" y="227" text-anchor="middle" fill="#8d99b2" font-size="10">mkt averages · rolling · lags</text>
+    </g>
+    <g>
+      <rect x="540" y="153" width="130" height="37" fill="#57c7e3" opacity=".75" rx="2"/>
+      <text x="605" y="143" text-anchor="middle" fill="#57c7e3" font-size="13" font-weight="600">~+0.0020</text>
+      <text x="605" y="212" text-anchor="middle" fill="#e8e3d5" font-size="11.5">aux targets</text>
+      <text x="605" y="227" text-anchor="middle" fill="#8d99b2" font-size="10">multi-task responders</text>
+    </g>
+    <g>
+      <rect x="760" y="186" width="130" height="4" fill="#6fbf8b" rx="2"/>
+      <text x="825" y="176" text-anchor="middle" fill="#6fbf8b" font-size="13" font-weight="600">+0.0007</text>
+      <text x="825" y="212" text-anchor="middle" fill="#e8e3d5" font-size="11.5">ensembling</text>
+      <text x="825" y="227" text-anchor="middle" fill="#8d99b2" font-size="10">6 models, mean</text>
+    </g>
+  </svg>
+  </div>
+</section>
+
+<!-- ===================== 5. SOURCES ===================== -->
+<section>
+  <h2><span class="no">05</span>Sources</h2>
+  <table>
+    <tr><th>Source</th><th>What it is</th><th>Link</th></tr>
+    <tr>
+      <td class="rk">1st / 4,245</td>
+      <td>Yirun Zhang, “Training Supervised Autoencoder with MLP” — ’21 winner</td>
+      <td><a href="https://www.kaggle.com/competitions/jane-street-market-prediction/discussion/224348">kaggle discussion 224348</a></td>
+    </tr>
+    <tr>
+      <td class="rk">mirror</td>
+      <td>Numerai forum replication thread of the ’21 winning architecture</td>
+      <td><a href="https://forum.numer.ai/t/autoencoder-and-multitask-mlp-on-new-dataset-from-kaggle-jane-street/4338">forum.numer.ai/4338</a></td>
+    </tr>
+    <tr>
+      <td class="rk">241st / 4,245</td>
+      <td>scaomath repo — utility regularizer, regime-switching, median blending</td>
+      <td><a href="https://github.com/scaomath/kaggle-jane-street">github.com/scaomath/kaggle-jane-street</a></td>
+    </tr>
+    <tr>
+      <td class="rk">’24 entry</td>
+      <td>E. Volkova solution.md — GRU, online learning, gain attribution</td>
+      <td><a href="https://github.com/evgeniavolkova/kagglejanestreet">github.com/evgeniavolkova/kagglejanestreet</a></td>
+    </tr>
+    <tr>
+      <td class="rk">host</td>
+      <td>Jane Street competition announcement &amp; problem framing</td>
+      <td><a href="https://blog.janestreet.com/announcing-our-market-prediction-kaggle-competition-index/">blog.janestreet.com</a></td>
+    </tr>
+    <tr>
+      <td class="rk">meta</td>
+      <td>ML Contests, “State of ML Competitions 2025” — field-wide patterns</td>
+      <td><a href="https://mlcontests.com/state-of-machine-learning-competitions-2025/">mlcontests.com</a></td>
+    </tr>
+  </table>
+</section>
+
+<footer>
+  <b>Method &amp; caveats.</b> Kaggle pages render client-side, so write-up text was recovered via mirrors
+  (Numerai forum, GitHub solution docs) rather than the discussion pages themselves; the ’24 first-place
+  write-up is paywalled behind Kaggle’s app and is not directly quoted here. The emphasis index is a
+  reading of what authors <i>say</i> mattered, weighted by explicitness — it is editorial, not measured.
+  Figures in §04 are the one solution that published its own deltas; feature-work and aux-target bars are
+  approximate (described qualitatively in the write-up). These are competition models on anonymized data —
+  Jane Street’s production systems remain unpublished.
+</footer>
+
+</div>
+</body>
+</html>
