@@ -47,3 +47,27 @@ def test_run_for_gui_has_no_note_when_earnings_present(monkeypatch) -> None:
 
     assert out["report"] is not None
     assert out["note"] is None
+
+
+def test_events_for_queries_the_requested_window_not_module_constants(monkeypatch) -> None:
+    """_events_for must scan the actual price window, not the model's 2023-2024
+    constants — otherwise a 2022 run (e.g. NVDA) reports 'no earnings' even though
+    the name had earnings in that window.
+    """
+    module = _load_model_module()
+    captured: dict[str, object] = {}
+
+    def fake_get_earnings_dates(tickers, start=None, end=None, **kwargs):
+        captured["start"] = start
+        captured["end"] = end
+        return _calendar([])
+
+    monkeypatch.setattr(module, "get_earnings_dates", fake_get_earnings_dates)
+    close = pd.Series(
+        range(20), index=pd.date_range("2022-01-03", periods=20, freq="B"), name="close"
+    )
+
+    module._events_for("NVDA", close)
+
+    assert pd.Timestamp(captured["start"]) == close.index[0]
+    assert pd.Timestamp(captured["end"]) == close.index[-1]
