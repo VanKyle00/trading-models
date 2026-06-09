@@ -34,6 +34,22 @@ _SUBDIR = "dolthub"
 _API = "https://www.dolthub.com/api/v1alpha1/post-no-preference/options/master"
 _OK_STATUSES = ("Success", "RowLimit")
 
+# DoltHub keys chains by the CONTEMPORANEOUS act_symbol, so pre-rename dates
+# must be queried under the old symbol. {canonical: [(old_symbol, renamed_on)]}
+# means: for dates strictly before ``renamed_on``, query ``old_symbol``. The
+# cache path and the canonical ``ticker`` column always use the canonical name.
+_SYMBOL_HISTORY: dict[str, list[tuple[str, str]]] = {
+    "META": [("FB", "2022-06-09")],  # Facebook -> Meta ticker change
+}
+
+
+def _act_symbol(ticker: str, d: str) -> str:
+    """Upstream act_symbol for a canonical ticker on ISO date ``d``."""
+    for old_symbol, renamed_on in _SYMBOL_HISTORY.get(ticker, []):
+        if d < renamed_on:
+            return old_symbol
+    return ticker
+
 
 def _empty() -> pd.DataFrame:
     return pd.DataFrame(
@@ -107,7 +123,7 @@ def load_chain(ticker: str, when: str | date | datetime, *, refresh: bool = Fals
         return pd.read_parquet(out)
     sql = (
         "SELECT `date`, expiration, strike, call_put, bid, ask, vol "
-        f"FROM option_chain WHERE `date`='{d}' AND act_symbol='{ticker}'"
+        f"FROM option_chain WHERE `date`='{d}' AND act_symbol='{_act_symbol(ticker, d)}'"
     )
     df = _canonicalize(_query(sql), ticker)
     out.parent.mkdir(parents=True, exist_ok=True)

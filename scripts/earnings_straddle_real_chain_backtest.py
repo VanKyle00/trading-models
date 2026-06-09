@@ -46,6 +46,33 @@ FEE_BPS = 1.0
 K_GRID = [1.05, 1.2, 1.5, 2.0]
 LOOKBACK_GRID = [4, 8, 12]
 
+# Cumulative split factors: DoltHub strikes are contemporaneous (never retro-adjusted),
+# yfinance closes are fully adjusted. spot must be scaled by the product of all split
+# ratios AFTER the entry date. Effective dates are the split ex-dates. Verified against
+# the cached chains: median(strikes)/adjusted_close matches the implied factor on every
+# cached (ticker, date) — AAPL and TSLA really did share the 2020-08-31 ex-date.
+SPLITS: dict[str, list[tuple[str, float]]] = {
+    "AAPL": [("2020-08-31", 4.0)],
+    "TSLA": [("2020-08-31", 5.0), ("2022-08-25", 3.0)],
+    "AMZN": [("2022-06-06", 20.0)],
+    "GOOGL": [("2022-07-18", 20.0)],
+    "NVDA": [("2021-07-20", 4.0), ("2024-06-10", 10.0)],
+    # NFLX 10:1 ex-date derived from cached data: chain median(strike)/adjusted_close
+    # is ~10.0 through 2025-10-23 and ~1.0 from 2026-01-15; within that bracket the
+    # yfinance closes sit on a 0.1-cent grid (real cent prices / 10) through 2025-11-14
+    # and on the whole-cent grid from 2025-11-17 onward -> first split-adjusted
+    # trading day is 2025-11-17.
+    "NFLX": [("2025-11-17", 10.0)],
+}
+
+
+def split_factor(ticker: str, when: pd.Timestamp) -> float:
+    factor = 1.0
+    for ex_date, ratio in SPLITS.get(ticker, []):
+        if when < pd.Timestamp(ex_date):
+            factor *= ratio
+    return factor
+
 
 def _load_real_chain_module():
     spec = importlib.util.spec_from_file_location("es_real_chain", _MODEL_DIR / "real_chain.py")
@@ -73,7 +100,12 @@ def _pool(pnls: list[float]) -> dict:
 def main() -> None:
     events: list[dict] = []
     skips: dict[str, int] = dict.fromkeys(rc.SKIP_REASONS, 0)
+    skips_by_ticker: dict[str, dict[str, int]] = {}
     n_window_skips = 0
+
+    def count_skip(ticker: str, reason: str) -> None:
+        by_t = skips_by_ticker.setdefault(ticker, {})
+        by_t[reason] = by_t.get(reason, 0) + 1
 
     for ticker in UNIVERSE:
         bars = load_daily(ticker, START, END)
@@ -100,11 +132,13 @@ def main() -> None:
                     lookback=LOOKBACK,
                     max_spread_frac=MAX_SPREAD_FRAC,
                     fee_bps=FEE_BPS,
+                    split_factor=split_factor(ticker, traded),
                 )
             except ValueError as err:
                 if "window" not in str(err):
                     raise
                 n_window_skips += 1
+                count_skip(ticker, "window_out_of_range")
                 continue
             except RuntimeError as err:
                 # DoltHub API failure: annotate where the cold run died and
@@ -112,6 +146,7 @@ def main() -> None:
                 raise RuntimeError(f"{ticker} {traded.date()}: {err}") from err
             if "skip_reason" in rec:
                 skips[rec["skip_reason"]] += 1
+                count_skip(ticker, rec["skip_reason"])
                 continue
             events.append(rec)
         print(f"{ticker}: {sum(1 for e in events if e['ticker'] == ticker)} events traded")
@@ -172,6 +207,7 @@ def main() -> None:
         "n_events_traded": len(events),
         "n_gate_fired": len(filtered),
         "skips": {**skips, "window_out_of_range": n_window_skips},
+        "skips_by_ticker": skips_by_ticker,
         "pooled_filtered": _pool(filtered),
         "pooled_unfiltered": _pool(unfiltered),
         "fdr": {
@@ -200,6 +236,9 @@ def main() -> None:
 
     print(f"\n=== REAL-CHAIN BACKTEST  events={len(events)}  gate_fired={len(filtered)} ===")
     print(f"skips: {out['skips']}")
+    for t in UNIVERSE:
+        if skips_by_ticker.get(t):
+            print(f"  skips {t:>6s}: {skips_by_ticker[t]}")
     line("POOLED filtered", out["pooled_filtered"])
     line("POOLED unfiltered", out["pooled_unfiltered"])
     print("\n--- per ticker (mean REAL implied move — must differ across names) ---")

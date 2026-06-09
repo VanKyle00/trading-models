@@ -179,6 +179,51 @@ def test_bad_json_payload_is_retried_then_succeeds(
     assert len(df) == 2  # recovered on the retry
 
 
+def test_load_chain_meta_pre_rename_queries_fb(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pre-2022-06-09 META chains live under act_symbol='FB'; the canonical
+    ticker column and the cache path stay META."""
+    from tradinglib.loaders.options import dolthub
+
+    monkeypatch.setattr(dolthub, "processed_dir", lambda source: tmp_path / source)
+    monkeypatch.setattr(dolthub.time, "sleep", lambda s: None)
+    captured: dict[str, str] = {}
+
+    def fake_get(url: str, params: dict, timeout: float) -> _FakeResponse:
+        captured["q"] = params["q"]
+        return _ok(_FAKE_ROWS)
+
+    monkeypatch.setattr(dolthub.httpx, "get", fake_get)
+
+    df = dolthub.load_chain("META", "2021-04-28")
+
+    assert "act_symbol='FB'" in captured["q"]
+    assert set(df["ticker"]) == {"META"}
+    cached = list((tmp_path / "options" / "dolthub" / "META").glob("*.parquet"))
+    assert len(cached) == 1
+
+
+def test_load_chain_meta_post_rename_queries_meta(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.options import dolthub
+
+    monkeypatch.setattr(dolthub, "processed_dir", lambda source: tmp_path / source)
+    monkeypatch.setattr(dolthub.time, "sleep", lambda s: None)
+    captured: dict[str, str] = {}
+
+    def fake_get(url: str, params: dict, timeout: float) -> _FakeResponse:
+        captured["q"] = params["q"]
+        return _ok(_FAKE_ROWS)
+
+    monkeypatch.setattr(dolthub.httpx, "get", fake_get)
+
+    dolthub.load_chain("META", "2023-01-15")
+
+    assert "act_symbol='META'" in captured["q"]
+
+
 def test_bad_json_payload_exhausts_retry_and_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

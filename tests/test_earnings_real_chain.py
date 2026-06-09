@@ -280,11 +280,37 @@ def test_run_event_nan_exit_bids_are_total_loss_not_skip() -> None:
     assert rec["pnl"] == pytest.approx(-900.09)
 
 
-def test_run_event_skip_exit_chain_missing_contract_rows() -> None:
-    """Exit chain non-empty but lists only a different expiry -> no_exit_chain."""
+def test_run_event_skip_when_no_intersection_expiry() -> None:
+    """Exit chain non-empty but lists only a different expiry -> the entry/exit
+    expiration sets are disjoint, so no intersection expiry survives the cutoff."""
     exit_ = _chain([("2026-04-17", 100, "call", 1.0, 1.2), ("2026-04-17", 100, "put", 1.0, 1.2)])
     rec = _run(_entry_chain(), exit_)
-    assert rec["skip_reason"] == rc.SKIP_NO_EXIT_CHAIN
+    assert rec["skip_reason"] == rc.SKIP_NO_EXPIRY
+
+
+def test_run_event_skip_contract_missing_at_exit() -> None:
+    """Expiry survives in both chains but the exit chain's ~27-strike band has
+    shifted grid phase: the traded strike row is absent -> contract_missing_at_exit."""
+    exit_ = _chain([("2026-03-13", 105, "call", 3.0, 3.2), ("2026-03-13", 105, "put", 2.0, 2.2)])
+    rec = _run(_entry_chain(), exit_)
+    assert rec["skip_reason"] == rc.SKIP_CONTRACT_MISSING_AT_EXIT
+
+
+def test_run_event_expiry_requires_exit_visibility() -> None:
+    """Entry lists 03-13 and 03-27; the exit-date chain (its visibility window
+    rolled) lists only 03-27 -> the intersection pick is 03-27, not nearest 03-13."""
+    entry = _chain(
+        [
+            ("2026-03-13", 100, "call", 4.8, 5.0),
+            ("2026-03-13", 100, "put", 3.8, 4.0),
+            ("2026-03-27", 100, "call", 5.8, 6.0),
+            ("2026-03-27", 100, "put", 4.8, 5.0),
+        ]
+    )
+    exit_ = _chain([("2026-03-27", 100, "call", 3.0, 3.2), ("2026-03-27", 100, "put", 2.0, 2.2)])
+    rec = _run(entry, exit_)
+    assert "skip_reason" not in rec
+    assert rec["expiry"] == "2026-03-27"
 
 
 # ---------- Issue 3: entry_lead validation ----------
@@ -293,6 +319,31 @@ def test_run_event_skip_exit_chain_missing_contract_rows() -> None:
 def test_run_event_entry_lead_zero_raises() -> None:
     with pytest.raises(ValueError, match="entry_lead"):
         _run(_entry_chain(), _exit_chain(), entry_lead=0)
+
+
+# ---------- split-corrected spot + strike-grid-mismatch guard ----------
+
+
+def test_run_event_skip_strike_grid_mismatch() -> None:
+    """Nearest quoted strike 5x the spot (wrong/missing split factor) -> guarded
+    skip, never a garbage deep-ITM trade."""
+    entry = _chain([("2026-03-13", 500, "call", 4.8, 5.0), ("2026-03-13", 500, "put", 3.8, 4.0)])
+    exit_ = _chain([("2026-03-13", 500, "call", 3.0, 3.2), ("2026-03-13", 500, "put", 2.0, 2.2)])
+    rec = _run(entry, exit_)
+    assert rec["skip_reason"] == rc.SKIP_STRIKE_GRID_MISMATCH
+
+
+def test_run_event_split_factor_scales_spot() -> None:
+    """Contemporaneous strikes ~1000 vs split-adjusted close 100: split_factor=10
+    aligns strike selection, the recorded spot, and the implied move."""
+    entry = _chain([("2026-03-13", 1000, "call", 48, 50), ("2026-03-13", 1000, "put", 38, 40)])
+    exit_ = _chain([("2026-03-13", 1000, "call", 30, 32), ("2026-03-13", 1000, "put", 20, 22)])
+    rec = _run(entry, exit_, split_factor=10.0)
+    assert "skip_reason" not in rec
+    assert rec["spot"] == 1000.0
+    assert rec["strike"] == 1000.0
+    # implied move from MIDs off the SPLIT-CORRECTED spot: (49 + 39) / 1000
+    assert rec["implied_move"] == pytest.approx(0.088)
 
 
 # ---------- coverage snapping (MWF-era DoltHub: Tue/Thu have no chains) ----------

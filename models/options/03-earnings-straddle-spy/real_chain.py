@@ -22,6 +22,27 @@ AND still exist at exit (e.g. earnings Thursday AMC with a Friday weekly expiry
 and a Monday exit — the Friday contract lapses before exit, so the next expiry
 is selected instead).
 
+Intersection expiry selection: the DoltHub dataset lists only ~3 tenor-anchored
+expirations per (date, symbol) (~2w/~4w/~7w out; the front week is never
+listed), and that visibility window ROLLS day to day — so the expiry nearest
+the cutoff at entry frequently is not listed on the exit-date chain even though
+the contract genuinely traded continuously. ``run_event`` therefore restricts
+candidates to expirations present in BOTH the entry chain and the exit chain
+before applying ``pick_expiry``. This is a data-availability workaround for
+MARKING the position at both dates, not price lookahead: it conditions on which
+rows the dataset happens to publish, never on quote values. Side effect, stated
+honestly: the tenor actually held shifts longer (~3-4 weeks) than the nominal
+spec (~2 weeks), because the shared expiration is usually the second-nearest
+slot rather than the rolling front slot.
+
+Split handling: DoltHub strikes/quotes are contemporaneous (never
+retro-adjusted) while the yfinance closes feeding ``run_event`` are fully
+split-adjusted, so ``split_factor`` (cumulative ratio of all splits AFTER the
+entry date) rescales the spot back to contemporaneous dollars for strike
+selection and the implied move. A ``strike_grid_mismatch`` guard skips any
+event whose nearest quoted strike is >15% from the (rescaled) spot, so a
+wrong or missing factor can never produce garbage deep-ITM trades.
+
 Coverage snapping: before ~Oct 2024 the DoltHub dataset carries chains only on
 Mon/Wed/Fri (Tue/Thu have zero rows table-wide), so loading chains at exactly
 the target offsets would structurally select Wed-AMC/Thu-BMO reporters in that
@@ -51,18 +72,22 @@ from tradinglib.options.instruments import CONTRACT_MULTIPLIER
 
 _HERE = Path(__file__).resolve().parent
 
-SKIP_NO_ENTRY_CHAIN = "no_entry_chain"
-SKIP_NO_EXPIRY = "no_post_earnings_expiry"
+SKIP_NO_ENTRY_CHAIN = "no_entry_chain"  # all entry candidate chains empty
+SKIP_NO_EXIT_CHAIN = "no_exit_chain"  # all exit candidate chains empty
+SKIP_NO_EXPIRY = "no_post_earnings_expiry"  # no entry-AND-exit expiry strictly after cutoff
 SKIP_NO_QUOTED_ATM = "no_quoted_atm"
 SKIP_SPREAD = "spread_over_cap"
-SKIP_NO_EXIT_CHAIN = "no_exit_chain"
+SKIP_STRIKE_GRID_MISMATCH = "strike_grid_mismatch"  # nearest quoted strike >15% from spot
+SKIP_CONTRACT_MISSING_AT_EXIT = "contract_missing_at_exit"  # expiry survived, strike row absent
 
 SKIP_REASONS = [
     SKIP_NO_ENTRY_CHAIN,
+    SKIP_NO_EXIT_CHAIN,
     SKIP_NO_EXPIRY,
     SKIP_NO_QUOTED_ATM,
     SKIP_SPREAD,
-    SKIP_NO_EXIT_CHAIN,
+    SKIP_STRIKE_GRID_MISMATCH,
+    SKIP_CONTRACT_MISSING_AT_EXIT,
 ]
 
 _MAX_LOOKBACK = 20  # prior_moves stored per event are trimmed to this for sweeps
@@ -166,6 +191,7 @@ def run_event(
     lookback: int = 8,
     max_spread_frac: float = 0.20,
     fee_bps: float = 1.0,
+    split_factor: float = 1.0,
 ) -> dict[str, Any]:
     """One earnings event, quote-to-quote.
 
@@ -180,6 +206,20 @@ def run_event(
     offsets. ``close`` must be tz-naive; ``prior_moves`` are abs moves of
     PRIOR events only (leakage discipline is the caller's contract, as in
     Phase 1).
+
+    Expiry candidates are the INTERSECTION of entry-chain and exit-chain
+    expirations: the contract traded continuously in reality, but the dataset's
+    rolling ~3-expiry visibility window must list it at BOTH marking dates —
+    a data-availability workaround, not price lookahead (see module docstring;
+    held tenors shift longer, ~3-4w vs the nominal ~2w, as a result).
+
+    ``split_factor`` is the cumulative ratio of all splits AFTER the entry date
+    (e.g. 20.0 for AMZN before 2022-06-06): ``spot = adjusted_close *
+    split_factor`` puts strike selection, ``implied_move``, and the recorded
+    ``spot`` in the chain's contemporaneous dollars. Everything downstream
+    (quotes, P&L) is already contemporaneous, and ``expected_move`` /
+    ``past_abs_moves`` are return-based (split-invariant), so nothing else
+    needs rescaling.
     """
     if entry_lead < 1:
         raise ValueError(f"entry_lead must be >= 1 (entry precedes earnings), got {entry_lead}")
@@ -210,7 +250,9 @@ def run_event(
         return {"skip_reason": SKIP_NO_ENTRY_CHAIN}
     entry_idx = e_idx - entry_lead_used
     entry_date = bars[entry_idx]
-    spot = float(close.iloc[entry_idx])
+    # Contemporaneous spot: yfinance closes are split-adjusted, chain strikes
+    # are not — rescale by the cumulative post-entry split factor.
+    spot = float(close.iloc[entry_idx]) * split_factor
 
     # Exit: forward only (must stay strictly after the earnings bar). Resolved
     # before expiry selection because the expiry cutoff must use the SNAPPED
@@ -227,12 +269,20 @@ def run_event(
         return {"skip_reason": SKIP_NO_EXIT_CHAIN}
     exit_date = bars[e_idx + exit_offset_used]
 
-    expiry = pick_expiry(entry_chain, max(earnings_datetime, pd.Timestamp(exit_date)))
+    # Intersection: only expirations visible on BOTH marking dates are
+    # holdable through exit under the dataset's rolling expiry window
+    # (data-availability constraint, not lookahead — see docstrings).
+    candidates = entry_chain[entry_chain["expiration"].isin(exit_chain["expiration"].unique())]
+    expiry = pick_expiry(candidates, max(earnings_datetime, pd.Timestamp(exit_date)))
     if expiry is None:
         return {"skip_reason": SKIP_NO_EXPIRY}
     strike = pick_atm_strike(entry_chain, expiry, spot)
     if strike is None:
         return {"skip_reason": SKIP_NO_QUOTED_ATM}
+    if abs(strike - spot) / spot > 0.15:
+        # Strike grid nowhere near spot: a wrong/missing split factor would
+        # otherwise buy a garbage deep-ITM "straddle".
+        return {"skip_reason": SKIP_STRIKE_GRID_MISMATCH}
     quotes = straddle_quotes(entry_chain, expiry, strike)
     if quotes is None:
         return {"skip_reason": SKIP_NO_QUOTED_ATM}
@@ -251,7 +301,9 @@ def run_event(
 
     exit_quotes = straddle_quotes(exit_chain, expiry, strike)
     if exit_quotes is None:
-        return {"skip_reason": SKIP_NO_EXIT_CHAIN}
+        # Expiry survived in both chains but the dataset's ~27-strike band is
+        # re-sampled daily and can shift grid phase, dropping the strike row.
+        return {"skip_reason": SKIP_CONTRACT_MISSING_AT_EXIT}
     exit_value = _bid_or_zero(exit_quotes["call_bid"]) + _bid_or_zero(exit_quotes["put_bid"])
 
     fees = (entry_cost + exit_value) * CONTRACT_MULTIPLIER * (fee_bps / 1e4)
