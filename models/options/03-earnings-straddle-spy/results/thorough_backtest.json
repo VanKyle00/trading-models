@@ -1,0 +1,2783 @@
+{
+  "universe": [
+    "AAPL",
+    "AMZN",
+    "MSFT",
+    "NVDA",
+    "TSLA",
+    "META",
+    "GOOGL",
+    "NFLX",
+    "AMD"
+  ],
+  "window": [
+    "2020-01-01",
+    "2026-06-05"
+  ],
+  "n_events_total": 216,
+  "baseline": {
+    "params": {
+      "k": 1.2,
+      "lookback": 8,
+      "pre_iv": 0.45,
+      "post_iv": 0.25
+    },
+    "pooled_filtered": {
+      "n": 33,
+      "total_pnl": 1870.7769649032998,
+      "trade_metrics": {
+        "n_trades": 33,
+        "win_rate": 0.3939393939393939,
+        "profit_factor": 1.1535746162319809,
+        "expectancy": 56.690211057675754,
+        "avg_win": 1080.948277427909,
+        "avg_loss": -609.0775320829758,
+        "avg_hold": 0.0
+      },
+      "bootstrap": {
+        "t_stat": 0.26842137062198745,
+        "ci_lo": -324.4186042895926,
+        "ci_hi": 463.3059592291036,
+        "p_value": 0.7781109445277361
+      }
+    },
+    "pooled_unfiltered": {
+      "n": 216,
+      "total_pnl": -27140.258329614822,
+      "trade_metrics": {
+        "n_trades": 216,
+        "win_rate": 0.32407407407407407,
+        "profit_factor": 0.677668573104426,
+        "expectancy": -125.64934411858714,
+        "avg_win": 815.1370475614791,
+        "avg_loss": -576.7113127323175,
+        "avg_hold": 0.0
+      },
+      "bootstrap": {
+        "t_stat": -1.9609330436826273,
+        "ci_lo": -248.997873135636,
+        "ci_hi": 2.6253231294253867,
+        "p_value": 0.051974012993503245
+      }
+    },
+    "n_gate_fired": 33,
+    "fdr": {
+      "tickers": [
+        "NVDA",
+        "TSLA",
+        "META",
+        "NFLX"
+      ],
+      "p_values": [
+        0.0004997501249375312,
+        0.7731134432783608,
+        0.47176411794102946,
+        0.39080459770114945
+      ],
+      "rejected": [
+        true,
+        false,
+        false,
+        false
+      ],
+      "threshold": 0.0004997501249375312
+    },
+    "per_ticker": {
+      "AAPL": {
+        "n_events": 24,
+        "n_gate_fired": 1,
+        "filtered": {
+          "n": 1,
+          "total_pnl": -125.1347337722109,
+          "trade_metrics": {
+            "n_trades": 1,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": -125.1347337722109,
+            "avg_win": 0.0,
+            "avg_loss": -125.1347337722109,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.0,
+            "ci_lo": 0.0,
+            "ci_hi": 0.0,
+            "p_value": 1.0
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": -10147.43973268733,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.125,
+            "profit_factor": 0.11020065770438829,
+            "expectancy": -422.80998886197204,
+            "avg_win": 418.9163703930438,
+            "avg_loss": -543.0566116126886,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": -4.763405034558719,
+            "ci_lo": -573.2890908346161,
+            "ci_hi": -251.3396091474526,
+            "p_value": 0.0004997501249375312
+          }
+        },
+        "mean_realized_move": 0.03172131001155836,
+        "mean_implied_move": 0.07529736514871078
+      },
+      "AMZN": {
+        "n_events": 24,
+        "n_gate_fired": 1,
+        "filtered": {
+          "n": 1,
+          "total_pnl": -65.97539863901329,
+          "trade_metrics": {
+            "n_trades": 1,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": -65.97539863901329,
+            "avg_win": 0.0,
+            "avg_loss": -65.97539863901329,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.0,
+            "ci_lo": 0.0,
+            "ci_hi": 0.0,
+            "p_value": 1.0
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": -3028.4354899987084,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.4166666666666667,
+            "profit_factor": 0.6258392081506285,
+            "expectancy": -126.18481208327951,
+            "avg_win": 506.5505820714272,
+            "avg_loss": -578.1386650509272,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": -0.972851844419731,
+            "ci_lo": -358.4574037681862,
+            "ci_hi": 126.22487423400088,
+            "p_value": 0.3213393303348326
+          }
+        },
+        "mean_realized_move": 0.061124258896418114,
+        "mean_implied_move": 0.07549489158299015
+      },
+      "MSFT": {
+        "n_events": 24,
+        "n_gate_fired": 0,
+        "filtered": {
+          "n": 0,
+          "total_pnl": 0.0,
+          "trade_metrics": {
+            "n_trades": 0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.0,
+            "ci_lo": 0.0,
+            "ci_hi": 0.0,
+            "p_value": 1.0
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": -21904.74837734342,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.08333333333333333,
+            "profit_factor": 0.07210639881399296,
+            "expectancy": -912.6978490559759,
+            "avg_win": 851.1064848372989,
+            "avg_loss": -1073.0436975917282,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": -5.832925538905791,
+            "ci_lo": -1190.635247570643,
+            "ci_hi": -608.4000558351566,
+            "p_value": 0.0004997501249375312
+          }
+        },
+        "mean_realized_move": 0.041531067252031796,
+        "mean_implied_move": 0.07794149439411684
+      },
+      "NVDA": {
+        "n_events": 24,
+        "n_gate_fired": 3,
+        "filtered": {
+          "n": 3,
+          "total_pnl": -1175.4659656260628,
+          "trade_metrics": {
+            "n_trades": 3,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": -391.82198854202096,
+            "avg_win": 0.0,
+            "avg_loss": -391.82198854202096,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": -4.596131037406508,
+            "ci_lo": -546.0368589677237,
+            "ci_hi": -251.73662001237972,
+            "p_value": 0.0004997501249375312
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": -3536.105516344818,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.25,
+            "profit_factor": 0.23831679355091764,
+            "expectancy": -147.33772984770076,
+            "avg_win": 184.39716170227862,
+            "avg_loss": -257.9160270310272,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": -2.4280995633514184,
+            "ci_lo": -258.6858686844691,
+            "ci_hi": -31.22109888236955,
+            "p_value": 0.01249375312343828
+          }
+        },
+        "mean_realized_move": 0.056911046449216095,
+        "mean_implied_move": 0.07669376103712981
+      },
+      "TSLA": {
+        "n_events": 24,
+        "n_gate_fired": 6,
+        "filtered": {
+          "n": 6,
+          "total_pnl": -1043.4233084691805,
+          "trade_metrics": {
+            "n_trades": 6,
+            "win_rate": 0.16666666666666666,
+            "profit_factor": 0.7567968441040753,
+            "expectancy": -173.9038847448634,
+            "avg_win": 3246.9129111631773,
+            "avg_loss": -858.0672439264715,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": -0.23846305763685754,
+            "ci_lo": -1203.8988415289277,
+            "ci_hi": 1317.904043945998,
+            "p_value": 0.7731134432783608
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": 1447.5333732807194,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.4583333333333333,
+            "profit_factor": 1.1167367178655287,
+            "expectancy": 60.31389055336331,
+            "avg_win": 1258.8651686659855,
+            "avg_loss": -953.8448832342401,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.22321399065638625,
+            "ci_lo": -439.09999948028997,
+            "ci_hi": 617.0997800038588,
+            "p_value": 0.8250874562718641
+          }
+        },
+        "mean_realized_move": 0.07246787827226277,
+        "mean_implied_move": 0.07623257794986497
+      },
+      "META": {
+        "n_events": 24,
+        "n_gate_fired": 11,
+        "filtered": {
+          "n": 11,
+          "total_pnl": 4006.7124378456792,
+          "trade_metrics": {
+            "n_trades": 11,
+            "win_rate": 0.5454545454545454,
+            "profit_factor": 1.6989093844373753,
+            "expectancy": 364.24658525869813,
+            "avg_win": 1623.2531982377259,
+            "avg_loss": -1146.5613503161353,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.713687505287481,
+            "ci_lo": -589.0635151133605,
+            "ci_hi": 1308.9073387313686,
+            "p_value": 0.47176411794102946
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": 12421.042285128002,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.5,
+            "profit_factor": 2.346637976954613,
+            "expectancy": 517.5434285470001,
+            "avg_win": 1803.7320867754195,
+            "avg_loss": -768.6452296814192,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 1.4221798164864259,
+            "ci_lo": -105.82743765915305,
+            "ci_hi": 1199.5659592040122,
+            "p_value": 0.13093453273363317
+          }
+        },
+        "mean_realized_move": 0.0993994834899672,
+        "mean_implied_move": 0.07529050417529132
+      },
+      "GOOGL": {
+        "n_events": 24,
+        "n_gate_fired": 0,
+        "filtered": {
+          "n": 0,
+          "total_pnl": 0.0,
+          "trade_metrics": {
+            "n_trades": 0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.0,
+            "ci_lo": 0.0,
+            "ci_hi": 0.0,
+            "p_value": 1.0
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": -5806.231612171279,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.16666666666666666,
+            "profit_factor": 0.19099118669710954,
+            "expectancy": -241.9263171738033,
+            "avg_win": 342.68448242222075,
+            "avg_loss": -358.8484770930081,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": -3.433780347240107,
+            "ci_lo": -364.8068717198215,
+            "ci_hi": -108.96163905231404,
+            "p_value": 0.0009995002498750624
+          }
+        },
+        "mean_realized_move": 0.05009366198645986,
+        "mean_implied_move": 0.07796002091593007
+      },
+      "NFLX": {
+        "n_events": 24,
+        "n_gate_fired": 10,
+        "filtered": {
+          "n": 10,
+          "total_pnl": 509.43261745503696,
+          "trade_metrics": {
+            "n_trades": 10,
+            "win_rate": 0.6,
+            "profit_factor": 1.9154835443052778,
+            "expectancy": 50.9432617455037,
+            "avg_win": 177.64925099554725,
+            "avg_loss": -139.11572212956162,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.8117312311414006,
+            "ci_lo": -60.55234045761039,
+            "ci_hi": 169.38642671311342,
+            "p_value": 0.39080459770114945
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": 1988.610915146739,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.5416666666666666,
+            "profit_factor": 1.9084491045355634,
+            "expectancy": 82.85878813111412,
+            "avg_win": 321.35602579194864,
+            "avg_loss": -199.00158364987212,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 1.155042566212229,
+            "ci_lo": -53.60391682316777,
+            "ci_hi": 218.82213402652556,
+            "p_value": 0.23738130934532733
+          }
+        },
+        "mean_realized_move": 0.0946936489813532,
+        "mean_implied_move": 0.07801526959906267
+      },
+      "AMD": {
+        "n_events": 24,
+        "n_gate_fired": 1,
+        "filtered": {
+          "n": 1,
+          "total_pnl": -235.3686838909489,
+          "trade_metrics": {
+            "n_trades": 1,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": -235.3686838909489,
+            "avg_win": 0.0,
+            "avg_loss": -235.3686838909489,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.0,
+            "ci_lo": 0.0,
+            "ci_hi": 0.0,
+            "p_value": 1.0
+          }
+        },
+        "unfiltered": {
+          "n": 24,
+          "total_pnl": 1425.5158253752743,
+          "trade_metrics": {
+            "n_trades": 24,
+            "win_rate": 0.375,
+            "profit_factor": 1.2609612021666057,
+            "expectancy": 59.396492723969764,
+            "avg_win": 765.3415884340858,
+            "avg_loss": -364.17056470209985,
+            "avg_hold": 0.0
+          },
+          "bootstrap": {
+            "t_stat": 0.3937818020012081,
+            "ci_lo": -199.61018681427024,
+            "ci_hi": 377.63981765205494,
+            "p_value": 0.6951524237881059
+          }
+        },
+        "mean_realized_move": 0.06933820196083185,
+        "mean_implied_move": 0.0796559311305625
+      }
+    }
+  },
+  "sensitivity_pre_iv": [
+    {
+      "pre_iv": 0.3,
+      "post_iv": 0.1667,
+      "n_gate_fired": 94,
+      "n_events": 216,
+      "expectancy": 472.5385447738711,
+      "win_rate": 0.5851063829787234,
+      "profit_factor": 4.595874651776152,
+      "total_pnl": 44418.623208743884,
+      "p_value": 0.0009995002498750624
+    },
+    {
+      "pre_iv": 0.4,
+      "post_iv": 0.2222,
+      "n_gate_fired": 50,
+      "n_events": 216,
+      "expectancy": 207.44626488656795,
+      "win_rate": 0.54,
+      "profit_factor": 1.84685481559911,
+      "total_pnl": 10372.313244328398,
+      "p_value": 0.1619190404797601
+    },
+    {
+      "pre_iv": 0.45,
+      "post_iv": 0.25,
+      "n_gate_fired": 33,
+      "n_events": 216,
+      "expectancy": 56.690211057675754,
+      "win_rate": 0.3939393939393939,
+      "profit_factor": 1.1535746162319809,
+      "total_pnl": 1870.7769649032998,
+      "p_value": 0.7781109445277361
+    },
+    {
+      "pre_iv": 0.55,
+      "post_iv": 0.3056,
+      "n_gate_fired": 17,
+      "n_events": 216,
+      "expectancy": 6.288154758184271,
+      "win_rate": 0.5294117647058824,
+      "profit_factor": 1.0161647815490422,
+      "total_pnl": 106.89863088913262,
+      "p_value": 0.9845077461269365
+    },
+    {
+      "pre_iv": 0.65,
+      "post_iv": 0.3611,
+      "n_gate_fired": 9,
+      "n_events": 216,
+      "expectancy": -638.3696263739015,
+      "win_rate": 0.4444444444444444,
+      "profit_factor": 0.28869350210383665,
+      "total_pnl": -5745.326637365113,
+      "p_value": 0.18240879560219891
+    }
+  ],
+  "sensitivity_k": [
+    {
+      "k": 1.05,
+      "n_gate_fired": 51,
+      "expectancy": 79.66426978218735,
+      "win_rate": 0.4117647058823529,
+      "profit_factor": 1.253071507747,
+      "total_pnl": 4062.8777588915545,
+      "p_value": 0.5982008995502249
+    },
+    {
+      "k": 1.2,
+      "n_gate_fired": 33,
+      "expectancy": 56.690211057675754,
+      "win_rate": 0.3939393939393939,
+      "profit_factor": 1.1535746162319809,
+      "total_pnl": 1870.7769649032998,
+      "p_value": 0.7781109445277361
+    },
+    {
+      "k": 1.5,
+      "n_gate_fired": 17,
+      "expectancy": 271.89594309949246,
+      "win_rate": 0.6470588235294118,
+      "profit_factor": 2.0967599915590194,
+      "total_pnl": 4622.231032691372,
+      "p_value": 0.33233383308345826
+    },
+    {
+      "k": 2.0,
+      "n_gate_fired": 0,
+      "expectancy": 0.0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "total_pnl": 0.0,
+      "p_value": 1.0
+    }
+  ],
+  "sensitivity_calibrated_iv": {
+    "n_events": 216,
+    "n_gate_fired": 79,
+    "pooled_filtered": {
+      "n": 79,
+      "total_pnl": 36930.17493448868,
+      "trade_metrics": {
+        "n_trades": 79,
+        "win_rate": 0.569620253164557,
+        "profit_factor": 4.735785471444969,
+        "expectancy": 467.4705687909959,
+        "avg_win": 1040.3487343305635,
+        "avg_loss": -290.7505326584317,
+        "avg_hold": 0.0
+      },
+      "bootstrap": {
+        "t_stat": 3.5103869872546394,
+        "ci_lo": 218.62003176780865,
+        "ci_hi": 747.3726172673798,
+        "p_value": 0.0009995002498750624
+      }
+    },
+    "pooled_unfiltered": {
+      "n": 216,
+      "total_pnl": 35441.950239942395,
+      "trade_metrics": {
+        "n_trades": 216,
+        "win_rate": 0.48148148148148145,
+        "profit_factor": 1.6920618606159263,
+        "expectancy": 164.08310296269627,
+        "avg_win": 833.2121469698571,
+        "avg_loss": -457.2510093296674,
+        "avg_hold": 0.0
+      },
+      "bootstrap": {
+        "t_stat": 2.326528369710888,
+        "ci_lo": 28.320753236410745,
+        "ci_hi": 302.4696281912037,
+        "p_value": 0.018490754622688656
+      }
+    }
+  },
+  "events": [
+    {
+      "ticker": "AAPL",
+      "date": "2020-07-30",
+      "implied_move": 0.07506384609127281,
+      "expected_move": NaN,
+      "realized_move": 0.10468860244505707,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 831.2679578816314
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2020-10-29",
+      "implied_move": 0.07507649321060213,
+      "expected_move": 0.10468860244505707,
+      "realized_move": 0.05601809762785448,
+      "gate_fired": true,
+      "filtered_pnl": -125.1347337722109,
+      "unfiltered_pnl": -125.1347337722109
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2021-01-27",
+      "implied_move": 0.07511854298733459,
+      "expected_move": 0.08035335003645577,
+      "realized_move": 0.03498521293037571,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -5.9177923801617
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2021-04-28",
+      "implied_move": 0.07507877335445658,
+      "expected_move": 0.06523063766776242,
+      "realized_move": 0.0007486969995773585,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -487.00491623698326
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2021-07-27",
+      "implied_move": 0.07967623051713155,
+      "expected_move": 0.04911015250071615,
+      "realized_move": 0.012195888059395088,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -615.6832285197888
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2021-10-28",
+      "implied_move": 0.07513991648641487,
+      "expected_move": 0.04172729961245194,
+      "realized_move": 0.018155859539118024,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -640.005743043861
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2022-01-27",
+      "implied_move": 0.07507046930760275,
+      "expected_move": 0.03779872626689629,
+      "realized_move": 0.06977761840801766,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 285.2270890479849
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2022-04-28",
+      "implied_move": 0.07506374246009981,
+      "expected_move": 0.042367139429913624,
+      "realized_move": 0.036604856502888916,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -653.2096264518623
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2022-07-28",
+      "implied_move": 0.07517973314482004,
+      "expected_move": 0.04164685406403554,
+      "realized_move": 0.03279334100690501,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -170.97466957247525
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2022-10-27",
+      "implied_move": 0.07519975349118917,
+      "expected_move": 0.03265994638426653,
+      "realized_move": 0.07555249217779547,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -652.8878476177924
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2023-02-02",
+      "implied_move": 0.07511491482234141,
+      "expected_move": 0.035101745703009155,
+      "realized_move": 0.02440019655971115,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -301.4372814152448
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2023-05-04",
+      "implied_move": 0.07509586718531121,
+      "expected_move": 0.033778618656676085,
+      "realized_move": 0.04692679957200796,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -585.4530999664858
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2023-08-03",
+      "implied_move": 0.07510522392836581,
+      "expected_move": 0.03955088147822991,
+      "realized_move": 0.04802010148677027,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 140.25406424951507
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2023-11-02",
+      "implied_move": 0.07516164745400938,
+      "expected_move": 0.04402890815665181,
+      "realized_move": 0.005180982394806244,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -400.25010376621503
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2024-02-01",
+      "implied_move": 0.07510151388553758,
+      "expected_move": 0.042407048513612836,
+      "realized_move": 0.005405075072322352,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -814.5132723331917
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2024-05-02",
+      "implied_move": 0.07516116609689708,
+      "expected_move": 0.03436048059665092,
+      "realized_move": 0.05981636007014823,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -166.0244497230742
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2024-08-01",
+      "implied_move": 0.07510194193925014,
+      "expected_move": 0.03726191854255834,
+      "realized_move": 0.006869407461095545,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -617.7341762099677
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2024-10-31",
+      "implied_move": 0.07510019405774128,
+      "expected_move": 0.034021426849332154,
+      "realized_move": 0.013279682723741582,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -555.7967670453363
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2025-01-30",
+      "implied_move": 0.07512213117905403,
+      "expected_move": 0.026237325667575417,
+      "realized_move": 0.006692154679906359,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -671.286129870321
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2025-05-01",
+      "implied_move": 0.07508327422317214,
+      "expected_move": 0.02402382043259982,
+      "realized_move": 0.03736166699984034,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -377.6709782692342
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2025-07-31",
+      "implied_move": 0.07506426270564237,
+      "expected_move": 0.022828178861078866,
+      "realized_move": 0.025003627425670194,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -712.5315371653414
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2025-10-30",
+      "implied_move": 0.07507612492901997,
+      "expected_move": 0.019951119603441356,
+      "realized_move": 0.0037950435186790976,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1172.9434757800773
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2026-01-29",
+      "implied_move": 0.07511428368205285,
+      "expected_move": 0.019777877243925462,
+      "realized_move": 0.0046461584937966816,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -659.5981005110516
+    },
+    {
+      "ticker": "AAPL",
+      "date": "2026-04-30",
+      "implied_move": 0.07506671642973922,
+      "expected_move": 0.019683012671609754,
+      "realized_move": 0.03239351812191993,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1018.1309142157843
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2020-07-30",
+      "implied_move": 0.07509066553838843,
+      "expected_move": NaN,
+      "realized_move": 0.036960821567137314,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -460.00925456904224
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2020-10-29",
+      "implied_move": 0.07506508444332824,
+      "expected_move": 0.036960821567137314,
+      "realized_move": 0.0544564552314909,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 83.3366335946921
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2021-02-02",
+      "implied_move": 0.07960595773243409,
+      "expected_move": 0.045708638399314105,
+      "realized_move": 0.019961565909300982,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -492.84416940757365
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2021-04-29",
+      "implied_move": 0.07511256470933882,
+      "expected_move": 0.03712628090264306,
+      "realized_move": 0.001120636171800582,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -740.047751497521
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2021-07-29",
+      "implied_move": 0.07506624808974915,
+      "expected_move": 0.028124869719932444,
+      "realized_move": 0.07564890713277761,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 19.43449204051285
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2021-10-28",
+      "implied_move": 0.07512525129662065,
+      "expected_move": 0.037629677202501474,
+      "realized_move": 0.021511245053778105,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -699.5373461655545
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2022-02-03",
+      "implied_move": 0.0750709891607533,
+      "expected_move": 0.03494327184438092,
+      "realized_move": 0.13535901735711864,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -375.5777782821824
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2022-04-28",
+      "implied_move": 0.07506273291054984,
+      "expected_move": 0.04928837834620059,
+      "realized_move": 0.140494377749234,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 341.7493798620708
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2022-07-28",
+      "implied_move": 0.07514223146560292,
+      "expected_move": 0.06068912827157977,
+      "realized_move": 0.10361464095050721,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 1125.3570492443105
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2022-10-27",
+      "implied_move": 0.07521479252107814,
+      "expected_move": 0.069020855694501,
+      "realized_move": 0.06804249715805744,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 876.2071390572237
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2023-02-02",
+      "implied_move": 0.07507121957572306,
+      "expected_move": 0.07071911093532182,
+      "realized_move": 0.08431497620839845,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -452.78490982798394
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2023-04-27",
+      "implied_move": 0.07526236342667846,
+      "expected_move": 0.078763287222709,
+      "realized_move": 0.039792412663683385,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -448.9540228310798
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2023-08-03",
+      "implied_move": 0.07516992121458882,
+      "expected_move": 0.08359725928419436,
+      "realized_move": 0.08269337801006271,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 20.488618379473337
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2023-10-26",
+      "implied_move": 0.07522019818259372,
+      "expected_move": 0.084477818143855,
+      "realized_move": 0.06832816082460003,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -458.32294069588534
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2024-02-01",
+      "implied_move": 0.07509310981756043,
+      "expected_move": 0.09032993261520773,
+      "realized_move": 0.07866649218561839,
+      "gate_fired": true,
+      "filtered_pnl": -65.97539863901329,
+      "unfiltered_pnl": -65.97539863901329
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2024-04-30",
+      "implied_move": 0.07970631226386915,
+      "expected_move": 0.0832433669687702,
+      "realized_move": 0.02285714285714291,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -694.7029441852501
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2024-08-01",
+      "implied_move": 0.07514008236500846,
+      "expected_move": 0.06853871260725881,
+      "realized_move": 0.0878470841762542,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 645.4482537512667
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2024-10-31",
+      "implied_move": 0.07511667891933155,
+      "expected_move": 0.06656776801047719,
+      "realized_move": 0.06185621865256041,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -712.8937793563528
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2025-02-06",
+      "implied_move": 0.07508774422939737,
+      "expected_move": 0.06579448319729006,
+      "realized_move": 0.04053095448794508,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -801.6233664735337
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2025-05-01",
+      "implied_move": 0.07506419401464251,
+      "expected_move": 0.06032148048223339,
+      "realized_move": 0.0011566836184702112,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -821.5535095018276
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2025-07-31",
+      "implied_move": 0.07509213584847628,
+      "expected_move": 0.05549201435158174,
+      "realized_move": 0.08269617085933034,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 116.19043912962661
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2025-10-30",
+      "implied_move": 0.07507338781516004,
+      "expected_move": 0.055492363457740196,
+      "realized_move": 0.09584492754129248,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 725.1699582431029
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2026-02-05",
+      "implied_move": 0.07513995937853325,
+      "expected_move": 0.05893195929732675,
+      "realized_move": 0.05554804877440456,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 1112.1238574119925
+    },
+    {
+      "ticker": "AMZN",
+      "date": "2026-04-29",
+      "implied_move": 0.07508357307235693,
+      "expected_move": 0.056042153870925024,
+      "realized_move": 0.0076793983730687465,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -869.1141392801801
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2020-07-22",
+      "implied_move": 0.07508068501306087,
+      "expected_move": NaN,
+      "realized_move": 0.04349467617521596,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -483.89377534489904
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2020-10-27",
+      "implied_move": 0.0796350608847738,
+      "expected_move": 0.04349467617521596,
+      "realized_move": 0.04956622149566581,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -516.3068898852362
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2021-01-26",
+      "implied_move": 0.07965667722028912,
+      "expected_move": 0.046530448835440885,
+      "realized_move": 0.002453324848494365,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -418.48932627269824
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2021-04-27",
+      "implied_move": 0.07963316975989322,
+      "expected_move": 0.031838074173125376,
+      "realized_move": 0.02828556587161124,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -939.2937254459102
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2021-07-27",
+      "implied_move": 0.07963798820906684,
+      "expected_move": 0.030949947097746844,
+      "realized_move": 0.0011168667183151237,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1241.4609060517541
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2021-10-26",
+      "implied_move": 0.07961914960158484,
+      "expected_move": 0.0249833310218605,
+      "realized_move": 0.04211413491518856,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -723.7013819377316
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2022-01-25",
+      "implied_move": 0.07962509076159068,
+      "expected_move": 0.027838465004081842,
+      "realized_move": 0.028493096108482163,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1231.5343956202269
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2022-04-26",
+      "implied_move": 0.07969479296232228,
+      "expected_move": 0.02793198373328189,
+      "realized_move": 0.04810895567685347,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -545.5940038500121
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2022-07-26",
+      "implied_move": 0.07964702670072211,
+      "expected_move": 0.030454105226228337,
+      "realized_move": 0.06685186787472341,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -396.9028944666643
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2022-10-25",
+      "implied_move": 0.07966685457507124,
+      "expected_move": 0.03337375418866677,
+      "realized_move": 0.07715627083444643,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -379.48090395391046
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2023-01-24",
+      "implied_move": 0.07969528978139884,
+      "expected_move": 0.036822510356014346,
+      "realized_move": 0.00590802731434148,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -853.7511559674749
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2023-04-25",
+      "implied_move": 0.07968740504897964,
+      "expected_move": 0.037254348164245235,
+      "realized_move": 0.07243492304985133,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -351.8208470707759
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2023-07-25",
+      "implied_move": 0.07965130165322824,
+      "expected_move": 0.042773017811525246,
+      "realized_move": 0.03763740229926393,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1160.2029432908603
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2023-10-24",
+      "implied_move": 0.07965466942628094,
+      "expected_move": 0.04733808475914385,
+      "realized_move": 0.030677949157114304,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1440.0277604641888
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2024-01-30",
+      "implied_move": 0.07962489572295914,
+      "expected_move": 0.045908561539384565,
+      "realized_move": 0.026946362652204292,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1792.4157059367717
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2024-04-25",
+      "implied_move": 0.07512462682959123,
+      "expected_move": 0.04571521985734983,
+      "realized_move": 0.018243691756969715,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1698.406227692627
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2024-07-30",
+      "implied_move": 0.07965759377587296,
+      "expected_move": 0.04198206186736436,
+      "realized_move": 0.010805990491959738,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1785.8532945953048
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2024-10-30",
+      "implied_move": 0.07510831342759614,
+      "expected_move": 0.0349763271945189,
+      "realized_move": 0.06052758573969319,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1255.8472921917419
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2025-01-29",
+      "implied_move": 0.07507348422619851,
+      "expected_move": 0.03289774155767475,
+      "realized_move": 0.06180906066178271,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1148.4036182533018
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2025-04-30",
+      "implied_move": 0.07507608370738135,
+      "expected_move": 0.0398853707261049,
+      "realized_move": 0.07625353781859867,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 1412.8046284850134
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2025-07-30",
+      "implied_move": 0.07507667215555915,
+      "expected_move": 0.04036269757219832,
+      "realized_move": 0.03947465737521205,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1787.0744133863482
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2025-10-29",
+      "implied_move": 0.07508605471353291,
+      "expected_move": 0.040592354456691834,
+      "realized_move": 0.02915702043662427,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1910.516245345265
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2026-01-28",
+      "implied_move": 0.07508439033757401,
+      "expected_move": 0.04040223836663058,
+      "realized_move": 0.0999315049399564,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 289.40834118958446
+    },
+    {
+      "ticker": "MSFT",
+      "date": "2026-04-29",
+      "implied_move": 0.07509858896427622,
+      "expected_move": 0.04952538115259959,
+      "realized_move": 0.03929691983619443,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1545.983639994316
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2020-08-19",
+      "implied_move": 0.07678489873883522,
+      "expected_move": NaN,
+      "realized_move": 0.00020592845040057206,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -41.76233142838464
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2020-11-18",
+      "implied_move": 0.07921308498560953,
+      "expected_move": 0.00020592845040057206,
+      "realized_move": 0.0008563280402569262,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -79.41376317453978
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2021-02-24",
+      "implied_move": 0.07646518244194792,
+      "expected_move": 0.0005311282453287491,
+      "realized_move": 0.08217769427016508,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -72.8971002944163
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2021-05-26",
+      "implied_move": 0.07913921807482666,
+      "expected_move": 0.027746650253607525,
+      "realized_move": 0.013503362397229046,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -82.65393963470706
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2021-08-18",
+      "implied_move": 0.07537902669640757,
+      "expected_move": 0.024185828289512906,
+      "realized_move": 0.03981087722349197,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -71.99140288983472
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2021-11-17",
+      "implied_move": 0.07517389596281125,
+      "expected_move": 0.02731083807630872,
+      "realized_move": 0.08249881776916324,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 51.72883996897144
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2022-02-16",
+      "implied_move": 0.07517730672838643,
+      "expected_move": 0.036508834691784474,
+      "realized_move": 0.07559123813018354,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -110.04650072066579
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2022-05-25",
+      "implied_move": 0.07564219014609799,
+      "expected_move": 0.042092035182984336,
+      "realized_move": 0.05160529793114721,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 35.6589848313306
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2022-08-24",
+      "implied_move": 0.07511322486249415,
+      "expected_move": 0.0432811930265047,
+      "realized_move": 0.04012298136521797,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -59.146940071557765
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2022-11-16",
+      "implied_move": 0.07577969467319776,
+      "expected_move": 0.04827082464085687,
+      "realized_move": 0.014644747457545848,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -66.93303495184227
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2023-02-22",
+      "implied_move": 0.08241184530164944,
+      "expected_move": 0.04999437706801799,
+      "realized_move": 0.14021408226326582,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 35.69660454444238
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2023-05-24",
+      "implied_move": 0.07506628654462602,
+      "expected_move": 0.05724892556715558,
+      "realized_move": 0.24369647340226552,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 525.6377060072846
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2023-08-23",
+      "implied_move": 0.07518298300593865,
+      "expected_move": 0.08602306444278514,
+      "realized_move": 0.0009975532081105687,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -185.59660034136323
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2023-11-21",
+      "implied_move": 0.07960679527251571,
+      "expected_move": 0.08117139894086246,
+      "realized_move": 0.024587431723259723,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -215.43513271783013
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2024-02-21",
+      "implied_move": 0.08182258701340786,
+      "expected_move": 0.07393247568512452,
+      "realized_move": 0.16400898595581914,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 63.23039821330167
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2024-05-22",
+      "implied_move": 0.07525452424274486,
+      "expected_move": 0.08498469416332897,
+      "realized_move": 0.09319663104306519,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 394.43043664834113
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2024-08-28",
+      "implied_move": 0.07506466234099371,
+      "expected_move": 0.09018361080231872,
+      "realized_move": 0.06384843628616965,
+      "gate_fired": true,
+      "filtered_pnl": -251.73662001237972,
+      "unfiltered_pnl": -251.73662001237972
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2024-11-20",
+      "implied_move": 0.07510526043842254,
+      "expected_move": 0.09314929266743768,
+      "realized_move": 0.005346563963976703,
+      "gate_fired": true,
+      "filtered_pnl": -546.0368589677237,
+      "unfiltered_pnl": -546.0368589677237
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2025-02-26",
+      "implied_move": 0.07507999171371636,
+      "expected_move": 0.09198701973074154,
+      "realized_move": 0.08478062880758996,
+      "gate_fired": true,
+      "filtered_pnl": -377.69248664595943,
+      "unfiltered_pnl": -377.69248664595943
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2025-05-28",
+      "implied_move": 0.08179687272394902,
+      "expected_move": 0.08505783804878206,
+      "realized_move": 0.03248994479484102,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -513.4510188659915
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2025-08-27",
+      "implied_move": 0.07517145752994922,
+      "expected_move": 0.058657021972853995,
+      "realized_move": 0.007874547726525405,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -586.732925615288
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2025-11-19",
+      "implied_move": 0.07506497049822297,
+      "expected_move": 0.05951664628765585,
+      "realized_move": 0.03152478448099327,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -550.8566117900045
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2026-02-25",
+      "implied_move": 0.07506712913699835,
+      "expected_move": 0.060383815382372544,
+      "realized_move": 0.05456124072866231,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -78.85707992066455
+    },
+    {
+      "ticker": "NVDA",
+      "date": "2026-05-20",
+      "implied_move": 0.07508717581736629,
+      "expected_move": 0.04670284722897794,
+      "realized_move": 0.017720537361840427,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -751.2481385153369
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2020-07-22",
+      "implied_move": 0.07526634188983633,
+      "expected_move": NaN,
+      "realized_move": 0.04977615338574293,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 665.7486235795077
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2020-10-21",
+      "implied_move": 0.075185863487552,
+      "expected_move": 0.04977615338574293,
+      "realized_move": 0.007453064711647084,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -517.5153864159365
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2021-01-27",
+      "implied_move": 0.07513186621082425,
+      "expected_move": 0.028614609048695006,
+      "realized_move": 0.033246240146660666,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 613.9445123803453
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2021-04-26",
+      "implied_move": 0.07964869564891662,
+      "expected_move": 0.030158486081350227,
+      "realized_move": 0.04532647907368281,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -868.5711864809273
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2021-07-26",
+      "implied_move": 0.07960589806137856,
+      "expected_move": 0.03395048432943337,
+      "realized_move": 0.01952494819687245,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -980.9188288290025
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2021-10-20",
+      "implied_move": 0.07509030709797336,
+      "expected_move": 0.031065377102921187,
+      "realized_move": 0.03257101073349511,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -663.2812875114614
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2022-01-26",
+      "implied_move": 0.07509310981756039,
+      "expected_move": 0.03131631604135018,
+      "realized_move": 0.11554175561970448,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 342.65044261807634
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2022-04-20",
+      "implied_move": 0.07511126517351217,
+      "expected_move": 0.04334852169540079,
+      "realized_move": 0.03231684066245499,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1360.433062389886
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2022-07-20",
+      "implied_move": 0.07515087510825193,
+      "expected_move": 0.041969561566282565,
+      "realized_move": 0.09780470722853529,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 1252.6156795404531
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2022-10-19",
+      "implied_move": 0.07506766175317243,
+      "expected_move": 0.04797313079663161,
+      "realized_move": 0.0664744863679374,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -831.2414069935621
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2023-01-25",
+      "implied_move": 0.07514534848389975,
+      "expected_move": 0.0553508085036679,
+      "realized_move": 0.10967259156647335,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 2222.1666989523947
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2023-04-19",
+      "implied_move": 0.07508845035433886,
+      "expected_move": 0.06490410243114449,
+      "realized_move": 0.09745828230593856,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 694.6029555089917
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2023-07-19",
+      "implied_move": 0.0750706501736287,
+      "expected_move": 0.07142057783517645,
+      "realized_move": 0.09737009860008494,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 687.3324343664135
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2023-10-18",
+      "implied_move": 0.07510067957619068,
+      "expected_move": 0.08115122163557802,
+      "realized_move": 0.09300310180733784,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 2128.0244146727055
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2024-01-24",
+      "implied_move": 0.07511872261258412,
+      "expected_move": 0.08870523301980836,
+      "realized_move": 0.12125293136804816,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 898.6297036772157
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2024-04-23",
+      "implied_move": 0.07962986803124474,
+      "expected_move": 0.08941912998835132,
+      "realized_move": 0.12061109407252757,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 1094.88847886656
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2024-07-24",
+      "implied_move": 0.08179640108905838,
+      "expected_move": 0.10045591166461039,
+      "realized_move": 0.12334604589403697,
+      "gate_fired": true,
+      "filtered_pnl": -146.71442201717582,
+      "unfiltered_pnl": -146.71442201717582
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2024-10-23",
+      "implied_move": 0.07511064836711348,
+      "expected_move": 0.09069571193557334,
+      "realized_move": 0.21919035070290427,
+      "gate_fired": true,
+      "filtered_pnl": 3246.9129111631773,
+      "unfiltered_pnl": 3246.9129111631773
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2025-01-29",
+      "implied_move": 0.07508514130683226,
+      "expected_move": 0.1097851949774442,
+      "realized_move": 0.028732954254456988,
+      "gate_fired": true,
+      "filtered_pnl": -1462.7774611888453,
+      "unfiltered_pnl": -1462.7774611888453
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2025-04-22",
+      "implied_move": 0.0817855774079658,
+      "expected_move": 0.09966774031344215,
+      "realized_move": 0.0536622440095611,
+      "gate_fired": true,
+      "filtered_pnl": -117.3474580430775,
+      "unfiltered_pnl": -117.3474580430775
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2025-07-23",
+      "implied_move": 0.07506866415831792,
+      "expected_move": 0.09419323552639497,
+      "realized_move": 0.08197020076301287,
+      "gate_fired": true,
+      "filtered_pnl": -1023.611252604067,
+      "unfiltered_pnl": -1023.611252604067
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2025-10-22",
+      "implied_move": 0.07507520332710066,
+      "expected_move": 0.09226824829676096,
+      "realized_move": 0.022803402824313368,
+      "gate_fired": true,
+      "filtered_pnl": -1539.8856257791922,
+      "unfiltered_pnl": -1539.8856257791922
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2026-01-28",
+      "implied_move": 0.07508357219340794,
+      "expected_move": 0.0834932859238829,
+      "realized_move": 0.03453389466363932,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1746.6667773400986
+    },
+    {
+      "ticker": "TSLA",
+      "date": "2026-04-22",
+      "implied_move": 0.07507105946609806,
+      "expected_move": 0.0726534063358318,
+      "realized_move": 0.03558619957523779,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1141.0193264518894
+    },
+    {
+      "ticker": "META",
+      "date": "2020-07-30",
+      "implied_move": 0.07506922318726066,
+      "expected_move": NaN,
+      "realized_move": 0.0817484755414768,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 442.0172050300753
+    },
+    {
+      "ticker": "META",
+      "date": "2020-10-29",
+      "implied_move": 0.07508668862461253,
+      "expected_move": 0.0817484755414768,
+      "realized_move": 0.06309859259823902,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -30.8261178170942
+    },
+    {
+      "ticker": "META",
+      "date": "2021-01-27",
+      "implied_move": 0.07510716247744008,
+      "expected_move": 0.07242353406985791,
+      "realized_move": 0.02623663137489407,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -159.0203095933539
+    },
+    {
+      "ticker": "META",
+      "date": "2021-04-28",
+      "implied_move": 0.0751220051676587,
+      "expected_move": 0.0570278998382033,
+      "realized_move": 0.07297275561336392,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -73.69784149496991
+    },
+    {
+      "ticker": "META",
+      "date": "2021-07-28",
+      "implied_move": 0.07512613306075823,
+      "expected_move": 0.06101411378199345,
+      "realized_move": 0.04007712666664964,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -970.4879240301088
+    },
+    {
+      "ticker": "META",
+      "date": "2021-10-25",
+      "implied_move": 0.07962376909109571,
+      "expected_move": 0.05682671635892469,
+      "realized_move": 0.03918571668256343,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 99.38078845414566
+    },
+    {
+      "ticker": "META",
+      "date": "2022-02-02",
+      "implied_move": 0.07510759284403168,
+      "expected_move": 0.05388654974619781,
+      "realized_move": 0.26390093064396625,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 4940.162236166885
+    },
+    {
+      "ticker": "META",
+      "date": "2022-04-27",
+      "implied_move": 0.07517672560257235,
+      "expected_move": 0.08388860416016473,
+      "realized_move": 0.17593586215771673,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -81.45226218776952
+    },
+    {
+      "ticker": "META",
+      "date": "2022-07-27",
+      "implied_move": 0.07506395077427003,
+      "expected_move": 0.09539451140985873,
+      "realized_move": 0.05224675047081906,
+      "gate_fired": true,
+      "filtered_pnl": -451.94603585755976,
+      "unfiltered_pnl": -451.94603585755976
+    },
+    {
+      "ticker": "META",
+      "date": "2022-10-26",
+      "implied_move": 0.07516568438521211,
+      "expected_move": 0.09170679577602651,
+      "realized_move": 0.24557067545074496,
+      "gate_fired": true,
+      "filtered_pnl": 1968.741972397358,
+      "unfiltered_pnl": 1968.741972397358
+    },
+    {
+      "ticker": "META",
+      "date": "2023-02-01",
+      "implied_move": 0.07510777361613204,
+      "expected_move": 0.11451580613258976,
+      "realized_move": 0.23282398970907736,
+      "gate_fired": true,
+      "filtered_pnl": 2705.5415927187423,
+      "unfiltered_pnl": 2705.5415927187423
+    },
+    {
+      "ticker": "META",
+      "date": "2023-04-26",
+      "implied_move": 0.07508047971206885,
+      "expected_move": 0.14033922592436265,
+      "realized_move": 0.1392550327605333,
+      "gate_fired": true,
+      "filtered_pnl": 1103.4289798453246,
+      "unfiltered_pnl": 1103.4289798453246
+    },
+    {
+      "ticker": "META",
+      "date": "2023-07-26",
+      "implied_move": 0.07507230428703585,
+      "expected_move": 0.14862451056775883,
+      "realized_move": 0.04400978927026844,
+      "gate_fired": true,
+      "filtered_pnl": 1156.839370494621,
+      "unfiltered_pnl": 1156.839370494621
+    },
+    {
+      "ticker": "META",
+      "date": "2023-10-25",
+      "implied_move": 0.07513302324110364,
+      "expected_move": 0.1491160933932112,
+      "realized_move": 0.03732496414260156,
+      "gate_fired": true,
+      "filtered_pnl": -559.1420927088038,
+      "unfiltered_pnl": -559.1420927088038
+    },
+    {
+      "ticker": "META",
+      "date": "2024-02-01",
+      "implied_move": 0.07509633687969362,
+      "expected_move": 0.14888349932571596,
+      "realized_move": 0.20317642749060294,
+      "gate_fired": true,
+      "filtered_pnl": 2762.7113233353157,
+      "unfiltered_pnl": 2762.7113233353157
+    },
+    {
+      "ticker": "META",
+      "date": "2024-04-24",
+      "implied_move": 0.07507441064662809,
+      "expected_move": 0.14129293643154556,
+      "realized_move": 0.10561290200875739,
+      "gate_fired": true,
+      "filtered_pnl": 42.255950634993496,
+      "unfiltered_pnl": 42.255950634993496
+    },
+    {
+      "ticker": "META",
+      "date": "2024-07-31",
+      "implied_move": 0.0750914983237541,
+      "expected_move": 0.13250256641292563,
+      "realized_move": 0.04824870437918927,
+      "gate_fired": true,
+      "filtered_pnl": -971.3091234712338,
+      "unfiltered_pnl": -971.3091234712338
+    },
+    {
+      "ticker": "META",
+      "date": "2024-10-30",
+      "implied_move": 0.07507980542722234,
+      "expected_move": 0.1320028106514719,
+      "realized_move": 0.04092586988782865,
+      "gate_fired": true,
+      "filtered_pnl": -2216.5575602916942,
+      "unfiltered_pnl": -2216.5575602916942
+    },
+    {
+      "ticker": "META",
+      "date": "2025-01-29",
+      "implied_move": 0.0750852953580787,
+      "expected_move": 0.10642220995610736,
+      "realized_move": 0.015536193853986857,
+      "gate_fired": true,
+      "filtered_pnl": -1533.8519392513845,
+      "unfiltered_pnl": -1533.8519392513845
+    },
+    {
+      "ticker": "META",
+      "date": "2025-04-30",
+      "implied_move": 0.07509186903854628,
+      "expected_move": 0.07926123547422105,
+      "realized_move": 0.04227698472628205,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 574.5084255059337
+    },
+    {
+      "ticker": "META",
+      "date": "2025-07-30",
+      "implied_move": 0.07509476064782607,
+      "expected_move": 0.06713897946993964,
+      "realized_move": 0.11252712930803033,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -1656.8953699797712
+    },
+    {
+      "ticker": "META",
+      "date": "2025-10-29",
+      "implied_move": 0.07510765130883687,
+      "expected_move": 0.07570364697465988,
+      "realized_move": 0.11334768465917988,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 4223.790908622468
+    },
+    {
+      "ticker": "META",
+      "date": "2026-01-28",
+      "implied_move": 0.07510081379172069,
+      "expected_move": 0.08520648703923217,
+      "realized_move": 0.10404802222031617,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -518.5561794932873
+    },
+    {
+      "ticker": "META",
+      "date": "2026-04-29",
+      "implied_move": 0.07510714271343244,
+      "expected_move": 0.07281543638044632,
+      "realized_move": 0.0855003921421249,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 1625.4062880991696
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2020-07-30",
+      "implied_move": 0.07541226846017689,
+      "expected_move": NaN,
+      "realized_move": 0.03277491979336855,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -310.948388053308
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2020-10-29",
+      "implied_move": 0.07506323085196373,
+      "expected_move": 0.03277491979336855,
+      "realized_move": 0.03804383669298761,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -321.80387213776703
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2021-02-02",
+      "implied_move": 0.07984489285981863,
+      "expected_move": 0.03540937824317808,
+      "realized_move": 0.0728249825273144,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 333.31865769777505
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2021-04-27",
+      "implied_move": 0.07964065870953531,
+      "expected_move": 0.04788124633789018,
+      "realized_move": 0.0297077637156431,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -356.0773085140245
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2021-07-27",
+      "implied_move": 0.07967115969587289,
+      "expected_move": 0.043337875682328414,
+      "realized_move": 0.031796554338448635,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -546.7525991953444
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2021-10-26",
+      "implied_move": 0.0796019024723375,
+      "expected_move": 0.04102961141355246,
+      "realized_move": 0.049595241802371515,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -200.07121268108313
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2022-02-01",
+      "implied_move": 0.07961231409935315,
+      "expected_move": 0.04245721647835563,
+      "realized_move": 0.07523749481761866,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -64.25920675425732
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2022-04-26",
+      "implied_move": 0.07977095286486192,
+      "expected_move": 0.047140113383964635,
+      "realized_move": 0.03670871574214318,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -529.0909889728791
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2022-07-26",
+      "implied_move": 0.07964928937229362,
+      "expected_move": 0.045836188678736955,
+      "realized_move": 0.07655680114826846,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -198.28068388304382
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2022-10-25",
+      "implied_move": 0.07960276720179597,
+      "expected_move": 0.051308923848099444,
+      "realized_move": 0.09140514477673156,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 22.909905809923657
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2023-02-02",
+      "implied_move": 0.07510013090989112,
+      "expected_move": 0.05797908735856744,
+      "realized_move": 0.027473608114660375,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -279.8815822559409
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2023-04-25",
+      "implied_move": 0.07961166523506423,
+      "expected_move": 0.052310165556985685,
+      "realized_move": 0.0013481133417267976,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -411.98060508478375
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2023-07-25",
+      "implied_move": 0.07964499287306549,
+      "expected_move": 0.04876520926024615,
+      "realized_move": 0.05776934936942291,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -21.983189005142776
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2023-10-24",
+      "implied_move": 0.0796012804042576,
+      "expected_move": 0.05201180863911793,
+      "realized_move": 0.09509408572338585,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 152.46869748758036
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2024-01-30",
+      "implied_move": 0.07966495483576731,
+      "expected_move": 0.05769916412924472,
+      "realized_move": 0.07500335405393321,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -131.0674949977256
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2024-04-25",
+      "implied_move": 0.07511500692295205,
+      "expected_move": 0.05766989653378404,
+      "realized_move": 0.102243293703423,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -353.12727902751067
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2024-07-23",
+      "implied_move": 0.07960814463695326,
+      "expected_move": 0.06586171877894402,
+      "realized_move": 0.05038769295729406,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -395.15440376008337
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2024-10-29",
+      "implied_move": 0.07961225617465066,
+      "expected_move": 0.06259058025507222,
+      "realized_move": 0.028170804968314922,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -546.3612269748992
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2025-02-04",
+      "implied_move": 0.07964249920668022,
+      "expected_move": 0.05468628777902014,
+      "realized_move": 0.07292381547378302,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -385.0957075750921
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2025-04-24",
+      "implied_move": 0.07511852129721626,
+      "expected_move": 0.06036756369891047,
+      "realized_move": 0.016825609508002604,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -215.79470281251997
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2025-07-23",
+      "implied_move": 0.0751686998676636,
+      "expected_move": 0.062302250719694946,
+      "realized_move": 0.01019824882829412,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -730.7538546473661
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2025-10-29",
+      "implied_move": 0.07511854469635564,
+      "expected_move": 0.05635586315205385,
+      "realized_move": 0.025166653841215192,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -656.3511763853894
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2026-02-04",
+      "implied_move": 0.07507915028745243,
+      "expected_move": 0.047614934166782516,
+      "realized_move": 0.005374778371478595,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -522.1340591420012
+    },
+    {
+      "ticker": "GOOGL",
+      "date": "2026-04-29",
+      "implied_move": 0.07508521804634212,
+      "expected_move": 0.03891136220647569,
+      "realized_move": 0.09961702406520634,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 862.040668693604
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2020-07-16",
+      "implied_move": 0.0752485183113668,
+      "expected_move": NaN,
+      "realized_move": 0.06522684787763111,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -194.46409860567655
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2020-10-20",
+      "implied_move": 0.07961060030014615,
+      "expected_move": 0.06522684787763111,
+      "realized_move": 0.06922083381432698,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 1.5605597489484353
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2021-01-19",
+      "implied_move": 0.08178334700866002,
+      "expected_move": 0.06722384084597904,
+      "realized_move": 0.16854337736766944,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 366.60132560406055
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2021-04-20",
+      "implied_move": 0.07994906640472949,
+      "expected_move": 0.10099701968654251,
+      "realized_move": 0.07400333512694968,
+      "gate_fired": true,
+      "filtered_pnl": -45.62586671077588,
+      "unfiltered_pnl": -45.62586671077588
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2021-07-20",
+      "implied_move": 0.07962488470029014,
+      "expected_move": 0.0942485985466443,
+      "realized_move": 0.03280294877789258,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -204.37166279717349
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2021-10-19",
+      "implied_move": 0.07973255473925916,
+      "expected_move": 0.08195946859289396,
+      "realized_move": 0.02169016516146316,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -214.3803240110865
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2022-01-20",
+      "implied_move": 0.07506793624382892,
+      "expected_move": 0.07191458468765549,
+      "realized_move": 0.21790458626053022,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 792.4938273301377
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2022-04-19",
+      "implied_move": 0.08177505303883151,
+      "expected_move": 0.09277029919806616,
+      "realized_move": 0.35116607551133094,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 878.1862076726829
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2022-07-19",
+      "implied_move": 0.07983886422319854,
+      "expected_move": 0.12506977123722426,
+      "realized_move": 0.07345132098767415,
+      "gate_fired": true,
+      "filtered_pnl": 172.08372083811264,
+      "unfiltered_pnl": 172.08372083811264
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2022-10-18",
+      "implied_move": 0.07963759084725329,
+      "expected_move": 0.12609783037597966,
+      "realized_move": 0.13086441789163628,
+      "gate_fired": true,
+      "filtered_pnl": 182.3893832537433,
+      "unfiltered_pnl": 182.3893832537433
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2023-01-19",
+      "implied_move": 0.07591983168805219,
+      "expected_move": 0.13380327838564332,
+      "realized_move": 0.08461590220709558,
+      "gate_fired": true,
+      "filtered_pnl": 15.781949988740962,
+      "unfiltered_pnl": 15.781949988740962
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2023-04-18",
+      "implied_move": 0.07980001719417976,
+      "expected_move": 0.12331234399057157,
+      "realized_move": 0.03170508513908443,
+      "gate_fired": true,
+      "filtered_pnl": -120.27275874068437,
+      "unfiltered_pnl": -120.27275874068437
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2023-07-19",
+      "implied_move": 0.07509064008749501,
+      "expected_move": 0.11802506274208842,
+      "realized_move": 0.08410976749907251,
+      "gate_fired": true,
+      "filtered_pnl": -111.79147120754351,
+      "unfiltered_pnl": -111.79147120754351
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2023-10-18",
+      "implied_move": 0.07506337585112728,
+      "expected_move": 0.12443841508223591,
+      "realized_move": 0.16054763975038244,
+      "gate_fired": true,
+      "filtered_pnl": 125.10073030368949,
+      "unfiltered_pnl": 125.10073030368949
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2024-01-23",
+      "implied_move": 0.07963952859837416,
+      "expected_move": 0.14179559940585082,
+      "realized_move": 0.10703178756681098,
+      "gate_fired": true,
+      "filtered_pnl": 412.0321553447575,
+      "unfiltered_pnl": 412.0321553447575
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2024-04-18",
+      "implied_move": 0.07525227302361052,
+      "expected_move": 0.12793649956913591,
+      "realized_move": 0.09093288392014132,
+      "gate_fired": true,
+      "filtered_pnl": 158.50756624423957,
+      "unfiltered_pnl": 158.50756624423957
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2024-07-18",
+      "implied_move": 0.07535282932053221,
+      "expected_move": 0.09540735062023721,
+      "realized_move": 0.015084616941612339,
+      "gate_fired": true,
+      "filtered_pnl": -278.7727918592427,
+      "unfiltered_pnl": -278.7727918592427
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2024-10-17",
+      "implied_move": 0.07535895824164686,
+      "expected_move": 0.08811151261447948,
+      "realized_move": 0.11087036453117594,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 75.66167074443365
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2025-01-21",
+      "implied_move": 0.08177551997025652,
+      "expected_move": 0.08561225594442194,
+      "realized_move": 0.0969436980385241,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 725.5833789481549
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2025-04-17",
+      "implied_move": 0.07524082271687794,
+      "expected_move": 0.0871532304233505,
+      "realized_move": 0.015292426142407889,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -129.21469369824626
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2025-07-17",
+      "implied_move": 0.07508844155960025,
+      "expected_move": 0.08510164804876594,
+      "realized_move": 0.05095863366074482,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -511.79213542801153
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2025-10-21",
+      "implied_move": 0.07965156724191848,
+      "expected_move": 0.08095775631897498,
+      "realized_move": 0.10068071763447539,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -119.78791467324481
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2026-01-20",
+      "implied_move": 0.08180157181056627,
+      "expected_move": 0.0734743910544866,
+      "realized_move": 0.02177402566312825,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -258.54370241690776
+    },
+    {
+      "ticker": "NFLX",
+      "date": "2026-04-16",
+      "implied_move": 0.07506267725570236,
+      "expected_move": 0.06281717081652625,
+      "realized_move": 0.09722611808071646,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 271.6458592736308
+    },
+    {
+      "ticker": "AMD",
+      "date": "2020-07-28",
+      "implied_move": 0.07963147676528938,
+      "expected_move": NaN,
+      "realized_move": 0.12542516862868824,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 346.06510732318566
+    },
+    {
+      "ticker": "AMD",
+      "date": "2020-10-27",
+      "implied_move": 0.07965028467860129,
+      "expected_move": 0.12542516862868824,
+      "realized_move": 0.031440109202483524,
+      "gate_fired": true,
+      "filtered_pnl": -235.3686838909489,
+      "unfiltered_pnl": -235.3686838909489
+    },
+    {
+      "ticker": "AMD",
+      "date": "2021-01-26",
+      "implied_move": 0.07971243276449579,
+      "expected_move": 0.07843263891558588,
+      "realized_move": 0.06197870133381089,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -194.02821894198132
+    },
+    {
+      "ticker": "AMD",
+      "date": "2021-04-27",
+      "implied_move": 0.07974082636878757,
+      "expected_move": 0.07294799305499422,
+      "realized_move": 0.013965525809084278,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -367.5249794244737
+    },
+    {
+      "ticker": "AMD",
+      "date": "2021-07-27",
+      "implied_move": 0.07960897625258655,
+      "expected_move": 0.058202376243516735,
+      "realized_move": 0.07579920486001579,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 339.6077830931463
+    },
+    {
+      "ticker": "AMD",
+      "date": "2021-10-26",
+      "implied_move": 0.07968272537395772,
+      "expected_move": 0.06172174196681655,
+      "realized_move": 0.005287574426627084,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -530.6108670476824
+    },
+    {
+      "ticker": "AMD",
+      "date": "2022-02-01",
+      "implied_move": 0.07960344004753149,
+      "expected_move": 0.05231604737678497,
+      "realized_move": 0.05120742780820908,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 637.3786094467068
+    },
+    {
+      "ticker": "AMD",
+      "date": "2022-05-03",
+      "implied_move": 0.07989778925966275,
+      "expected_move": 0.0521576731527027,
+      "realized_move": 0.09096895825064255,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 92.18510751813301
+    },
+    {
+      "ticker": "AMD",
+      "date": "2022-08-02",
+      "implied_move": 0.07961662722094967,
+      "expected_move": 0.05700908378994518,
+      "realized_move": 0.012085855237907062,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 220.84105306240963
+    },
+    {
+      "ticker": "AMD",
+      "date": "2022-11-01",
+      "implied_move": 0.07963381408214501,
+      "expected_move": 0.04284166961609753,
+      "realized_move": 0.01726447840984291,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -247.6710077918542
+    },
+    {
+      "ticker": "AMD",
+      "date": "2023-01-31",
+      "implied_move": 0.07962223398663118,
+      "expected_move": 0.041069715767017456,
+      "realized_move": 0.12628074079947327,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 698.2225553858298
+    },
+    {
+      "ticker": "AMD",
+      "date": "2023-05-02",
+      "implied_move": 0.0796063305848197,
+      "expected_move": 0.04910747070022525,
+      "realized_move": 0.0922033208527272,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -364.58376771413896
+    },
+    {
+      "ticker": "AMD",
+      "date": "2023-08-01",
+      "implied_move": 0.07964661224944551,
+      "expected_move": 0.05888719508068062,
+      "realized_move": 0.07015306213473704,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -513.7138209008845
+    },
+    {
+      "ticker": "AMD",
+      "date": "2023-10-31",
+      "implied_move": 0.07960960630014131,
+      "expected_move": 0.058181427240020775,
+      "realized_move": 0.09685280117286643,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 391.1486163014197
+    },
+    {
+      "ticker": "AMD",
+      "date": "2024-01-30",
+      "implied_move": 0.07961157470593487,
+      "expected_move": 0.0696270805833007,
+      "realized_move": 0.02539808891778772,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -631.7301371102803
+    },
+    {
+      "ticker": "AMD",
+      "date": "2024-04-30",
+      "implied_move": 0.07960217918960155,
+      "expected_move": 0.06640091322199802,
+      "realized_move": 0.0890895326136133,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -198.41876118311484
+    },
+    {
+      "ticker": "AMD",
+      "date": "2024-07-30",
+      "implied_move": 0.07963932931139181,
+      "expected_move": 0.06616598501736937,
+      "realized_move": 0.04362895969096203,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -350.74163738377683
+    },
+    {
+      "ticker": "AMD",
+      "date": "2024-10-29",
+      "implied_move": 0.07961079849310719,
+      "expected_move": 0.07010887307400124,
+      "realized_move": 0.10616537682095861,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -94.98498446393933
+    },
+    {
+      "ticker": "AMD",
+      "date": "2025-02-04",
+      "implied_move": 0.07964870964701465,
+      "expected_move": 0.0812214853753907,
+      "realized_move": 0.06267780639137688,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -315.7962989647058
+    },
+    {
+      "ticker": "AMD",
+      "date": "2025-05-06",
+      "implied_move": 0.07970261015042325,
+      "expected_move": 0.07327111857437865,
+      "realized_move": 0.01764345787173327,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -379.5896888381103
+    },
+    {
+      "ticker": "AMD",
+      "date": "2025-08-05",
+      "implied_move": 0.0796917883951994,
+      "expected_move": 0.06395113570175441,
+      "realized_move": 0.06419598759758327,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -774.8654231868131
+    },
+    {
+      "ticker": "AMD",
+      "date": "2025-11-04",
+      "implied_move": 0.07962719007873008,
+      "expected_move": 0.06320650138461019,
+      "realized_move": 0.0251149107932942,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": -262.9301936887932
+    },
+    {
+      "ticker": "AMD",
+      "date": "2026-02-03",
+      "implied_move": 0.07967021737472678,
+      "expected_move": 0.05423926508716366,
+      "realized_move": 0.17314443047898198,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 2388.69153535075
+    },
+    {
+      "ticker": "AMD",
+      "date": "2026-05-05",
+      "implied_move": 0.07967477385232555,
+      "expected_move": 0.07270755778231294,
+      "realized_move": 0.1861453669565576,
+      "gate_fired": false,
+      "filtered_pnl": null,
+      "unfiltered_pnl": 1773.933928425191
+    }
+  ]
+}

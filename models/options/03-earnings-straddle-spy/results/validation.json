@@ -1,71 +1,274 @@
 {
   "phase": "1-synthetic-not-tradeable",
   "per_ticker": {
-    "NVDA": {
-      "implied_move": 0.07510526043842254,
-      "expected_move": 0.10436422769742223,
+    "AAPL": {
+      "implied_move": 0.07506671642973922,
+      "expected_move": 0.019683012671609754,
       "k": 1.2,
       "filtered": {
-        "took_trade": true,
+        "took_trade": false,
         "metrics": {
-          "annualized_return": -0.0027447986134685465,
-          "sharpe": -0.8622991970884405,
-          "sortino": -0.9069512204400856,
-          "max_drawdown": -0.006672475462698335,
-          "hit_rate": 0.2,
-          "probabilistic_sharpe": 0.03754911092438229,
-          "deflated_sharpe": 0.03754911092438229,
-          "n_bars": 502
+          "sharpe": 0.0,
+          "annualized_return": 0.0,
+          "max_drawdown": 0.0
         },
-        "final_equity": 99453.96314103228,
-        "trade_pnl": -546.0368589677237,
-        "implied_move": 0.07510526043842254,
-        "expected_move": 0.10436422769742223
+        "final_equity": 100000.0,
+        "trade_pnl": 0.0
       },
       "unfiltered": {
         "took_trade": true,
         "metrics": {
-          "annualized_return": -0.0027447986134685465,
-          "sharpe": -0.8622991970884405,
-          "sortino": -0.9069512204400856,
-          "max_drawdown": -0.006672475462698335,
-          "hit_rate": 0.2,
-          "probabilistic_sharpe": 0.03754911092438229,
-          "deflated_sharpe": 0.03754911092438229,
-          "n_bars": 502
+          "annualized_return": -0.00159553091175757,
+          "sharpe": -0.6255973243174786,
+          "sortino": -0.6255973243174786,
+          "max_drawdown": -0.010181309142157868,
+          "hit_rate": 0.0,
+          "probabilistic_sharpe": 9.077595718703967e-05,
+          "deflated_sharpe": 9.077595718703967e-05,
+          "n_bars": 1615
         },
-        "final_equity": 99453.96314103228,
-        "trade_pnl": -546.0368589677237,
-        "implied_move": 0.07510526043842254,
-        "expected_move": 0.10436422769742223
+        "final_equity": 98981.86908578422,
+        "trade_pnl": -1018.1309142157843,
+        "implied_move": 0.07506671642973922,
+        "expected_move": 0.019683012671609754
+      }
+    },
+    "AMZN": {
+      "implied_move": 0.07508357307235693,
+      "expected_move": 0.056042153870925024,
+      "k": 1.2,
+      "filtered": {
+        "took_trade": false,
+        "metrics": {
+          "sharpe": 0.0,
+          "annualized_return": 0.0,
+          "max_drawdown": 0.0
+        },
+        "final_equity": 100000.0,
+        "trade_pnl": 0.0
+      },
+      "unfiltered": {
+        "took_trade": true,
+        "metrics": {
+          "annualized_return": -0.0013611413299519093,
+          "sharpe": -0.4255598309565161,
+          "sortino": -0.4271901941484423,
+          "max_drawdown": -0.00938357065494988,
+          "hit_rate": 0.2,
+          "probabilistic_sharpe": 0.012718012758528211,
+          "deflated_sharpe": 0.012718012758528211,
+          "n_bars": 1615
+        },
+        "final_equity": 99130.88586071982,
+        "trade_pnl": -869.1141392801801,
+        "implied_move": 0.07508357307235693,
+        "expected_move": 0.056042153870925024
+      }
+    },
+    "NVDA": {
+      "implied_move": 0.07508717581736629,
+      "expected_move": 0.04670284722897794,
+      "k": 1.2,
+      "filtered": {
+        "took_trade": false,
+        "metrics": {
+          "sharpe": 0.0,
+          "annualized_return": 0.0,
+          "max_drawdown": 0.0
+        },
+        "final_equity": 100000.0,
+        "trade_pnl": 0.0
+      },
+      "unfiltered": {
+        "took_trade": true,
+        "metrics": {
+          "annualized_return": -0.001175959555776207,
+          "sharpe": -0.40873050948698597,
+          "sortino": -0.41191950979538194,
+          "max_drawdown": -0.008401933766094771,
+          "hit_rate": 0.2,
+          "probabilistic_sharpe": 0.021418293105787748,
+          "deflated_sharpe": 0.021418293105787748,
+          "n_bars": 1615
+        },
+        "final_equity": 99248.75186148466,
+        "trade_pnl": -751.2481385153369,
+        "implied_move": 0.07508717581736629,
+        "expected_move": 0.04670284722897794
+      }
+    },
+    "TSLA": {
+      "implied_move": 0.07507105946609806,
+      "expected_move": 0.0726534063358318,
+      "k": 1.2,
+      "filtered": {
+        "took_trade": false,
+        "metrics": {
+          "sharpe": 0.0,
+          "annualized_return": 0.0,
+          "max_drawdown": 0.0
+        },
+        "final_equity": 100000.0,
+        "trade_pnl": 0.0
+      },
+      "unfiltered": {
+        "took_trade": true,
+        "metrics": {
+          "annualized_return": -0.0017890471682681097,
+          "sharpe": -0.6220656263676283,
+          "sortino": -0.6220656263676283,
+          "max_drawdown": -0.011410193264518864,
+          "hit_rate": 0.0,
+          "probabilistic_sharpe": 2.8820776833549143e-05,
+          "deflated_sharpe": 2.8820776833549143e-05,
+          "n_bars": 1615
+        },
+        "final_equity": 98858.98067354811,
+        "trade_pnl": -1141.0193264518894,
+        "implied_move": 0.07507105946609806,
+        "expected_move": 0.0726534063358318
+      }
+    },
+    "META": {
+      "implied_move": 0.07510714271343244,
+      "expected_move": 0.07281543638044632,
+      "k": 1.2,
+      "filtered": {
+        "took_trade": false,
+        "metrics": {
+          "sharpe": 0.0,
+          "annualized_return": 0.0,
+          "max_drawdown": 0.0
+        },
+        "final_equity": 100000.0,
+        "trade_pnl": 0.0
+      },
+      "unfiltered": {
+        "took_trade": true,
+        "metrics": {
+          "annualized_return": 0.0025190136546164865,
+          "sharpe": 0.34162304793478393,
+          "sortino": 2.768808664684099,
+          "max_drawdown": -0.0038697083341836525,
+          "hit_rate": 0.4,
+          "probabilistic_sharpe": 0.9300356911975878,
+          "deflated_sharpe": 0.9300356911975878,
+          "n_bars": 1615
+        },
+        "final_equity": 101625.40628809917,
+        "trade_pnl": 1625.4062880991696,
+        "implied_move": 0.07510714271343244,
+        "expected_move": 0.07281543638044632
+      }
+    },
+    "NFLX": {
+      "implied_move": 0.07506267725570236,
+      "expected_move": 0.06281717081652625,
+      "k": 1.2,
+      "filtered": {
+        "took_trade": false,
+        "metrics": {
+          "sharpe": 0.0,
+          "annualized_return": 0.0,
+          "max_drawdown": 0.0
+        },
+        "final_equity": 100000.0,
+        "trade_pnl": 0.0
+      },
+      "unfiltered": {
+        "took_trade": true,
+        "metrics": {
+          "annualized_return": 0.0004233833929023767,
+          "sharpe": 0.4513817062281477,
+          "sortino": 3.8324977933893973,
+          "max_drawdown": -0.0004297942487572204,
+          "hit_rate": 0.4,
+          "probabilistic_sharpe": 0.9797350563159607,
+          "deflated_sharpe": 0.9797350563159607,
+          "n_bars": 1615
+        },
+        "final_equity": 100271.64585927363,
+        "trade_pnl": 271.6458592736308,
+        "implied_move": 0.07506267725570236,
+        "expected_move": 0.06281717081652625
+      }
+    },
+    "AMD": {
+      "implied_move": 0.07967477385232555,
+      "expected_move": 0.07270755778231294,
+      "k": 1.2,
+      "filtered": {
+        "took_trade": false,
+        "metrics": {
+          "sharpe": 0.0,
+          "annualized_return": 0.0,
+          "max_drawdown": 0.0
+        },
+        "final_equity": 100000.0,
+        "trade_pnl": 0.0
+      },
+      "unfiltered": {
+        "took_trade": true,
+        "metrics": {
+          "annualized_return": 0.0027474987799744888,
+          "sharpe": 0.18871212739774723,
+          "sortino": 0.5069697137986059,
+          "max_drawdown": -0.013584399385265011,
+          "hit_rate": 0.4,
+          "probabilistic_sharpe": 0.7182023393714365,
+          "deflated_sharpe": 0.7182023393714365,
+          "n_bars": 1615
+        },
+        "final_equity": 101773.93392842519,
+        "trade_pnl": 1773.933928425191,
+        "implied_move": 0.07967477385232555,
+        "expected_move": 0.07270755778231294
       }
     }
   },
   "pooled_filtered": {
-    "bootstrap_t_stat": -0.21370948982726928,
-    "bootstrap_ci_lower": -276.2433412021292,
-    "bootstrap_ci_upper": 250.16599271714637,
-    "bootstrap_p_value": 0.8250874562718641
+    "bootstrap_t_stat": 0.26842137062198745,
+    "bootstrap_ci_lower": -324.4186042895926,
+    "bootstrap_ci_upper": 463.3059592291036,
+    "bootstrap_p_value": 0.7781109445277361
   },
   "fdr": {
     "tickers": [
-      "NVDA"
+      "AAPL",
+      "AMZN",
+      "NVDA",
+      "TSLA",
+      "META",
+      "NFLX",
+      "AMD"
     ],
     "p_values": [
-      0.8250874562718641
+      1.0,
+      1.0,
+      0.0004997501249375312,
+      0.7731134432783608,
+      0.47176411794102946,
+      0.39080459770114945,
+      1.0
     ],
     "rejected": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
       false
     ],
-    "threshold": 0.0
+    "threshold": 0.0004997501249375312
   },
   "trade_metrics": {
-    "n_trades": 7,
-    "win_rate": 0.42857142857142855,
-    "profit_factor": 0.8202321202760127,
-    "expectancy": -30.786667310052767,
-    "avg_win": 327.7661802896425,
-    "avg_loss": -299.7013030098242,
+    "n_trades": 33,
+    "win_rate": 0.3939393939393939,
+    "profit_factor": 1.1535746162319809,
+    "expectancy": 56.690211057675754,
+    "avg_win": 1080.948277427909,
+    "avg_loss": -609.0775320829758,
     "avg_hold": 0.0
   }
 }
