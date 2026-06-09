@@ -68,3 +68,66 @@ def test_snapshot_is_idempotent_per_day(tmp_path: Path, monkeypatch: pytest.Monk
 
     assert first["AAPL"] == 4
     assert second["AAPL"] == -1  # sentinel: already snapshotted today, no refetch
+
+
+def test_one_failing_ticker_does_not_abort_the_watchlist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.options import yf_chain
+
+    monkeypatch.setattr(yf_chain, "processed_dir", lambda source: tmp_path / source)
+
+    class _FlakyTicker(_FakeTicker):
+        def __init__(self, symbol: str) -> None:
+            if symbol == "BAD":
+                raise RuntimeError("yfinance flake")
+            super().__init__(symbol)
+
+    monkeypatch.setattr(yf_chain.yf, "Ticker", _FlakyTicker)
+
+    counts = yf_chain.snapshot_chains(["AAPL", "BAD", "MSFT"])
+
+    assert counts["AAPL"] == 4 and counts["MSFT"] == 4
+    assert counts["BAD"] == -2
+    assert not (tmp_path / "options" / "yf_snapshots" / "BAD").exists()
+
+
+def test_empty_options_not_persisted_so_rerun_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.options import yf_chain
+
+    monkeypatch.setattr(yf_chain, "processed_dir", lambda source: tmp_path / source)
+
+    class _NoOptionsTicker(_FakeTicker):
+        def __init__(self, symbol: str) -> None:
+            super().__init__(symbol)
+            self.options = ()
+
+    monkeypatch.setattr(yf_chain.yf, "Ticker", _NoOptionsTicker)
+    first = yf_chain.snapshot_chains(["AAPL"])
+    assert first["AAPL"] == 0
+    assert not list((tmp_path / "options").rglob("*.parquet"))  # nothing locked in
+
+    # a later re-run with working data must succeed (not -1)
+    monkeypatch.setattr(yf_chain.yf, "Ticker", _FakeTicker)
+    second = yf_chain.snapshot_chains(["AAPL"])
+    assert second["AAPL"] == 4
+
+
+def test_snapshot_roundtrip_preserves_dtypes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.options import yf_chain
+
+    monkeypatch.setattr(yf_chain, "processed_dir", lambda source: tmp_path / source)
+    monkeypatch.setattr(yf_chain.yf, "Ticker", _FakeTicker)
+
+    yf_chain.snapshot_chains(["AAPL"])
+    files = list((tmp_path / "options" / "yf_snapshots" / "AAPL").glob("*.parquet"))
+    df = pd.read_parquet(files[0])
+
+    assert pd.api.types.is_datetime64_any_dtype(df["date"])
+    assert pd.api.types.is_datetime64_any_dtype(df["expiration"])
+    for col in ("strike", "bid", "ask", "iv", "spot"):
+        assert pd.api.types.is_float_dtype(df[col]), col

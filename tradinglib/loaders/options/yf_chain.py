@@ -4,11 +4,24 @@ Same canonical schema as the DoltHub loader (``[date, ticker, expiration,
 strike, right, bid, ask, iv]``) plus a ``spot`` column, so the backtest can
 consume either source once enough forward history accrues. Snapshots are
 point-in-time by definition: one parquet per (ticker, snapshot date) at
-``data/processed/options/yf_snapshots/<ticker>/<date>.parquet``, and an
-existing file for today is never re-fetched (idempotent — a snapshot has no
-meaningful "refresh"). Only expirations within ``MAX_DAYS`` calendar days are
-collected (enough to cover earnings straddle tenors). yfinance is mocked in
-tests and never called live (repo convention).
+``data/processed/options/yf_snapshots/<ticker>/<date>.parquet``.
+
+Dates are US Eastern Time (America/New_York) so an evening UTC run does not
+stamp tomorrow's date.
+
+Idempotency: an existing file for today is never re-fetched.  Return sentinels:
+  -1  already snapshotted today (file exists, skipped)
+  -2  fetch failed — no file written; re-run to retry
+   0  yfinance returned no expirations in window — no file written; re-run to retry
+  >0  rows written
+
+Empty results are never persisted: if yfinance transiently returns no
+expirations (or all beyond the cutoff) the run returns 0 and writes nothing, so
+the next run retries rather than being locked out by the idempotency guard.
+
+Only expirations within ``MAX_DAYS`` calendar days are collected (enough to
+cover earnings straddle tenors). yfinance is mocked in tests and never called
+live (repo convention).
 """
 
 from __future__ import annotations
@@ -55,13 +68,14 @@ def _canonicalize_expiry(
     return out.sort_values(["expiration", "strike", "right"]).reset_index(drop=True)
 
 
-def _empty() -> pd.DataFrame:
-    return pd.DataFrame({c: pd.Series([], dtype="object") for c in _COLUMNS})
-
-
 def snapshot_chains(tickers: list[str], *, max_days: int = MAX_DAYS) -> dict[str, int]:
-    """Snapshot near-term chains; returns {ticker: rows written} (-1 = already done today)."""
-    snapshot = pd.Timestamp.now("UTC").strftime("%Y-%m-%d")
+    """Snapshot near-term chains; returns {ticker: rows written}.
+
+    Sentinels: -1 = already snapshotted today, -2 = fetch failed, 0 = no data
+    (nothing written — re-run to retry), >0 = rows written.
+    """
+    now_et = pd.Timestamp.now(tz="America/New_York")
+    snapshot = now_et.strftime("%Y-%m-%d")
     cutoff = pd.Timestamp(snapshot) + pd.Timedelta(days=max_days)
     counts: dict[str, int] = {}
     for ticker in tickers:
@@ -69,25 +83,32 @@ def snapshot_chains(tickers: list[str], *, max_days: int = MAX_DAYS) -> dict[str
         if out.exists():
             counts[ticker] = -1
             continue
-        t = yf.Ticker(ticker)
-        spot = float(t.fast_info["lastPrice"])
-        frames = []
-        for exp in t.options:
-            if pd.Timestamp(exp) > cutoff:
-                continue
-            chain = t.option_chain(exp)  # fetch once per expiration
-            frames.append(
-                _canonicalize_expiry(
-                    chain.calls,
-                    chain.puts,
-                    ticker=ticker,
-                    snapshot=snapshot,
-                    expiration=exp,
-                    spot=spot,
+        try:
+            t = yf.Ticker(ticker)
+            spot = float(t.fast_info["lastPrice"])
+            frames = []
+            for exp in t.options:
+                if pd.Timestamp(exp) > cutoff:
+                    continue
+                chain = t.option_chain(exp)  # fetch once per expiration
+                frames.append(
+                    _canonicalize_expiry(
+                        chain.calls,
+                        chain.puts,
+                        ticker=ticker,
+                        snapshot=snapshot,
+                        expiration=exp,
+                        spot=spot,
+                    )
                 )
-            )
-        df = pd.concat(frames, ignore_index=True) if frames else _empty()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        df.to_parquet(out)
-        counts[ticker] = len(df)
+            if not frames:
+                counts[ticker] = 0
+                continue
+            df = pd.concat(frames, ignore_index=True)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(out)
+            counts[ticker] = len(df)
+        except Exception:
+            counts[ticker] = -2
+            continue
     return counts

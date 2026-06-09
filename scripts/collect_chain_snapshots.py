@@ -17,7 +17,14 @@ WATCHLIST = ["AAPL", "AMZN", "MSFT", "NVDA", "TSLA", "META", "GOOGL", "NFLX", "A
 
 def main() -> None:
     for ticker, n in snapshot_chains(WATCHLIST).items():
-        status = "already snapshotted today" if n < 0 else f"{n} rows"
+        if n == -1:
+            status = "already snapshotted today"
+        elif n == -2:
+            status = "FAILED (re-run to retry)"
+        elif n == 0:
+            status = "0 rows (nothing written, re-run to retry)"
+        else:
+            status = f"{n} rows"
         print(f"{ticker}: {status}")
 
 
