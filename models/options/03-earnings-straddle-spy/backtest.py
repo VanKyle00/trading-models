@@ -240,8 +240,14 @@ def plot_branches(branches: dict[str, dict], out_path: Path) -> None:
 
 
 def _events_for(ticker: str, close: pd.Series) -> pd.Series:
-    """Real earnings dates within the price window (mocked-free path is data-optional)."""
-    df = get_earnings_dates([ticker], start=START, end=END)
+    """Real earnings dates within the price window (mocked-free path is data-optional).
+
+    Scans the actual price window (``close.index``), NOT the module's canonical
+    START/END — otherwise a GUI run outside 2023-2024 (e.g. NVDA in 2022) finds no
+    events and falsely reports "no earnings". Correct for both call sites: the GUI
+    passes the user's window, ``main()`` passes its START..END-loaded bars.
+    """
+    df = get_earnings_dates([ticker], start=close.index[0], end=close.index[-1])
     return df["earnings_datetime"]
 
 
