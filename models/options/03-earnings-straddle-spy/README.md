@@ -5,9 +5,16 @@ The straddle is just the expression; **the edge is the selection filter**, not
 "owning vol into earnings." We trade only when the forecast realized move
 (`expected_move`, the mean of prior earnings-day absolute returns) exceeds the
 move implied by the straddle premium (`implied_move = premium / spot`) by a
-margin `k > 1`. The whole point of the model is to compare the **filtered**
-branch (trade only when the gate fires) against the **unfiltered** branch (trade
-every event) and show the gate adds value.
+margin `k > 1`. The model compares the **filtered** branch (trade only when the
+gate fires) against the **unfiltered** branch (trade every event).
+
+> **Phase-1 caveat (see [`model.md`](model.md)).** In Phase 1 the gate **cannot**
+> demonstrate selection alpha: because the synthetic `pre_iv` is a single global
+> constant, the implied move is ticker-independent (~0.075–0.080 for every name),
+> so `expected_move > k·implied_move` degenerates into a pure realized-vol screen.
+> The thorough backtest (216 events) finds the filtered edge **statistically
+> insignificant** (p = 0.78) and its sign an **artifact of the assumed IV**. Treat
+> "the filter is the alpha" as a hypothesis for the real-chain phase, not a result.
 
 ## What it tests
 
@@ -15,8 +22,9 @@ every event) and show the gate adds value.
   of edge, evaluated filtered-vs-unfiltered.
 - Double-leg spread frictions through the real options engine: a straddle is two
   legs, and the bid/ask spread is charged **per leg**, so it is paid **twice on
-  entry and twice on exit**. With synthetic vol this round-trip spread is the
-  dominant cost and the reason an unfiltered straddle program bleeds.
+  entry and twice on exit**. This four-legged round-trip spread is a major cost
+  (~44% of the unfiltered loss in the thorough run), but the modeled IV crush is
+  the larger half (~56%) — both are synthetic inputs, not market facts.
 - Cross-event significance: a non-parametric bootstrap CI on pooled per-trade
   P&L plus Benjamini-Hochberg FDR control across the watchlist (so a single
   lucky ticker does not masquerade as edge).
@@ -51,9 +59,15 @@ are out of scope here.
 uv run python models/options/03-earnings-straddle-spy/backtest.py
 ```
 
-Writes `results/metrics.json` (SPY filtered branch), `results/validation.json`,
-and `results/equity_curve.png`. The run is data-optional: tickers whose bars or
+Writes `results/metrics.json`, `results/validation.json`, and
+`results/equity_curve.png`. The run is data-optional: tickers whose bars or
 earnings dates are unavailable are skipped.
+
+> `metrics.json` keys off a single event's branch and is **uninformative** as a
+> headline (it currently reads all-zeros). The meaningful trade-level result lives
+> in `validation.json`; the full event study + sensitivity sweeps are in
+> `results/thorough_backtest.json` (reproduce with
+> `uv run python scripts/earnings_straddle_thorough_backtest.py`).
 
 ## Reading `results/validation.json`
 
@@ -63,8 +77,12 @@ earnings dates are unavailable are skipped.
   `bootstrap_t_stat`, the `[bootstrap_ci_lower, bootstrap_ci_upper]` CI, and the
   centered `bootstrap_p_value`.
 - `fdr` — per-ticker bootstrap p-values with Benjamini-Hochberg `rejected` flags
-  and the BH `threshold`; the survivors (`rejected == true`) are the tickers
-  whose filtered edge holds up after multiple-testing control. A ticker with
-  fewer than 2 events gets the sentinel p-value 1.0 and cannot be rejected.
+  and the BH `threshold`. **`rejected == true` only means the mean is
+  distinguishable from zero — the bootstrap p-value is two-sided, so a rejection
+  can be a significant _loss_.** In the thorough run the **only** survivor is
+  NVDA, whose filtered expectancy is **−$391.82 (0/3 wins)** — a significant
+  loser, not a confirmed edge. No name shows a significant _positive_ edge. A
+  ticker with fewer than 2 events gets the sentinel p-value 1.0 and cannot be
+  rejected.
 - `trade_metrics` — pooled trade-level stats (`n_trades`, `win_rate`,
   `profit_factor`, `expectancy`, `avg_win`, `avg_loss`).

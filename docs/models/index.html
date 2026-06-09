@@ -214,15 +214,16 @@
 
     <a class="toc-item" href="06-earnings-straddle-spy.html"
        data-family="options" data-assets="equities" data-window="swing" data-status="demonstrator"
-       data-sharpe="-0.86" data-maxdd="-0.007" data-order="6"
+       data-sharpe="0.0" data-maxdd="0.0" data-order="6"
        data-title="When Is Earnings Volatility Cheap?">
       <span class="no">OPT-02 · Event Volatility</span>
       <h3>When Is Earnings Volatility Cheap?</h3>
       <p class="desc">A long ATM straddle into scheduled earnings, completing the options strategy SSRN 5921742
       specifies but declines to implement. Buying earnings vol loses to the volatility risk premium and the
       post-report IV crush; the only edge is a selection filter that trades only when the forecast move beats
-      the implied one. On a synthetic Phase-1 surface even the filtered trades do not beat the premium.</p>
-      <p class="stat">Synthetic, NVDA 7 trades, 2023–2024 · Profit factor <span class="neg">0.82</span> · bootstrap p <span class="neg">0.83</span> · <b>demonstrator</b></p>
+      the implied one. Across 216 events the filtered edge is statistically insignificant and an artifact of
+      the assumed synthetic IV — in Phase 1 the gate is really just a high-realized-vol screen.</p>
+      <p class="stat">Synthetic, 9 names · 216 events (33 filtered), 2020–2026 · filtered PF <span class="neg">1.15</span> · bootstrap p <span class="neg">0.78</span> · <b>not tradeable</b></p>
       <div class="tags"><span>options</span><span>equities</span><span>swing</span><span>demonstrator</span></div>
     </a>
   </nav>

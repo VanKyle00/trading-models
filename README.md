@@ -65,7 +65,7 @@ Full steps and the persistent-cache notes are in [`docs/DEPLOY.md`](docs/DEPLOY.
 | [Google Trends Contrarian on BTC](https://vankyle00.github.io/trading-models/docs/models/04-google-trends-contrarian-btc.html) | alt-data | swing | crypto | -0.30 | -0.80 | negative-result |
 | [Order Flow Imbalance on BTC](https://vankyle00.github.io/trading-models/docs/models/03-order-flow-imbalance-btc.html) | microstructure | intraday | crypto | -86.37 | -0.36 | negative-result |
 | [Delta-Hedged Long Option on SPY](https://vankyle00.github.io/trading-models/docs/models/05-delta-hedged-long-option-spy.html) | options | swing | equities | -6.94 | -0.08 | working |
-| [Earnings Event-Vol Straddle on SPY](https://vankyle00.github.io/trading-models/docs/models/06-earnings-straddle-spy.html) | options | swing | equities | 0.0 | 0.0 | working |
+| [Earnings Event-Vol Straddle on SPY](https://vankyle00.github.io/trading-models/docs/models/06-earnings-straddle-spy.html) | options | swing | equities | 0.0 | 0.0 | negative-result |
 
 Rows 3 and 4 are intentional negative results: hypotheses were tested
 honestly and the data rejected them. Each model's README documents
@@ -76,8 +76,14 @@ options model) also posts a negative Sharpe by design — it is the
 options-pipeline demonstrator (hence status `working`), and its loss is
 expected long-volatility theta bleed from pricing above realized vol, not a bug.
 Row 6 (the earnings-straddle model) is a Phase-1 synthetic pipeline (elevated
-pre-earnings IV plus a parameterized crush, not yet tradeable); its Sharpe and
-Max DD are placeholders pending a data-enabled run.
+pre-earnings IV plus a parameterized crush, not yet tradeable). A thorough
+backtest (216 earnings events across 9 single names, 2020–2026) found **no
+statistically significant edge**: the unfiltered long-straddle program bleeds
+(−$125.65/trade, p=0.052) and the filtered branch's nominal gain is insignificant
+(p=0.78) and an artifact of the assumed synthetic IV — hence `negative-result`.
+Its Sharpe and Max DD stay 0.0 because per-bar Sharpe is the wrong lens for a
+sparse event trade; the trade-level result lives in the model's `model.md` and
+`results/`.
 
 Note on the microstructure Sharpe: the -86.37 number is annualized
 assuming 525,600 minute-bars per year. The *direction* (clearly
