@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 from pathlib import Path
 
@@ -184,7 +185,7 @@ def test_run_event_zero_exit_bid_is_total_loss_not_skip() -> None:
 
 
 def test_run_event_skip_no_entry_chain() -> None:
-    rec = _run(_chain([]), _exit_chain())
+    rec = _run(_chain([]), _chain([]))
     assert rec["skip_reason"] == rc.SKIP_NO_ENTRY_CHAIN
 
 
@@ -292,3 +293,90 @@ def test_run_event_skip_exit_chain_missing_contract_rows() -> None:
 def test_run_event_entry_lead_zero_raises() -> None:
     with pytest.raises(ValueError, match="entry_lead"):
         _run(_entry_chain(), _exit_chain(), entry_lead=0)
+
+
+# ---------- coverage snapping (MWF-era DoltHub: Tue/Thu have no chains) ----------
+
+
+def _date_loader(frames: dict[str, pd.DataFrame]):
+    """Per-date fake loader: serves ``frames["YYYY-MM-DD"]``; any date not in
+    the dict gets an empty chain (an uncovered DoltHub day)."""
+
+    def load_chain(ticker: str, when, **kwargs) -> pd.DataFrame:
+        return frames.get(str(pd.Timestamp(when).date()), _chain([]))
+
+    return load_chain
+
+
+def _run_dated(frames: dict[str, pd.DataFrame], **kwargs):
+    defaults = dict(
+        ticker="TEST",
+        close=_bars(),
+        earnings_datetime=EARNINGS,
+        prior_moves=[0.10] * 8,
+        load_chain=_date_loader(frames),
+    )
+    defaults.update(kwargs)
+    return rc.run_event(**defaults)
+
+
+def test_run_event_snaps_entry_to_covered_date() -> None:
+    """Empty chain at T-3 (Mar 3), covered at T-2 (Mar 4) -> entry snaps to Mar 4."""
+    rec = _run_dated({"2026-03-04": _entry_chain(), "2026-03-09": _exit_chain()})
+    assert "skip_reason" not in rec
+    assert rec["entry_date"] == "2026-03-04"
+    assert rec["entry_lead_used"] == 2
+    assert rec["exit_offset_used"] == 1
+
+
+def test_run_event_snap_prefers_target_then_nearer() -> None:
+    """Chains at T-2 AND T-4, empty at T-3 -> preference order [3, 2, 4, ...] picks T-2."""
+    rec = _run_dated(
+        {
+            "2026-03-02": _entry_chain(),  # T-4
+            "2026-03-04": _entry_chain(),  # T-2
+            "2026-03-09": _exit_chain(),
+        }
+    )
+    assert "skip_reason" not in rec
+    assert rec["entry_date"] == "2026-03-04"
+    assert rec["entry_lead_used"] == 2
+
+
+def test_run_event_snaps_exit_forward() -> None:
+    """Exit empty at +1 (Mar 9), covered at +2 (Mar 10) -> exit snaps to Mar 10."""
+    rec = _run_dated({"2026-03-03": _entry_chain(), "2026-03-10": _exit_chain()})
+    assert "skip_reason" not in rec
+    assert rec["entry_lead_used"] == 3
+    assert rec["exit_date"] == "2026-03-10"
+    assert rec["exit_offset_used"] == 2
+
+
+def test_run_event_all_entry_candidates_empty_skips() -> None:
+    rec = _run_dated({"2026-03-09": _exit_chain()})  # no entry candidate covered
+    assert rec["skip_reason"] == rc.SKIP_NO_ENTRY_CHAIN
+
+
+def test_run_event_all_exit_candidates_empty_skips() -> None:
+    rec = _run_dated({"2026-03-03": _entry_chain()})  # no exit candidate covered
+    assert rec["skip_reason"] == rc.SKIP_NO_EXIT_CHAIN
+
+
+# ---------- sanitize_for_json ----------
+
+
+def test_sanitize_for_json_strips_non_finite() -> None:
+    obj = {
+        "a": float("nan"),
+        "b": [1.0, float("inf"), {"c": float("-inf"), "d": 2.5}],
+        "e": "text",
+        "n": 3,
+    }
+    out = rc.sanitize_for_json(obj)
+    assert out["a"] is None
+    assert out["b"][0] == 1.0
+    assert out["b"][1] is None
+    assert out["b"][2]["c"] is None
+    assert out["b"][2]["d"] == 2.5
+    assert out["e"] == "text" and out["n"] == 3
+    json.dumps(out, allow_nan=False)  # strict JSON must not raise

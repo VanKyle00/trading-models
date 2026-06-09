@@ -81,6 +81,7 @@ def main() -> None:
         close = pd.Series(close.to_numpy(), index=close.index.tz_localize(None), name="close")
         ev = get_earnings_dates([ticker], start=START, end=END)["earnings_datetime"]
         ev = pd.to_datetime(ev, utc=True).sort_values()
+        ev = ev.drop_duplicates()
 
         for traded_aware in ev:
             traded = traded_aware.tz_localize(None)
@@ -100,9 +101,15 @@ def main() -> None:
                     max_spread_frac=MAX_SPREAD_FRAC,
                     fee_bps=FEE_BPS,
                 )
-            except ValueError:
+            except ValueError as err:
+                if "window" not in str(err):
+                    raise
                 n_window_skips += 1
                 continue
+            except RuntimeError as err:
+                # DoltHub API failure: annotate where the cold run died and
+                # fail fast — the JSON must never cover an incomplete universe.
+                raise RuntimeError(f"{ticker} {traded.date()}: {err}") from err
             if "skip_reason" in rec:
                 skips[rec["skip_reason"]] += 1
                 continue
@@ -177,7 +184,9 @@ def main() -> None:
     }
 
     out_path = _MODEL_DIR / "results" / "real_chain_backtest.json"
-    out_path.write_text(json.dumps(out, indent=2, default=str))
+    out_path.write_text(
+        json.dumps(rc.sanitize_for_json(out), indent=2, default=str, allow_nan=False)
+    )
 
     def line(label: str, pool: dict) -> None:
         tm, b = pool["trade_metrics"], pool["bootstrap"]

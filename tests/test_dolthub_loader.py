@@ -114,6 +114,25 @@ def test_load_chain_empty_result_is_cached(tmp_path: Path, monkeypatch: pytest.M
     assert calls["n"] == 1  # the miss is cached too
 
 
+def test_row_limit_warns_and_returns_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from tradinglib.loaders.options import dolthub
+
+    monkeypatch.setattr(dolthub, "processed_dir", lambda source: tmp_path / source)
+    monkeypatch.setattr(dolthub.time, "sleep", lambda s: None)
+
+    def fake_get(url: str, params: dict, timeout: float) -> _FakeResponse:
+        return _FakeResponse({"query_execution_status": "RowLimit", "rows": _FAKE_ROWS})
+
+    monkeypatch.setattr(dolthub.httpx, "get", fake_get)
+
+    with pytest.warns(UserWarning, match="RowLimit"):
+        df = dolthub.load_chain("AAPL", "2026-06-02")
+
+    assert len(df) == 2  # rows are still accepted
+    cached = list((tmp_path / "options" / "dolthub" / "AAPL").glob("*.parquet"))
+    assert len(cached) == 1  # and still cached
+
+
 def test_query_error_status_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from tradinglib.loaders.options import dolthub
 

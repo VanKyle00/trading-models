@@ -22,6 +22,17 @@ AND still exist at exit (e.g. earnings Thursday AMC with a Friday weekly expiry
 and a Monday exit — the Friday contract lapses before exit, so the next expiry
 is selected instead).
 
+Coverage snapping: before ~Oct 2024 the DoltHub dataset carries chains only on
+Mon/Wed/Fri (Tue/Thu have zero rows table-wide), so loading chains at exactly
+the target offsets would structurally select Wed-AMC/Thu-BMO reporters in that
+era. ``run_event`` therefore snaps each leg to the nearest COVERED (non-empty)
+chain date within a bounded window: entry tries the target first, then
+alternates nearer/farther (``entry_snap`` bars each way, never closer than 1
+bar before the earnings bar); exit only moves forward (up to ``exit_snap``
+bars, never before the earnings bar). The offsets actually used are recorded
+per event as ``entry_lead_used``/``exit_offset_used``. If every candidate
+chain is empty the event skips with ``no_entry_chain``/``no_exit_chain``.
+
 Fees mirror Phase 1's ``fee_bps=1.0``: each crossing pays fee_bps on its
 notional, so ``fees = (entry_cost + exit_value) * 100 * fee_bps / 1e4``.
 """
@@ -149,6 +160,8 @@ def run_event(
     load_chain: Callable[..., pd.DataFrame],
     entry_lead: int = 3,
     exit_offset: int = 1,
+    entry_snap: int = 2,
+    exit_snap: int = 3,
     k: float = 1.2,
     lookback: int = 8,
     max_spread_frac: float = 0.20,
@@ -159,9 +172,14 @@ def run_event(
     Returns ``{"skip_reason": <reason>}`` when the chain cannot trade, else a
     full trade record (the gate is evaluated but pnl is always present, so the
     unfiltered branch can use every tradeable event). Raises ValueError when
-    the event window does not fit the bar series (the runner's concern).
-    ``close`` must be tz-naive; ``prior_moves`` are abs moves of PRIOR events
-    only (leakage discipline is the caller's contract, as in Phase 1).
+    the event window does not fit the bar series (the runner's concern) — the
+    fit check uses the TARGET offsets; snap candidates falling outside the bar
+    series are simply dropped. Entry/exit snap to the nearest covered chain
+    date within ``entry_snap``/``exit_snap`` bars of the targets (see module
+    docstring); ``entry_lead_used``/``exit_offset_used`` record the actual
+    offsets. ``close`` must be tz-naive; ``prior_moves`` are abs moves of
+    PRIOR events only (leakage discipline is the caller's contract, as in
+    Phase 1).
     """
     if entry_lead < 1:
         raise ValueError(f"entry_lead must be >= 1 (entry precedes earnings), got {entry_lead}")
@@ -170,18 +188,45 @@ def run_event(
     if not after.any():
         raise ValueError(f"event window out of range: earnings {earnings_datetime} beyond bars")
     e_idx = int(after.argmax())
-    entry_idx, exit_idx = e_idx - entry_lead, e_idx + exit_offset
-    if entry_idx < 0 or exit_idx >= len(bars):
+    if e_idx - entry_lead < 0 or e_idx + exit_offset >= len(bars):
         raise ValueError(
             f"event window out of range: need {entry_lead} bars before and "
             f"{exit_offset} after the earnings bar"
         )
-    entry_date, exit_date = bars[entry_idx], bars[exit_idx]
+
+    # Entry: target offset first, then alternating nearer/farther, bounded to
+    # >= 1 bar before the earnings bar and <= entry_lead + entry_snap.
+    entry_offsets = [entry_lead]
+    for step in range(1, entry_snap + 1):
+        entry_offsets += [entry_lead - step, entry_lead + step]
+    entry_offsets = [o for o in entry_offsets if o >= 1 and e_idx - o >= 0]
+    entry_chain, entry_lead_used = None, entry_lead
+    for off in entry_offsets:
+        cand = load_chain(ticker, bars[e_idx - off])
+        if not cand.empty:
+            entry_chain, entry_lead_used = cand, off
+            break
+    if entry_chain is None:
+        return {"skip_reason": SKIP_NO_ENTRY_CHAIN}
+    entry_idx = e_idx - entry_lead_used
+    entry_date = bars[entry_idx]
     spot = float(close.iloc[entry_idx])
 
-    entry_chain = load_chain(ticker, entry_date)
-    if entry_chain.empty:
-        return {"skip_reason": SKIP_NO_ENTRY_CHAIN}
+    # Exit: forward only (must stay strictly after the earnings bar). Resolved
+    # before expiry selection because the expiry cutoff must use the SNAPPED
+    # exit date; exit quotes are evaluated later from this same chain.
+    exit_chain, exit_offset_used = None, exit_offset
+    for off in range(exit_offset, exit_offset + exit_snap + 1):
+        if e_idx + off >= len(bars):
+            break
+        cand = load_chain(ticker, bars[e_idx + off])
+        if not cand.empty:
+            exit_chain, exit_offset_used = cand, off
+            break
+    if exit_chain is None:
+        return {"skip_reason": SKIP_NO_EXIT_CHAIN}
+    exit_date = bars[e_idx + exit_offset_used]
+
     expiry = pick_expiry(entry_chain, max(earnings_datetime, pd.Timestamp(exit_date)))
     if expiry is None:
         return {"skip_reason": SKIP_NO_EXPIRY}
@@ -204,8 +249,7 @@ def run_event(
     window = trimmed[-lookback:]
     expected = float(pd.Series(window).mean()) if window else float("nan")
 
-    exit_chain = load_chain(ticker, exit_date)
-    exit_quotes = None if exit_chain.empty else straddle_quotes(exit_chain, expiry, strike)
+    exit_quotes = straddle_quotes(exit_chain, expiry, strike)
     if exit_quotes is None:
         return {"skip_reason": SKIP_NO_EXIT_CHAIN}
     exit_value = _bid_or_zero(exit_quotes["call_bid"]) + _bid_or_zero(exit_quotes["put_bid"])
@@ -218,6 +262,8 @@ def run_event(
         "date": str(pd.Timestamp(earnings_datetime).date()),
         "entry_date": str(pd.Timestamp(entry_date).date()),
         "exit_date": str(pd.Timestamp(exit_date).date()),
+        "entry_lead_used": int(entry_lead_used),
+        "exit_offset_used": int(exit_offset_used),
         "expiry": str(pd.Timestamp(expiry).date()),
         "strike": float(strike),
         "spot": spot,
@@ -233,9 +279,10 @@ def run_event(
 
 
 def gate_pnls(events: list[dict], *, k: float, lookback: int) -> list[float]:
-    """Recompute gate membership from stored rows (pnl is k/lookback-independent).
-    ``lookback`` values above ``_MAX_LOOKBACK`` (20) are effectively capped —
-    stored ``prior_moves`` are trimmed to the last 20."""
+    """Recompute gate membership from stored rows (pnl is k/lookback-independent;
+    coverage snapping depends only on data coverage, never on k/lookback, so the
+    invariant survives it). ``lookback`` values above ``_MAX_LOOKBACK`` (20) are
+    effectively capped — stored ``prior_moves`` are trimmed to the last 20."""
     fired: list[float] = []
     for ev in events:
         window = ev["prior_moves"][-lookback:]
@@ -243,3 +290,16 @@ def gate_pnls(events: list[dict], *, k: float, lookback: int) -> list[float]:
         if _SIG.passes_filter(expected, ev["implied_move"], k):
             fired.append(float(ev["pnl"]))
     return fired
+
+
+def sanitize_for_json(obj: Any) -> Any:
+    """Recursively replace non-finite floats (NaN/inf) with None so the results
+    file is strict JSON (json.dumps emits bare NaN/Infinity tokens otherwise,
+    which jq / JSON.parse reject)."""
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [sanitize_for_json(v) for v in obj]
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    return obj

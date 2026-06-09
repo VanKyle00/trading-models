@@ -21,6 +21,7 @@ tests and never called live (repo convention).
 from __future__ import annotations
 
 import time
+import warnings
 from datetime import date, datetime
 
 import httpx
@@ -84,6 +85,11 @@ def _query(sql: str) -> list[dict]:
             if payload.get("query_execution_status") not in _OK_STATUSES:
                 raise RuntimeError(
                     f"DoltHub query failed: {payload.get('query_execution_message', 'unknown')}"
+                )
+            if payload.get("query_execution_status") == "RowLimit":
+                warnings.warn(
+                    f"DoltHub RowLimit hit for query (chain may be truncated): {sql}",
+                    stacklevel=2,
                 )
             return payload.get("rows", [])
         except (httpx.HTTPError, RuntimeError, ValueError) as err:
