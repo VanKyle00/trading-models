@@ -26,6 +26,7 @@ scaledown the loader simply re-fetches — the graceful fallback).
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import modal
@@ -157,8 +158,6 @@ def fastapi_app():
     # Volumes are snapshots: a warm container keeps seeing the volume as it was
     # when it mounted, so a report committed by scheduled_swing_scan would stay
     # invisible until the container recycled. Reload before serving /scans.
-    import contextlib
-
     @web_app.middleware("http")
     async def _reload_scans_volume(request, call_next):
         if request.url.path.startswith("/scans"):
