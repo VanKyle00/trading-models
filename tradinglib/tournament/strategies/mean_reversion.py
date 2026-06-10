@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from tradinglib.features.technical import rsi, sma
+from tradinglib.features.technical import atr, ma_slope, rsi, sma
 from tradinglib.tournament.levels import Levels, direction, protective_stop, two_r_target
 from tradinglib.tournament.strategies._core import (
     StrategyDef,
@@ -117,5 +117,86 @@ register(
         param_grid={"window": [10, 20], "num_std": [2.0, 2.5]},
         make_signal=_bollinger_signal,
         levels=_bollinger_levels,
+    )
+)
+
+
+# --- ma_pullback -------------------------------------------------------------
+
+_LEG_MIN = 0.15
+_PULLED = 0.95
+
+
+def _ma_pullback_setup(full: pd.DataFrame, band: float, stance: str) -> pd.Series:
+    close = full["close"]
+    s50, s200 = sma(close, 50), sma(close, 200)
+    r = rsi(close, 14)
+    at_ma = (close / s50 - 1.0).abs() <= band
+    if direction(stance) > 0:
+        trend_ok = (s50 > s200) & (ma_slope(close, 50, 10) > 0) & (ma_slope(close, 200, 20) > 0)
+        leg = close.rolling(60).max() / close.rolling(120).min() - 1.0 >= _LEG_MIN
+        pulled = close <= close.rolling(60).max() * _PULLED
+        rsi_ok = (r >= 30.0) & (r <= 50.0)
+    else:
+        trend_ok = (s50 < s200) & (ma_slope(close, 50, 10) < 0) & (ma_slope(close, 200, 20) < 0)
+        leg = close.rolling(60).min() / close.rolling(120).max() - 1.0 <= -_LEG_MIN
+        pulled = close >= close.rolling(60).min() / _PULLED
+        rsi_ok = (r >= 50.0) & (r <= 70.0)
+    return trend_ok & leg & pulled & at_ma & rsi_ok
+
+
+def _ma_pullback_signal(
+    train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str
+) -> pd.Series:
+    full = _full_history(train, test)
+    close = full["close"]
+    setup = _ma_pullback_setup(full, params["band"], stance)
+    s20, s200 = sma(close, 20), sma(close, 200)
+    if direction(stance) > 0:
+        pos = _hold_between(setup, (close > s20) | (close < s200))
+    else:
+        pos = -_hold_between(setup, (close < s20) | (close > s200))
+    return pos.loc[test.index]
+
+
+def _ma_pullback_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None:
+    if not bool(_ma_pullback_setup(bars, params["band"], stance).iloc[-1]):
+        return None  # not at the MA in a qualifying trend tonight
+    close = bars["close"]
+    long_side = direction(stance) > 0
+    entry = float(sma(close, 20).iloc[-1])  # recapture trigger, like the detector
+    last_atr = float(atr(bars["high"], bars["low"], close, 14).iloc[-1])
+    s50 = float(sma(close, 50).iloc[-1])
+    if long_side:
+        stop = min(float(bars["low"].iloc[-10:].min()), s50 - 1.5 * last_atr)
+    else:
+        stop = max(float(bars["high"].iloc[-10:].max()), s50 + 1.5 * last_atr)
+    if not direction(stance) * (entry - stop) > 0:
+        return None  # stop ended up on the wrong side (degenerate geometry)
+    return Levels(
+        entry=entry,
+        entry_type="stop",
+        stop=stop,
+        target=two_r_target(entry, stop),
+        condition=(
+            f"{'buy' if long_side else 'sell'}-stop at SMA(20) recapture after an "
+            f"orderly pullback to SMA(50) (band {params['band']:.0%})"
+        ),
+    )
+
+
+register(
+    StrategyDef(
+        key="ma_pullback",
+        name="MA pullback",
+        style="mean_reversion",
+        description=(
+            "Orderly pullback to a rising SMA(50) inside an uptrend (RSI 30-50); "
+            "enter on SMA(20) recapture, exit there or on trend failure at SMA(200). "
+            "Short stance mirrors a downtrend rally."
+        ),
+        param_grid={"band": [0.02, 0.03]},
+        make_signal=_ma_pullback_signal,
+        levels=_ma_pullback_levels,
     )
 )

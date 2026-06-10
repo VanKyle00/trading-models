@@ -201,9 +201,10 @@ def test_registry_has_five_strategies_with_18_total_trials() -> None:
         "macd",
         "bollinger",
         "base_breakout",
+        "ma_pullback",
     }  # keep in sync with the registry
     total = sum(len(expand_grid(s.param_grid)) for s in STRATEGIES.values())
-    assert total == 21  # keep in sync with the registry (was 18; +3 for base_breakout)
+    assert total == 23  # keep in sync with the registry (was 21; +2 for ma_pullback)
     styles = {"trend", "breakout", "mean_reversion"}
     assert all(s.style in styles and s.description for s in STRATEGIES.values())
 
@@ -242,6 +243,38 @@ def test_base_breakout_levels_actionable_only_in_a_base() -> None:
     # an established uptrend with no consolidation is not actionable
     trending = _trend_bars(n=420)
     assert STRATEGIES["base_breakout"].levels(trending, {"base": 40}, "long") is None
+
+
+def _ma_pullback_bars() -> pd.DataFrame:
+    # long uptrend, then a controlled pullback onto the rising SMA50:
+    # 10 down bars at 0.8%/bar stall the trend enough, 9 up bars at 0.3%/bar
+    # park the close inside the SMA50 ±3% band with RSI(14) ≈ 40 in [30, 50].
+    up = 100.0 * 1.003 ** np.arange(420)
+    seg = [up[-1]]
+    for _ in range(10):
+        seg.append(seg[-1] * 0.992)
+    for _ in range(9):
+        seg.append(seg[-1] * 1.003)
+    dip = np.array(seg[1:])
+    return _bars(np.concatenate([up, dip]))
+
+
+def test_ma_pullback_levels_actionable_at_the_ma() -> None:
+    bars = _ma_pullback_bars()
+    lv = STRATEGIES["ma_pullback"].levels(bars, {"band": 0.03}, "long")
+    assert lv is not None  # fixture was tuned so RSI(14) ≈ 40 lands in [30, 50]
+    assert lv.entry_type == "stop"
+    assert lv.stop < lv.entry < lv.target
+    # no pullback -> never actionable
+    assert STRATEGIES["ma_pullback"].levels(_trend_bars(), {"band": 0.03}, "long") is None
+
+
+def test_ma_pullback_signal_is_zero_in_flat_chop() -> None:
+    bars = _flat_bars(n=420)
+    sig = STRATEGIES["ma_pullback"].make_signal(
+        bars.iloc[:300], bars.iloc[300:], {"band": 0.03}, "long"
+    )
+    assert (sig == 0.0).all()
 
 
 def test_base_breakout_short_fires_on_breakdown_from_tight_base(n_base: int = 60) -> None:
