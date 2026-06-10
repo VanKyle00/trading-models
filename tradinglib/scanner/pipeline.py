@@ -1,4 +1,4 @@
-"""The scan orchestrator: universe → FA gate → setups → (briefs) → ranked report.
+"""The scan orchestrator: universe → FA gate → setups → (briefs) → tournament → tickets → ranked report.
 
 ``run_scan`` is a pure function over the cached loaders so a CLI, a Modal
 scheduled job, or the FastAPI workbench can all wrap it. Per-ticker work is
@@ -20,6 +20,7 @@ from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.loaders.events.earnings import get_earnings_dates
 from tradinglib.loaders.fundamentals.edgar import get_quarterly_trends
 from tradinglib.loaders.fundamentals.yfinance import get_fundamental_snapshot
+from tradinglib.loaders.options.yf_chain import CHAIN_COLUMNS, fetch_chain
 from tradinglib.loaders.universe.russell1000 import get_russell1000_constituents
 from tradinglib.loaders.universe.sp500 import get_sp500_constituents
 from tradinglib.scanner.briefs import brief_candidates
@@ -27,6 +28,7 @@ from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.fa_gate import apply_edgar_trends, score_fundamentals
 from tradinglib.scanner.rank import rank_candidates
 from tradinglib.scanner.setups import detect_all
+from tradinglib.strategist import build_ticket
 from tradinglib.tournament.run import run_tournament
 
 logger = logging.getLogger(__name__)
@@ -201,6 +203,7 @@ def run_scan(
     }
 
     tournament: dict[str, list[dict]] = {"long": [], "short": []}
+    winner_bars: dict[tuple[str, str], pd.DataFrame] = {}
     if not config.skip_strategies:
         prev_winners = _previous_winners(previous_report)
         t_start = (asof - pd.Timedelta(days=config.tournament_lookback_days)).strftime("%Y-%m-%d")
@@ -222,6 +225,7 @@ def run_scan(
                 winner = None
                 if tr.winner is not None and tr.winner_levels is not None:
                     winner = {**tr.winner.as_dict(), "levels": tr.winner_levels.as_dict()}
+                    winner_bars[(stance, ticker)] = t_bars
                 tournament[stance].append(
                     {
                         "ticker": ticker,
@@ -238,6 +242,58 @@ def run_scan(
                     }
                 )
 
+    tickets: dict[str, list[dict]] = {"long": [], "short": []}
+    fa_by_key = {
+        (stance, c["ticker"]): c for stance in ("long", "short") for c in fa_candidates[stance]
+    }
+    for stance in ("long", "short"):
+        for entry in tournament[stance]:
+            if entry["winner"] is None:
+                continue
+            ticker = entry["ticker"]
+            try:
+                try:
+                    chain = fetch_chain(ticker)
+                except Exception as exc:
+                    errors.append(
+                        {"ticker": ticker, "stage": "tickets", "error": f"chain fetch: {exc}"}
+                    )
+                    chain = pd.DataFrame(columns=CHAIN_COLUMNS)
+                next_earnings = None
+                try:
+                    earnings = get_earnings_dates([ticker], refresh=config.refresh)
+                    dts = pd.DatetimeIndex(earnings["earnings_datetime"])
+                    if dts.tz is None:
+                        dts = dts.tz_localize("UTC")
+                    future = dts[dts > asof]
+                    if len(future):
+                        next_earnings = future.min()
+                except Exception as exc:
+                    errors.append(
+                        {"ticker": ticker, "stage": "tickets", "error": f"earnings: {exc}"}
+                    )
+                earnings_soon = bool(
+                    next_earnings is not None
+                    and next_earnings <= asof + pd.Timedelta(days=config.earnings_warn_days)
+                )
+                tickets[stance].append(
+                    build_ticket(
+                        ticker=ticker,
+                        stance=stance,
+                        winner=entry["winner"],
+                        bars=winner_bars[(stance, ticker)],
+                        chain=chain,
+                        fa=fa_by_key.get((stance, ticker)),
+                        winner_changed=entry["winner_changed"],
+                        next_earnings=next_earnings,
+                        earnings_warning=earnings_soon,
+                        account_size=config.account_size,
+                        risk_per_trade_pct=config.risk_per_trade_pct,
+                    )
+                )
+            except Exception as exc:
+                errors.append({"ticker": ticker, "stage": "tickets", "error": str(exc)})
+
     return {
         "asof": asof.strftime("%Y-%m-%d"),
         "config": {
@@ -252,6 +308,8 @@ def run_scan(
             "universe": config.universe,
             "skip_strategies": config.skip_strategies,
             "tournament_lookback_days": config.tournament_lookback_days,
+            "account_size": config.account_size,
+            "risk_per_trade_pct": config.risk_per_trade_pct,
         },
         "funnel": {
             "universe": len(universe),
@@ -266,9 +324,11 @@ def run_scan(
             "tournament_survivors": sum(
                 1 for entries in tournament.values() for e in entries if e["survivors"]
             ),
+            "tickets": sum(len(entries) for entries in tickets.values()),
         },
         "fa_candidates": fa_candidates,
         "tournament": tournament,
+        "tickets": tickets,
         "candidates": rank_candidates(candidates, top=config.top),
         "errors": errors,
     }

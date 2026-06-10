@@ -22,6 +22,9 @@ the next run retries rather than being locked out by the idempotency guard.
 Only expirations within ``MAX_DAYS`` calendar days are collected (enough to
 cover earnings straddle tenors). yfinance is mocked in tests and never called
 live (repo convention).
+
+``fetch_chain`` adds ``open_interest``/``volume`` in memory only (never
+persisted); the snapshot schema remains the canonical nine columns above.
 """
 
 from __future__ import annotations
@@ -36,6 +39,15 @@ _SUBDIR = "yf_snapshots"
 MAX_DAYS = 45
 
 _COLUMNS = ["date", "ticker", "expiration", "strike", "right", "bid", "ask", "iv", "spot"]
+
+FETCH_MAX_DAYS = 120  # ticket-playbook window: covers 60-90 DTE directional structures
+
+CHAIN_COLUMNS = [*_COLUMNS, "open_interest", "volume"]
+
+
+def _optional_numeric(leg: pd.DataFrame, col: str) -> pd.Series | float:
+    """Column coerced to numeric, or NaN when yfinance omits it."""
+    return pd.to_numeric(leg[col], errors="coerce") if col in leg.columns else float("nan")
 
 
 def _canonicalize_expiry(
@@ -61,11 +73,53 @@ def _canonicalize_expiry(
                     "ask": pd.to_numeric(leg["ask"], errors="coerce"),
                     "iv": pd.to_numeric(leg["impliedVolatility"], errors="coerce"),
                     "spot": float(spot),
+                    "open_interest": _optional_numeric(leg, "openInterest"),
+                    "volume": _optional_numeric(leg, "volume"),
                 }
             )
         )
     out = pd.concat(frames, ignore_index=True)
     return out.sort_values(["expiration", "strike", "right"]).reset_index(drop=True)
+
+
+def _fetch_frames(ticker: str, *, snapshot: str, cutoff: pd.Timestamp) -> list[pd.DataFrame]:
+    """One canonical frame per in-window expiration; raises on yfinance failure
+    (``snapshot_chains`` maps that to the -2 sentinel, ``fetch_chain`` propagates)."""
+    t = yf.Ticker(ticker)
+    spot = float(t.fast_info["lastPrice"])
+    frames = []
+    for exp in t.options:
+        if pd.Timestamp(exp) > cutoff:
+            continue
+        chain = t.option_chain(exp)  # fetch once per expiration
+        frames.append(
+            _canonicalize_expiry(
+                chain.calls,
+                chain.puts,
+                ticker=ticker,
+                snapshot=snapshot,
+                expiration=exp,
+                spot=spot,
+            )
+        )
+    return frames
+
+
+def fetch_chain(ticker: str, *, max_days: int = FETCH_MAX_DAYS) -> pd.DataFrame:
+    """In-memory near-term chain for the ticket playbook (never persisted).
+
+    Canonical snapshot schema plus ``open_interest``/``volume`` (the playbook's
+    liquidity gate needs them). Raises on fetch failure — the scan pipeline
+    isolates per-ticker errors; an empty frame means yfinance listed no
+    expirations inside the window.
+    """
+    now_et = pd.Timestamp.now(tz="America/New_York")
+    snapshot = now_et.strftime("%Y-%m-%d")
+    cutoff = pd.Timestamp(snapshot) + pd.Timedelta(days=max_days)
+    frames = _fetch_frames(ticker, snapshot=snapshot, cutoff=cutoff)
+    if not frames:
+        return pd.DataFrame(columns=CHAIN_COLUMNS)
+    return pd.concat(frames, ignore_index=True)
 
 
 def snapshot_chains(tickers: list[str], *, max_days: int = MAX_DAYS) -> dict[str, int]:
@@ -84,27 +138,11 @@ def snapshot_chains(tickers: list[str], *, max_days: int = MAX_DAYS) -> dict[str
             counts[ticker] = -1
             continue
         try:
-            t = yf.Ticker(ticker)
-            spot = float(t.fast_info["lastPrice"])
-            frames = []
-            for exp in t.options:
-                if pd.Timestamp(exp) > cutoff:
-                    continue
-                chain = t.option_chain(exp)  # fetch once per expiration
-                frames.append(
-                    _canonicalize_expiry(
-                        chain.calls,
-                        chain.puts,
-                        ticker=ticker,
-                        snapshot=snapshot,
-                        expiration=exp,
-                        spot=spot,
-                    )
-                )
+            frames = _fetch_frames(ticker, snapshot=snapshot, cutoff=cutoff)
             if not frames:
                 counts[ticker] = 0
                 continue
-            df = pd.concat(frames, ignore_index=True)
+            df = pd.concat(frames, ignore_index=True)[_COLUMNS]
             out.parent.mkdir(parents=True, exist_ok=True)
             df.to_parquet(out)
             counts[ticker] = len(df)

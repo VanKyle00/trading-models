@@ -112,6 +112,12 @@ def main(argv: list[str] | None = None) -> int:
                     f"entry {lv['entry']:.2f} stop {lv['stop']:.2f} "
                     f"target {lv['target']:.2f}{changed}"
                 )
+    print(f"tickets: {result['funnel']['tickets']}")
+    for stance in ("long", "short"):
+        for t in result["tickets"][stance]:
+            rec = next(s for s in t["structures"] if s["recommended"])
+            qty = rec["quantity"] if rec["quantity"] else "UNSIZED"
+            print(f"  {t['ticker']:<6} {stance:<5} {t['strategy']:<10} -> {rec['label']} x{qty}")
     print(f"report: {json_path}")
     print(f"        {md_path}")
     return 0

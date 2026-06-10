@@ -104,7 +104,7 @@ def _quiet_bars(symbol: str) -> pd.DataFrame:
 
 
 @pytest.fixture
-def patched_pipeline(monkeypatch: pytest.MonkeyPatch):
+def patched_pipeline(monkeypatch: pytest.MonkeyPatch, make_chain):
     from tradinglib.scanner import pipeline
 
     bars_by_symbol = {
@@ -164,6 +164,23 @@ def patched_pipeline(monkeypatch: pytest.MonkeyPatch):
     # break the existing tests instead of letting the new ones fail cleanly.
     monkeypatch.setattr(pipeline, "run_tournament", fake_tournament, raising=False)
     pipeline._test_tournament_calls = tournament_calls
+
+    chain_mids = {
+        ("call", 75, 95.0): 8.0,
+        ("call", 75, 110.0): 2.4,
+        ("put", 38, 90.0): 1.0,
+        ("put", 38, 95.0): 2.8,
+        ("put", 75, 105.0): 7.5,
+        ("put", 75, 90.0): 1.8,
+        ("call", 38, 105.0): 2.4,
+        ("call", 38, 110.0): 0.7,
+    }
+
+    def fake_fetch_chain(ticker, *, max_days=120):
+        return make_chain(mids=chain_mids)
+
+    # raising=False for the same red-phase reason as run_tournament above
+    monkeypatch.setattr(pipeline, "fetch_chain", fake_fetch_chain, raising=False)
 
     pipeline._test_trend_calls = trend_calls  # for assertions
     monkeypatch.setattr(
@@ -415,3 +432,60 @@ def test_run_scan_tournament_drops_nan_ohlc_rows(patched_pipeline, monkeypatch) 
     assert captured
     for bars in captured:
         assert not bars[["open", "high", "low", "close"]].isna().any().any()
+
+
+def test_run_scan_builds_tickets_for_winners(patched_pipeline) -> None:
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    entries = result["tournament"]["long"] + result["tournament"]["short"]
+    with_winner = [e for e in entries if e["winner"]]
+    tickets = result["tickets"]["long"] + result["tickets"]["short"]
+    assert tickets and len(tickets) == len(with_winner)
+    for t in tickets:
+        assert sum(s["recommended"] for s in t["structures"]) == 1
+        assert t["evidence"]["fa_rank"] == 1  # fa_keep=1 -> the sole candidate ranks 1
+        assert t["evidence"]["deflated_sharpe"] == 0.95
+        assert any("indicative" in w for w in t["warnings"])
+    assert result["funnel"]["tickets"] == len(tickets)
+    assert result["config"]["account_size"] == 100_000.0
+    assert result["config"]["risk_per_trade_pct"] == 0.01
+
+
+def test_run_scan_ticket_chain_failure_degrades_to_stock_only(
+    patched_pipeline, monkeypatch
+) -> None:
+    def exploding_fetch(ticker, *, max_days=120):
+        raise RuntimeError("yfinance chain flake")
+
+    monkeypatch.setattr(patched_pipeline, "fetch_chain", exploding_fetch)
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    tickets = result["tickets"]["long"] + result["tickets"]["short"]
+    assert tickets  # the stock plan still ships
+    for t in tickets:
+        assert [s["kind"] for s in t["structures"]] in (["stock"], ["stock_short"])
+        assert any("options_illiquid" in w for w in t["warnings"])
+    assert any(e["stage"] == "tickets" for e in result["errors"])
+
+
+def test_run_scan_isolates_ticket_failures(patched_pipeline, monkeypatch) -> None:
+    def exploding_build(**kwargs):
+        raise RuntimeError("playbook blew up")
+
+    monkeypatch.setattr(patched_pipeline, "build_ticket", exploding_build)
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    assert result["tickets"] == {"long": [], "short": []}
+    t_errors = [e for e in result["errors"] if e["stage"] == "tickets"]
+    assert t_errors  # every winner errored, scan completed
+    assert result["tournament"]["long"] or result["tournament"]["short"]  # earlier stages intact
+    assert result["funnel"]["tickets"] == 0
+
+
+def test_run_scan_skip_strategies_means_no_tickets(patched_pipeline) -> None:
+    result = patched_pipeline.run_scan(
+        ScanConfig(fa_keep=1, short_keep=1, skip_llm=True, skip_strategies=True)
+    )
+
+    assert result["tickets"] == {"long": [], "short": []}
+    assert result["funnel"]["tickets"] == 0
