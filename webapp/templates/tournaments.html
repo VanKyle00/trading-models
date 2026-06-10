@@ -125,7 +125,7 @@
           <td class="tkr">{{ r.ticker }}</td>
           <td><span class="chip {{ 'favorable' if r.stance == 'long' else 'flag' }}">{{ r.stance }}</span></td>
           <td>{{ r.strategy }}</td>
-          <td><span class="chip st-{{ r.status }}">{{ r.status }}</span>
+          <td><span class="chip st-{{ r.status }}"{% if r.error %} title="{{ r.error }}"{% endif %}>{{ r.status }}</span>
               {% if r.ambiguous_bar %}<span class="chip flag" title="stop and target touched the same bar; counted as stopped">±</span>{% endif %}</td>
           <td class="{{ 'up' if r.r is not none and r.r > 0 else 'down' if r.r is not none and r.r < 0 else '' }}">
               {{ '%+.2f' | format(r.r) if r.r is not none else '—' }}</td>

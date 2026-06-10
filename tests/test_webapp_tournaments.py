@@ -86,6 +86,31 @@ def test_ledger_rows_attach_sparklines() -> None:
     assert tournaments_module.ledger_rows(None) == []
 
 
+def test_error_chip_carries_error_title(tournaments_dir: Path) -> None:
+    ledger = _ledger("2026-06-08")
+    ledger["tickets"].append(
+        {
+            "date": "2026-06-08",
+            "ticker": "MISS",
+            "stance": "short",
+            "strategy": "sma_cross",
+            "status": "error",
+            "error": "no data for MISS",
+        }
+    )
+    (tournaments_dir / "ledger.json").write_text(json.dumps(ledger), encoding="utf-8")
+    html = TestClient(create_app()).get("/tournaments").text
+    assert 'title="no data for MISS"' in html
+
+
+def test_index_survives_corrupt_report(tournaments_dir: Path) -> None:
+    (tournaments_dir / "2026-06-06").mkdir()
+    (tournaments_dir / "2026-06-06" / "report.json").write_text("{not json", encoding="utf-8")
+    resp = TestClient(create_app()).get("/tournaments")
+    assert resp.status_code == 200
+    assert 'href="/tournaments/2026-06-08"' in resp.text  # healthy date still listed
+
+
 def test_ledger_rows_normalize_error_records() -> None:
     ledger = {
         "stats": {},
