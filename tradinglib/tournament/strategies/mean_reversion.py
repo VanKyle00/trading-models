@@ -32,7 +32,7 @@ def _rsi2_signal(train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: 
     return pos.loc[test.index]
 
 
-def _rsi2_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+def _rsi2_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None:
     entry = float(bars["close"].iloc[-1])
     stop = protective_stop(bars, entry, stance)
     long_side = direction(stance) > 0
@@ -88,7 +88,7 @@ def _bollinger_signal(
     return pos.loc[test.index]
 
 
-def _bollinger_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+def _bollinger_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None:
     mid, lower, upper = _bollinger_bands(bars["close"], params["window"], params["num_std"])
     long_side = direction(stance) > 0
     entry = float(lower.iloc[-1]) if long_side else float(upper.iloc[-1])
