@@ -53,6 +53,14 @@ def test_pop_market_implied_matches_hand_computed_lognormal() -> None:
     assert below == pytest.approx(0.842, abs=1e-3)  # sanity anchor
 
 
+def test_pop_market_implied_nonpositive_level_is_certain() -> None:
+    # junk quotes can push a breakeven to or below zero; lognormal support is (0, inf)
+    pop = pop_market_implied(spot=100.0, level=0.0, vol=0.2, t_years=0.25, profit_above=True)
+    assert pop == 1.0
+    pop = pop_market_implied(spot=100.0, level=-0.1, vol=0.2, t_years=0.25, profit_above=False)
+    assert pop == 0.0
+
+
 def test_stock_plan_long() -> None:
     s = stock_plan(LONG_LEVELS, "long")
 

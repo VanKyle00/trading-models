@@ -65,6 +65,8 @@ def pop_market_implied(
     *, spot: float, level: float, vol: float, t_years: float, profit_above: bool
 ) -> float:
     """P(S_T ends on the profitable side of ``level``), zero-rate lognormal."""
+    if level <= 0.0:  # lognormal support is (0, inf): junk quotes can push a breakeven <= 0
+        return 1.0 if profit_above else 0.0
     d = (math.log(level / spot) + 0.5 * vol * vol * t_years) / (vol * math.sqrt(t_years))
     p_below = float(norm.cdf(d))
     return 1.0 - p_below if profit_above else p_below
@@ -135,6 +137,7 @@ def long_option(
     short_leg = nearest_strike(toward_target, levels.target)
     if short_leg is not None:
         net = leg.mid - short_leg.mid
+        # net <= 0 (inverted junk quotes) falls through to the plain long option
         if net > 0 and net <= (1.0 - SPREAD_SAVES_FRAC) * leg.mid:
             width = abs(short_leg.strike - leg.strike)
             breakeven = leg.strike + d * net
