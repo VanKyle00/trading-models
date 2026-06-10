@@ -197,3 +197,56 @@ def test_unknown_entry_type_raises() -> None:
         simulate_ticket(
             _ticket(entry_type="teleport"), _bars([(100.0, 101.0, 99.0, 100.0)]), asof=ASOF
         )
+
+
+def test_limit_entry_bar_target_only_touch_stays_open() -> None:
+    # intrabar order unknowable: the rally to target may precede the dip that
+    # filled the limit entry, so the entry bar's target touch must not exit
+    bars = _bars([(102.0, 111.0, 99.5, 105.0)])
+    out = simulate_ticket(_ticket(entry_type="limit"), bars, asof=ASOF)
+    assert out["status"] == "open"
+    assert out["entry_fill"] == 100.0
+    assert out["r"] == pytest.approx(1.0)  # unrealized from the close
+
+
+def test_limit_entry_bar_target_exit_allowed_next_bar() -> None:
+    bars = _bars([(102.0, 111.0, 99.5, 105.0), (109.0, 111.0, 108.0, 110.0)])
+    out = simulate_ticket(_ticket(entry_type="limit"), bars, asof=ASOF)
+    assert out["status"] == "target"
+    assert out["exit_date"] == "2026-06-12"
+    assert out["exit_fill"] == 110.0
+
+
+def test_limit_entry_bar_stop_hit_still_exits() -> None:
+    # to reach the stop the price passed through the entry level first
+    bars = _bars([(102.0, 103.0, 94.0, 95.0)])
+    out = simulate_ticket(_ticket(entry_type="limit"), bars, asof=ASOF)
+    assert out["status"] == "stopped"
+    assert out["exit_fill"] == 95.0
+    assert out["ambiguous_bar"] is False
+
+
+def test_short_limit_entry_fills_on_rip() -> None:
+    ticket = _ticket(entry=100.0, entry_type="limit", stop=105.0, target=90.0, stance="short")
+    bars = _bars([(99.0, 101.0, 98.0, 99.0)])
+    out = simulate_ticket(ticket, bars, asof=ASOF)
+    assert out["status"] == "open"
+    assert out["entry_fill"] == 100.0
+
+
+def test_short_ambiguous_bar_counts_as_stopped() -> None:
+    ticket = _ticket(entry=100.0, entry_type="market", stop=105.0, target=90.0, stance="short")
+    bars = _bars([(100.0, 101.0, 99.0, 100.0), (100.0, 106.0, 89.0, 100.0)])
+    out = simulate_ticket(ticket, bars, asof=ASOF)
+    assert out["status"] == "stopped"
+    assert out["ambiguous_bar"] is True
+    assert out["exit_fill"] == 105.0
+    assert out["r"] == pytest.approx(-1.0)
+
+
+def test_nan_bars_are_dropped() -> None:
+    bars = _bars([(101.0, 103.0, 100.0, 102.0), (float("nan"),) * 4, (104.0, 106.0, 103.0, 105.0)])
+    out = simulate_ticket(_ticket(), bars, asof=ASOF)
+    assert out["status"] == "open"
+    assert out["sessions_held"] == 2  # NaN row ignored entirely
+    assert out["r"] == pytest.approx((105.0 - 101.0) / 5.0)

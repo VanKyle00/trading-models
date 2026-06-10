@@ -4,11 +4,15 @@ The ``evaluate_tickets`` follow-up promised by the FA-tournament spec: every
 nightly ticket is timestamped before outcomes are known, and this module
 scores it afterwards from daily OHLC alone. Stock-level only — the levels are
 the strategy's contract; option structures are execution vehicles. Fills are
-conservative: entries and protective stops that gap through their level fill
-at the open (never better than the plan), and a bar that touches both stop
-and target counts as stopped and is flagged ambiguous. R-multiples use the
-PLANNED risk |entry - stop| — a market entry can gap past the stop, which
-would make fill-based risk degenerate.
+conservative: stop-style triggers (entry stops, protective stops) that gap
+through their level fill at the open (never better than the plan); limit
+entries that gap through fill at the gap open, as a real limit order would
+(potentially better than the plan). A bar that touches both stop and target
+counts as stopped and is flagged ambiguous. On the bar that fills a limit
+entry, a target-only touch does not exit — intrabar order is unknowable and
+the target rally may have preceded the dip that filled the entry; a stop hit
+on that bar still exits. R-multiples use the PLANNED risk |entry - stop| — a
+market entry can gap past the stop, which would make fill-based risk degenerate.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ def _sessions_after(bars: pd.DataFrame, asof: str) -> pd.DataFrame:
     idx = bars.index
     if getattr(idx, "tz", None) is not None:
         bars = bars.set_axis(idx.tz_convert("UTC").tz_localize(None))
+    bars = bars.dropna(subset=["open", "high", "low", "close"])
     return bars.loc[bars.index > pd.Timestamp(asof)]
 
 
@@ -105,10 +110,16 @@ def simulate_ticket(
         return out
 
     out["status"] = "open"
-    for ts, row in after.iloc[entry_idx:].iterrows():
+    is_limit = levels["entry_type"] == "limit"
+    for bar_num, (ts, row) in enumerate(after.iloc[entry_idx:].iterrows()):
         out["sessions_held"] += 1
         fill, status, ambiguous = _exit_fill(row, stop, target, stance)
         if fill is not None:
+            # On the limit-entry bar, a target-only hit is suppressed: intrabar
+            # order is unknowable and the rally may have preceded the fill dip.
+            # A stop hit still exits (price must pass through entry to reach stop).
+            if bar_num == 0 and is_limit and status == "target":
+                continue
             out["status"] = status
             out["exit_date"] = _date(ts)
             out["exit_fill"] = fill
