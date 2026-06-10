@@ -49,6 +49,18 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help="skip the per-ticker strategy tournament over the FA candidates",
     )
+    parser.add_argument(
+        "--account-size",
+        type=float,
+        default=100_000.0,
+        help="account size the ticket playbook sizes risk against",
+    )
+    parser.add_argument(
+        "--risk-per-trade-pct",
+        type=float,
+        default=0.01,
+        help="per-ticket risk budget as a fraction of account size",
+    )
     return parser.parse_args(argv)
 
 
@@ -64,6 +76,8 @@ def main(argv: list[str] | None = None) -> int:
         edgar_enrich=not args.skip_edgar,
         universe=args.universe,
         skip_strategies=args.skip_strategies,
+        account_size=args.account_size,
+        risk_per_trade_pct=args.risk_per_trade_pct,
     )
 
     provider = None
