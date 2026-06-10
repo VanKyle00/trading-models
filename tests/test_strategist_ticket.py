@@ -127,6 +127,39 @@ def test_empty_chain_degrades_to_stock_only_with_warning(make_chain) -> None:
     assert ticket["quotes_asof"] is None and ticket["iv_ratio"] is None
 
 
+def test_short_stance_ticket_builds_and_orders_short_structures(make_chain) -> None:
+    short_mids = {
+        ("put", 75, 90.0): 1.8,
+        ("put", 75, 95.0): 2.6,
+        ("put", 75, 105.0): 7.5,
+        ("put", 75, 110.0): 11.0,
+        ("call", 38, 105.0): 2.4,
+        ("call", 38, 110.0): 0.7,
+    }
+    winner = _winner()  # sma_cross: trend -> directional-first for shorts too
+    winner["levels"] = {
+        "entry": 100.0,
+        "entry_type": "market",
+        "stop": 104.0,
+        "target": 92.0,
+        "condition": "t",
+    }
+    ticket = build_ticket(
+        ticker="TEST",
+        stance="short",
+        winner=winner,
+        bars=_bars(),
+        chain=make_chain(mids=short_mids, iv=_rv()),  # neutral tilt
+    )
+
+    kinds = [s["kind"] for s in ticket["structures"]]
+    assert kinds == ["long_put", "stock_short", "bear_call_spread"]
+    rec = next(s for s in ticket["structures"] if s["recommended"])
+    assert rec["kind"] == "long_put" and rec["quantity"] == 1  # 1000 budget // 750 per contract
+    stock = next(s for s in ticket["structures"] if s["kind"] == "stock_short")
+    assert any("borrow" in w for w in stock["warnings"])
+
+
 def test_ticket_framing_and_evidence(make_chain) -> None:
     ticket = _ticket(
         make_chain,
