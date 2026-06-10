@@ -15,7 +15,7 @@ def _bars(
 ) -> pd.DataFrame:
     close = np.asarray(close, dtype=float)
     idx = pd.date_range("2022-01-03", periods=len(close), freq="B", tz="UTC")
-    return pd.DataFrame(
+    bars = pd.DataFrame(
         {
             "open": close,
             "high": close * 1.01 if high is None else np.asarray(high, dtype=float),
@@ -24,6 +24,8 @@ def _bars(
         },
         index=idx,
     )
+    bars["volume"] = np.full(len(close), 1_000_000.0)
+    return bars
 
 
 def _trend_bars(n: int = 420, rate: float = 1.005) -> pd.DataFrame:
@@ -192,8 +194,51 @@ def test_bollinger_levels_limit_at_band_target_at_mean() -> None:
 
 
 def test_registry_has_five_strategies_with_18_total_trials() -> None:
-    assert set(STRATEGIES) == {"sma_cross", "donchian", "rsi2", "macd", "bollinger"}
+    assert set(STRATEGIES) == {
+        "sma_cross",
+        "donchian",
+        "rsi2",
+        "macd",
+        "bollinger",
+        "base_breakout",
+    }  # keep in sync with the registry
     total = sum(len(expand_grid(s.param_grid)) for s in STRATEGIES.values())
-    assert total == 18  # the global n_trials the tournament deflates by
+    assert total == 21  # keep in sync with the registry (was 18; +3 for base_breakout)
     styles = {"trend", "breakout", "mean_reversion"}
     assert all(s.style in styles and s.description for s in STRATEGIES.values())
+
+
+def _base_breakout_bars(n_base: int = 60) -> pd.DataFrame:
+    # 252 bars of uptrend to a high, then a tight drying-volume base just
+    # under it, then a breakout bar above the base high.
+    trend = 100.0 * 1.004 ** np.arange(252)
+    base = np.full(n_base, trend[-1] * 0.99)
+    breakout = np.array([trend[-1] * 1.03])
+    close = np.concatenate([trend, base, breakout])
+    bars = _bars(close, high=close * 1.002, low=close * 0.998)
+    vol = np.full(len(close), 1_000_000.0)
+    # volume must DECLINE through the base: a constant low value makes the
+    # trailing-50 ratio converge to 1.0 late in the base and the dry-volume
+    # gate (ratio < 1.0) would fail right before the breakout
+    vol[-(n_base + 1) : -1] = np.linspace(900_000.0, 300_000.0, n_base)
+    bars["volume"] = vol
+    return bars
+
+
+def test_base_breakout_long_fires_on_breakout_from_tight_base() -> None:
+    bars = _base_breakout_bars()
+    train, test = bars.iloc[:280], bars.iloc[280:]
+    sig = STRATEGIES["base_breakout"].make_signal(train, test, {"base": 40}, "long")
+    assert sig.iloc[-1] == 1.0  # long on the breakout bar
+    assert set(np.unique(sig)) <= {0.0, 1.0}
+
+
+def test_base_breakout_levels_actionable_only_in_a_base() -> None:
+    bars = _base_breakout_bars()
+    lv = STRATEGIES["base_breakout"].levels(bars.iloc[:-1], {"base": 40}, "long")
+    assert lv is not None and lv.entry_type == "stop"
+    assert lv.entry == pytest.approx(float(bars["high"].iloc[:-1].iloc[-40:].max()))
+    assert lv.stop < lv.entry < lv.target
+    # an established uptrend with no consolidation is not actionable
+    trending = _trend_bars(n=420)
+    assert STRATEGIES["base_breakout"].levels(trending, {"base": 40}, "long") is None
