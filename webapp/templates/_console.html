@@ -39,7 +39,10 @@
                              animation: caret-blink 1s steps(2, start) infinite; }
   @keyframes caret-blink { 50% { opacity: 0; } }
   .composer { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
-  .composer input { flex: 1; }
+  .composer input { flex: 1; padding: 7px 8px; font: inherit; font-size: 12px;
+                    background: var(--field); color: var(--ink);
+                    border: 1px solid var(--line); border-radius: 0; }
+  .composer input:focus { outline: none; border-color: var(--accent); }
   .composer button {
     padding: 0 16px; cursor: pointer; border: 1px solid var(--line-strong);
     background: var(--ink); color: var(--bg); font: inherit;

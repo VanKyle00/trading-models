@@ -209,6 +209,8 @@ def test_planner_page_renders_console_and_chips():
     assert 'class="chat-chip"' in html and "bullish on RIVN" in html  # chip BUTTONS render
     assert "renderTicketCard" in html
     assert 'id="console-resize"' not in html  # resize handle is index-only
+    assert html.count('id="transcript"') == 1  # the partial is included exactly once
+    assert 'href="/scans"' in html and 'href="/tournaments"' in html and 'href="/models"' in html
 
 
 def test_planner_nav_crumbs():
