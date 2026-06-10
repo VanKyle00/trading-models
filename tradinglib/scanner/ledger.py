@@ -76,23 +76,31 @@ def build_ledger(base: Path, *, asof: str, loader: Loader = load_daily) -> dict:
             "ticker": ticker,
             "stance": ticket["stance"],
             "strategy": ticket["strategy"],
-            "levels": {k: ticket["levels"][k] for k in ("entry", "entry_type", "stop", "target")},
         }
         if ticker not in bars_by_ticker:
             try:
-                # oldest issue first, so `start` covers every later re-issue too
-                bars_by_ticker[ticker] = loader(ticker, start=date)
+                # oldest issue first, so `start` covers every later re-issue too;
+                # refresh=True is load-bearing: the parquet cache on the Modal Volume
+                # is written at issue night, so without a forced download the ledger
+                # would see zero post-issue bars and every ticket would stay "waiting"
+                # forever (one fresh download per distinct ledgered ticker per build)
+                bars_by_ticker[ticker] = loader(ticker, start=date, refresh=True)
             except Exception as exc:  # cache the failure: don't re-hit a dead ticker
                 bars_by_ticker[ticker] = exc
         bars = bars_by_ticker[ticker]
         try:
             if isinstance(bars, Exception):
                 raise bars
+            record["levels"] = {
+                k: ticket["levels"][k] for k in ("entry", "entry_type", "stop", "target")
+            }
             record.update(simulate_ticket(ticket, bars, asof=date))
         except Exception as exc:
             record.update(status="error", error=str(exc))
         records.append(record)
-    records.reverse()  # newest issue date first for display
+    records.sort(
+        key=lambda r: r["date"], reverse=True
+    )  # newest issue date first, stable within date
     return {"built_asof": asof, "stats": _stats(records), "tickets": records}
 
 

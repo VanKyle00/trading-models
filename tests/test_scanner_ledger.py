@@ -147,3 +147,29 @@ def test_empty_base_builds_empty_ledger(tmp_path: Path) -> None:
     ledger = build_ledger(tmp_path / "absent", asof="2026-06-11", loader=_loader_with({}))
     assert ledger["stats"]["issued"] == 0
     assert ledger["tickets"] == []
+
+
+def test_loader_asked_for_fresh_bars(base: Path) -> None:
+    # the parquet cache is frozen at issue night in prod; without refresh the
+    # ledger would never see post-issue bars and every ticket waits forever
+    seen_kwargs: list[dict] = []
+    bars = {"TST": _tst_bars()}
+
+    def loader(ticker: str, start: str | None = None, **kwargs: object) -> pd.DataFrame:
+        seen_kwargs.append(dict(kwargs))
+        if ticker not in bars:
+            raise RuntimeError(f"no data for {ticker}")
+        return bars[ticker]
+
+    build_ledger(base, asof="2026-06-11", loader=loader)
+    assert seen_kwargs and all(k.get("refresh") is True for k in seen_kwargs)
+
+
+def test_malformed_ticket_becomes_error_record(base: Path) -> None:
+    broken = {"ticker": "BRK", "stance": "long", "strategy": "sma_cross", "levels": {}}
+    (base / "2026-06-09" / "report.json").write_text(
+        json.dumps(_report("2026-06-09", [broken], [])), encoding="utf-8"
+    )
+    ledger = build_ledger(base, asof="2026-06-11", loader=_loader_with({"TST": _tst_bars()}))
+    errors = [r for r in ledger["tickets"] if r["status"] == "error"]
+    assert {"BRK", "MISS"} <= {r["ticker"] for r in errors}
