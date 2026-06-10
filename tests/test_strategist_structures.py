@@ -71,3 +71,73 @@ def test_stock_plan_short_carries_borrow_warning() -> None:
     assert s.kind == "stock_short"
     assert s.max_loss == pytest.approx(4.0) and s.max_gain == pytest.approx(8.0)
     assert any("borrow" in w for w in s.warnings)
+
+
+def test_long_call_when_spread_does_not_cut_cost(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option
+
+    chain = make_chain(mids=LONG_MIDS)  # short leg at 110 saves only 2.4/8.0 = 30% < 35%
+    s = long_option(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+
+    assert s is not None and s.kind == "long_call" and s.unit == "contract"
+    assert [leg["action"] for leg in s.legs] == ["buy"]
+    assert s.legs[0]["strike"] == 95.0  # delta ~0.67 is nearest the 0.65 target
+    assert s.legs[0]["dte"] == 75  # the only expiry inside 60-90
+    assert s.premium == pytest.approx(8.0)
+    assert s.max_loss == pytest.approx(8.0)
+    assert s.max_gain is None and s.rr is None  # uncapped payoff
+    assert s.breakeven == pytest.approx(103.0)
+    expected_pop = pop_market_implied(
+        spot=100.0, level=103.0, vol=0.30, t_years=75 / 365, profit_above=True
+    )
+    assert s.pop_market_implied == pytest.approx(expected_pop)
+
+
+def test_call_debit_spread_when_short_leg_at_target_cuts_cost(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option
+
+    mids = {**LONG_MIDS, ("call", 75, 110.0): 3.0}  # saves 3.0/8.0 = 37.5% > 35%
+    s = long_option(make_chain(mids=mids), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+
+    assert s is not None and s.kind == "call_debit_spread"
+    assert [(leg["action"], leg["strike"]) for leg in s.legs] == [("buy", 95.0), ("sell", 110.0)]
+    assert s.premium == pytest.approx(5.0)
+    assert s.max_loss == pytest.approx(5.0)
+    assert s.max_gain == pytest.approx(10.0)  # width 15 - debit 5
+    assert s.breakeven == pytest.approx(100.0)
+    assert s.rr == pytest.approx(2.0)
+
+
+def test_long_put_mirrors_for_short_stance(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option
+
+    chain = make_chain(mids=SHORT_MIDS)  # spread saves 1.8/7.5 = 24% -> plain put
+    s = long_option(chain, SHORT_LEVELS, spot=100.0, asof=ASOF, stance="short")
+
+    assert s is not None and s.kind == "long_put"
+    assert s.legs[0]["strike"] == 105.0  # delta ~-0.61 nearest -0.65
+    assert s.breakeven == pytest.approx(97.5)  # 105 - 7.5
+    expected_pop = pop_market_implied(
+        spot=100.0, level=97.5, vol=0.30, t_years=75 / 365, profit_above=False
+    )
+    assert s.pop_market_implied == pytest.approx(expected_pop)
+
+
+def test_put_debit_spread_for_short_stance(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option
+
+    mids = {**SHORT_MIDS, ("put", 75, 90.0): 3.0}  # saves 3.0/7.5 = 40% > 35%
+    s = long_option(make_chain(mids=mids), SHORT_LEVELS, spot=100.0, asof=ASOF, stance="short")
+
+    assert s is not None and s.kind == "put_debit_spread"
+    assert [(leg["action"], leg["strike"]) for leg in s.legs] == [("buy", 105.0), ("sell", 90.0)]
+    assert s.premium == pytest.approx(4.5)
+    assert s.max_gain == pytest.approx(10.5)  # width 15 - debit 4.5
+    assert s.breakeven == pytest.approx(100.5)
+
+
+def test_long_option_not_offered_without_directional_expiry(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option
+
+    chain = make_chain(mids={("call", 38, 100.0): 2.0})  # income window only
+    assert long_option(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long") is None
