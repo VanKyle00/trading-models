@@ -139,3 +139,11 @@ def test_load_latest_report_excludes_today_and_handles_missing(tmp_path: Path) -
 
     assert load_latest_report(tmp_path, before="2026-06-09") is None  # strictly before
     assert load_latest_report(tmp_path / "missing", before="2026-06-09") is None
+
+
+def test_load_latest_report_swallows_corrupt_json(tmp_path: Path) -> None:
+    d = tmp_path / "2026-06-08"
+    d.mkdir()
+    (d / "report.json").write_text('{"asof": "2026-06-08"')  # truncated partial write
+
+    assert load_latest_report(tmp_path, before="2026-06-09") is None

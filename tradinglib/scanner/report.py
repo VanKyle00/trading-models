@@ -115,7 +115,9 @@ def load_latest_report(base: Path, *, before: str) -> dict | None:
     """Latest ``report.json`` under ``base`` from a date strictly before ``before``.
 
     Scan directories are named ``YYYY-MM-DD`` so lexicographic order is
-    chronological. Returns ``None`` when there is no prior report (first run) —
+    chronological. Returns ``None`` when there is no prior report (first run)
+    or the latest one is unreadable/corrupt (e.g. a partial write) — the
+    previous report is optional context and must never kill tonight's scan;
     the tournament then marks ``winner_changed`` as unknown rather than false.
     """
     if not base.exists():
@@ -125,4 +127,7 @@ def load_latest_report(base: Path, *, before: str) -> dict | None:
     )
     if not dated:
         return None
-    return json.loads((dated[-1] / "report.json").read_text(encoding="utf-8"))
+    try:
+        return json.loads((dated[-1] / "report.json").read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
