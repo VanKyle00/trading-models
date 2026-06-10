@@ -177,7 +177,11 @@ def fastapi_app():
     # the scan sees the day's final bars. The report lands on the shared data
     # Volume, which the /scans page in fastapi_app reads.
     schedule=modal.Cron("0 22 * * 1-5"),
-    timeout=3600,  # ~1000 .info fetches (threaded+cached) + ~160 EDGAR companyfacts + ~15 LLM briefs; live smoke pending
+    # ~1000 .info fetches + ~160 EDGAR companyfacts + ~80 walk-forward tournaments
+    # + chains for survivors + ~15 LLM briefs. The 2026-06-10 live smoke ran in
+    # ~2.5 min on a warm cache; a cold Russell-scale night is unmeasured, and a
+    # timeout kill costs the whole nightly report — so take the headroom.
+    timeout=7200,
 )
 def scheduled_swing_scan() -> None:
     from datetime import UTC, datetime
