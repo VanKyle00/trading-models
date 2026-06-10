@@ -31,7 +31,7 @@ def _reactions(full: pd.DataFrame, min_move: float, stance: str) -> pd.Series:
         qualified &= move >= min_move
     else:
         qualified &= move <= -min_move
-    return full["earnings"].astype(bool) & qualified
+    return full["earnings"].eq(True) & qualified
 
 
 def _pead_signal(train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str) -> pd.Series:
@@ -40,6 +40,11 @@ def _pead_signal(train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: 
         return pd.Series(0.0, index=test.index)
     reaction = _reactions(full, params["min_move"], stance)
     close = full["close"]
+    # Overlapping reactions: _hold_between makes a second reaction's entry a
+    # no-op while in position, and the FIRST reaction's time-exit still fires
+    # (a later overlapping window may be partially missed); the ffill'd guard
+    # jumps to the newest reaction's extreme. Back-to-back qualifying earnings
+    # are rare; first-exit-wins is the accepted semantics.
     if direction(stance) > 0:
         guard = full["low"].where(reaction).ffill()
         entries = reaction.shift(_ENTRY_DELAY, fill_value=False) & (close > guard)
@@ -61,8 +66,8 @@ def _pead_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None
         return None
     last_reaction = int(reaction.to_numpy().nonzero()[0][-1])
     days_since = len(bars) - 1 - last_reaction
-    if not (_ENTRY_DELAY <= days_since <= _ENTRY_DELAY + params["hold"]):
-        return None  # outside the drift window tonight
+    if not (_ENTRY_DELAY <= days_since < _ENTRY_DELAY + params["hold"]):
+        return None  # outside the drift window tonight (upper bound = the signal's exit bar)
     long_side = direction(stance) > 0
     entry = float(bars["close"].iloc[-1])
     stop = float(bars["low"].iloc[last_reaction] if long_side else bars["high"].iloc[last_reaction])
