@@ -349,9 +349,7 @@ def test_edgar_no_data_short_outranks_improving_short() -> None:
         }
     )
     scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
-    trends = _trends(
-        {"S2": {"revenue_yoy": 0.30, "revenue_accel": 0.10, "eps_change_yoy": 0.5}}
-    )
+    trends = _trends({"S2": {"revenue_yoy": 0.30, "revenue_accel": 0.10, "eps_change_yoy": 0.5}})
 
     out = apply_edgar_trends(scored, trends, keep=1, short_keep=1).set_index("ticker")
 
