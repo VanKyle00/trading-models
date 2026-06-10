@@ -345,3 +345,22 @@ def test_pead_levels_inside_the_drift_window() -> None:
     lv = STRATEGIES["pead"].levels(bars.iloc[:86], {"min_move": 0.04, "hold": 12}, "long")
     assert lv is not None and lv.entry_type == "market"
     assert lv.stop == pytest.approx(float(bars["low"].iloc[80]))
+
+
+def test_pead_requires_both_move_and_volume_gates() -> None:
+    # +8% earnings move on NORMAL volume -> no reaction, no drift position
+    quiet = _pead_bars()
+    quiet.loc[quiet.index[80], "volume"] = 1_000_000.0
+    sig = STRATEGIES["pead"].make_signal(
+        quiet.iloc[:60], quiet.iloc[60:], {"min_move": 0.04, "hold": 12}, "long"
+    )
+    assert (sig == 0.0).all()
+    # 3x volume on a sub-threshold move -> equally flat
+    small = _pead_bars()
+    small_close = small["close"].to_numpy().copy()
+    small_close[80:] = small_close[79] * 1.01  # +1% < 4% min_move
+    small["close"] = small_close
+    sig2 = STRATEGIES["pead"].make_signal(
+        small.iloc[:60], small.iloc[60:], {"min_move": 0.04, "hold": 12}, "long"
+    )
+    assert (sig2 == 0.0).all()
