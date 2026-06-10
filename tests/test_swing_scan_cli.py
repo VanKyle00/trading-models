@@ -26,7 +26,13 @@ def _canned_result() -> dict:
     return {
         "asof": "2026-06-09",
         "config": {"fa_keep": 40, "top": 15},
-        "funnel": {"universe": 5, "fa_shortlist": 5, "with_setups": 1},
+        "funnel": {
+            "universe": 5,
+            "fa_shortlist": 5,
+            "with_setups": 1,
+            "tournament_candidates": 2,
+            "tournament_survivors": 1,
+        },
         "candidates": [
             {
                 "ticker": "AAPL",
@@ -56,6 +62,23 @@ def _canned_result() -> dict:
             ],
             "short": [],
         },
+        "tournament": {
+            "long": [
+                {
+                    "ticker": "AAPL",
+                    "winner": {
+                        "strategy": "sma_cross",
+                        "levels": {
+                            "entry": 210.0,
+                            "stop": 195.0,
+                            "target": 225.0,
+                        },
+                    },
+                    "winner_changed": False,
+                }
+            ],
+            "short": [],
+        },
     }
 
 
@@ -64,7 +87,7 @@ def test_cli_writes_report_and_passes_config(
 ) -> None:
     seen: dict = {}
 
-    def fake_run_scan(config, provider=None):
+    def fake_run_scan(config, provider=None, previous_report=None):
         seen["config"] = config
         seen["provider"] = provider
         return _canned_result()
@@ -119,7 +142,7 @@ def test_cli_builds_claude_provider_unless_skipped(
 
     seen: dict = {}
 
-    def fake_run_scan(config, provider=None):
+    def fake_run_scan(config, provider=None, previous_report=None):
         seen["provider"] = provider
         return _canned_result()
 
