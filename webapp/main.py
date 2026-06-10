@@ -24,6 +24,7 @@ from tradinglib.assistant import provider as _assistant_provider
 from tradinglib.service import RequestError, list_specs, model_spec, run, run_to_dict
 from tradinglib.tournament.strategies import STRATEGIES
 from webapp import scans as _scans
+from webapp import tournaments as _tournaments
 from webapp.charts import build_all
 from webapp.events import events_for_assets
 from webapp.forms import request_from_payload
@@ -231,6 +232,33 @@ def create_app() -> FastAPI:
             request,
             "models.html",
             {"strategies": list(STRATEGIES.values()), "specs": list_specs()},
+        )
+
+    @app.get("/tournaments", response_class=HTMLResponse)
+    def tournaments_index(request: Request) -> HTMLResponse:
+        ledger = _tournaments.load_ledger()
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "tournaments.html",
+            {
+                "stats": (ledger or {}).get("stats"),
+                "rows": _tournaments.ledger_rows(ledger),
+                "catalog": _tournaments.catalog(_scans.list_scan_dates()),
+            },
+        )
+
+    @app.get("/tournaments/{scan_date}", response_class=HTMLResponse)
+    def tournaments_by_date(request: Request, scan_date: str) -> HTMLResponse:
+        scan = _scans.load_scan(scan_date)
+        if scan is None:
+            return HTMLResponse("<p>scan not found</p>", status_code=404)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "tournament_day.html",
+            {
+                "dates": _scans.list_scan_dates(),
+                "day": _tournaments.day_view(scan, _tournaments.load_ledger()),
+            },
         )
 
     @app.post("/run", response_class=HTMLResponse)

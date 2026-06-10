@@ -36,4 +36,8 @@ def load_scan(date: str) -> dict | None:
     path = processed_dir(SOURCE) / date / "report.json"
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        # one partial write must not 500 every page that aggregates reports
+        return None

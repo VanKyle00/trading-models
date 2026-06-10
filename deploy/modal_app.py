@@ -157,10 +157,11 @@ def fastapi_app():
 
     # Volumes are snapshots: a warm container keeps seeing the volume as it was
     # when it mounted, so a report committed by scheduled_swing_scan would stay
-    # invisible until the container recycled. Reload before serving /scans.
+    # invisible until the container recycled. Reload before serving /scans and
+    # /tournaments (both read the volume-backed reports + ledger).
     @web_app.middleware("http")
     async def _reload_scans_volume(request, call_next):
-        if request.url.path.startswith("/scans"):
+        if request.url.path.startswith(("/scans", "/tournaments")):
             # a stale read beats a 500; the next container recycle catches up
             with contextlib.suppress(Exception):
                 await data_volume.reload.aio()
@@ -189,6 +190,7 @@ def scheduled_swing_scan() -> None:
     from tradinglib.assistant.provider import ClaudeProvider
     from tradinglib.data.paths import processed_dir
     from tradinglib.scanner.config import ScanConfig
+    from tradinglib.scanner.ledger import build_ledger, write_ledger
     from tradinglib.scanner.pipeline import run_scan
     from tradinglib.scanner.report import load_latest_report, write_report
 
@@ -197,5 +199,12 @@ def scheduled_swing_scan() -> None:
     previous = load_latest_report(base, before=datetime.now(UTC).strftime("%Y-%m-%d"))
     result = run_scan(ScanConfig(), ClaudeProvider(), previous_report=previous)
     json_path, _ = write_report(result, base / result["asof"])
+    try:
+        # forward ticket-performance ledger; must never cost the night's report
+        ledger = build_ledger(base, asof=result["asof"])
+        write_ledger(ledger, base)
+        print(f"ledger {result['asof']}: {ledger['stats']}")
+    except Exception as exc:
+        print(f"ledger build failed (report still written): {exc}")
     data_volume.commit()  # persist before the container scales down
     print(f"swing scan {result['asof']}: {result['funnel']} -> {json_path}")

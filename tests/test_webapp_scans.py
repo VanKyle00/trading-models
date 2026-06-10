@@ -177,6 +177,13 @@ def test_load_scan_rejects_bad_date_strings(scan_dir: Path) -> None:
     assert scans_module.load_scan("2026-06-09") is not None
 
 
+def test_load_scan_corrupt_report_returns_none(scan_dir: Path) -> None:
+    out = scan_dir / "2026-06-10"
+    out.mkdir()
+    (out / "report.json").write_text("{not json", encoding="utf-8")
+    assert scans_module.load_scan("2026-06-10") is None
+
+
 def test_scans_page_renders_latest(scan_dir: Path) -> None:
     client = TestClient(create_app())
     resp = client.get("/scans")

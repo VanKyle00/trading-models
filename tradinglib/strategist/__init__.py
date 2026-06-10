@@ -1,5 +1,6 @@
 """Ticket playbook (sub-project C): tournament winners -> nightly trade tickets."""
 
+from tradinglib.strategist.evaluate import simulate_ticket
 from tradinglib.strategist.ticket import build_ticket
 
-__all__ = ["build_ticket"]
+__all__ = ["build_ticket", "simulate_ticket"]

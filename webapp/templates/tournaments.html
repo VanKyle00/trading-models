@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en" data-theme="bone">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trading Models — Tournaments</title>
+
+  <!-- set theme before first paint to avoid a flash -->
+  <script>
+    (function () {
+      try { document.documentElement.setAttribute("data-theme", localStorage.getItem("tm-theme") || "bone"); }
+      catch (e) { document.documentElement.setAttribute("data-theme", "bone"); }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Martian+Mono:wght@500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    :root[data-theme="bone"] {
+      --bg:#e9e4d6; --panel:#ded8c7; --inset:#efe9db;
+      --ink:#1c1b16; --muted:#6f6a5c; --line:#c7bfa9; --line-strong:#1c1b16;
+      --up:#1f7a3d; --down:#b3261e; --accent:#c8852f; --accent-ink:#1c1b16;
+    }
+    :root[data-theme="night"] {
+      --bg:#121110; --panel:#1a1815; --inset:#171511;
+      --ink:#e8e2d4; --muted:#8a8478; --line:#34302a; --line-strong:#4a463e;
+      --up:#3fbf6b; --down:#e5534b; --accent:#d39a4f; --accent-ink:#121110;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+      font-size: 13px; line-height: 1.5;
+      transition: background .18s ease, color .18s ease;
+    }
+    .label, .brand, .m-label, .chip, .crumb { font-family: "Martian Mono", "JetBrains Mono", monospace;
+      text-transform: uppercase; letter-spacing: .12em; }
+
+    .topbar { display: flex; align-items: center; gap: 14px;
+              padding: 11px 18px; border-bottom: 1px solid var(--line-strong); }
+    .brand { font-size: 14px; font-weight: 600; letter-spacing: .18em; }
+    .brand a { color: inherit; text-decoration: none; }
+    .crumb { font-size: 10px; color: var(--muted); letter-spacing: .18em; }
+    .crumb a { color: inherit; text-decoration: none; }
+    .spacer { flex: 1; }
+    .toggle { display: flex; border: 1px solid var(--line-strong); }
+    .toggle button { font-family: "Martian Mono", monospace; font-size: 9px; letter-spacing: .14em;
+      background: transparent; color: var(--muted); border: 0; padding: 6px 11px;
+      cursor: pointer; text-transform: uppercase; }
+    .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+    .wrap { max-width: 980px; margin: 0 auto; padding: 22px 18px 60px; }
+    .placeholder { color: var(--muted); }
+
+    .funnel { display: grid; grid-template-columns: repeat(4, 1fr);
+              border: 1px solid var(--line-strong); margin-bottom: 22px; }
+    .funnel .metric { padding: 12px 14px; border-right: 1px solid var(--line); }
+    .funnel .metric:last-child { border-right: 0; }
+    .m-label { font-size: 8.5px; color: var(--muted); margin-bottom: 5px; }
+    .m-value { font-size: 22px; font-weight: 700; }
+    .m-value.up { color: var(--up); }
+    .m-value.down { color: var(--down); }
+
+    .sec-head { font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+                color: var(--muted); margin: 26px 0 10px; }
+
+    .ledger { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .ledger th, .ledger td { text-align: left; padding: 6px 8px;
+                             border-bottom: 1px solid var(--line); vertical-align: middle; }
+    .ledger th { font-family: "Martian Mono", monospace; font-size: 8.5px;
+                 text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+    .ledger a { color: inherit; }
+    .ledger .tkr { font-weight: 700; }
+    .ledger .up { color: var(--up); }
+    .ledger .down { color: var(--down); }
+
+    .chip { font-size: 8.5px; padding: 3px 8px; border: 1px solid var(--line); color: var(--muted); }
+    .chip.favorable { color: var(--up); border-color: var(--up); }
+    .chip.flag { color: var(--down); border-color: var(--down); }
+    .chip.st-open { color: var(--accent); border-color: var(--accent); }
+    .chip.st-target { color: var(--up); border-color: var(--up); }
+    .chip.st-stopped { color: var(--down); border-color: var(--down); }
+    .chip.st-error { color: var(--down); border-color: var(--down); border-style: dashed; }
+
+    .spark { display: block; }
+    .spark .sl-price { stroke: var(--ink); stroke-width: 1.5; }
+    .spark .sl-entry { stroke: var(--accent); stroke-width: 1; }
+    .spark .sl-stop { stroke: var(--down); stroke-width: 1; stroke-dasharray: 3 2; }
+    .spark .sl-target { stroke: var(--up); stroke-width: 1; stroke-dasharray: 3 2; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><a href="/">TRADING&nbsp;MODELS</a></div>
+    <div class="crumb">/ tournaments</div>
+    <div class="crumb"><a href="/scans">/ scans</a></div>
+    <div class="spacer"></div>
+    <div class="toggle" role="group" aria-label="theme">
+      <button type="button" data-theme-set="bone">Bone</button>
+      <button type="button" data-theme-set="night">Night</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    {% if stats %}
+      <div class="funnel">
+        <div class="metric"><div class="m-label">Tickets issued</div><div class="m-value">{{ stats.issued }}</div></div>
+        <div class="metric"><div class="m-label">Open</div><div class="m-value">{{ stats.open }}</div></div>
+        <div class="metric"><div class="m-label">Hit rate</div>
+          <div class="m-value">{{ '%.0f%%' | format(stats.hit_rate * 100) if stats.hit_rate is not none else '—' }}</div></div>
+        <div class="metric"><div class="m-label">Total R</div>
+          <div class="m-value {{ 'up' if stats.total_r > 0 else 'down' if stats.total_r < 0 else '' }}">{{ '%+.2f' | format(stats.total_r) }}</div></div>
+      </div>
+
+      <h2 class="sec-head">Forward track record — every ticket since issue</h2>
+      <table class="ledger">
+        <tr><th>issued</th><th>ticker</th><th>stance</th><th>strategy</th><th>status</th>
+            <th>R</th><th>move</th><th>held</th><th>path vs levels</th></tr>
+        {% for r in rows %}
+        <tr>
+          <td><a href="/tournaments/{{ r.date }}">{{ r.date }}</a></td>
+          <td class="tkr">{{ r.ticker }}</td>
+          <td><span class="chip {{ 'favorable' if r.stance == 'long' else 'flag' }}">{{ r.stance }}</span></td>
+          <td>{{ r.strategy }}</td>
+          <td><span class="chip st-{{ r.status }}"{% if r.error %} title="{{ r.error }}"{% endif %}>{{ r.status }}</span>
+              {% if r.ambiguous_bar %}<span class="chip flag" title="stop and target touched the same bar; counted as stopped">±</span>{% endif %}</td>
+          <td class="{{ 'up' if r.r is not none and r.r > 0 else 'down' if r.r is not none and r.r < 0 else '' }}">
+              {{ '%+.2f' | format(r.r) if r.r is not none else '—' }}</td>
+          <td>{{ '%+.1f%%' | format(r.pct_move * 100) if r.pct_move is not none else '—' }}</td>
+          <td>{{ r.sessions_held if r.sessions_held else '—' }}</td>
+          <td>{{ r.spark | safe }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="placeholder">No evaluations yet — the nightly job writes the first
+        <code>ledger.json</code> after the next scan
+        (or run <code>uv run python scripts/evaluate_tickets.py</code>).</p>
+    {% endif %}
+
+    {% if catalog %}
+      <h2 class="sec-head">Catalog — one tournament per night</h2>
+      <table class="ledger">
+        <tr><th>date</th><th>universe</th><th>past FA gate</th><th>tournament</th><th>survivors</th><th>tickets</th></tr>
+        {% for c in catalog %}
+        <tr>
+          <td><a href="/tournaments/{{ c.date }}">{{ c.date }}</a></td>
+          <td>{{ c.universe if c.universe is not none else '—' }}</td>
+          <td>{% if c.fa_long is not none %}{{ c.fa_long }} L{% if c.fa_short is not none %} / {{ c.fa_short }} S{% endif %}{% else %}—{% endif %}</td>
+          <td>{{ c.candidates if c.candidates is not none else 'not run' }}</td>
+          <td>{{ c.survivors if c.survivors is not none else '—' }}</td>
+          <td>{{ c.tickets if c.tickets is not none else '—' }}
+            {% for r in rows if r.date == c.date %}<span class="chip st-{{ r.status }}">{{ r.status }}</span>{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="placeholder">No scans yet — run <code>uv run python scripts/swing_scan.py</code> to produce one.</p>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      const buttons = document.querySelectorAll("[data-theme-set]");
+      function apply(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        try { localStorage.setItem("tm-theme", theme); } catch (e) {}
+        buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themeSet === theme)));
+      }
+      buttons.forEach(b => b.addEventListener("click", () => apply(b.dataset.themeSet)));
+      apply(document.documentElement.getAttribute("data-theme") || "bone");
+    })();
+  </script>
+</body>
+</html>
