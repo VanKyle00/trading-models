@@ -127,3 +127,77 @@ def test_chat_local_load_failure_emits_helpful_final(monkeypatch):
     events = _sse_events(resp.text)
     assert events[-1]["type"] == "final"
     assert "local model unavailable" in events[-1]["text"].lower()
+
+
+# ── conversation history ───────────────────────────────────────────────
+
+
+def _stub_chat_provider(monkeypatch):
+    from tradinglib.assistant import provider as provider_mod
+
+    scripted = [
+        AssistantTurn(text="noted", tool_calls=(), stop_reason="end_turn", usage=Usage(3, 3))
+    ]
+    stub = provider_mod.StubProvider(list(scripted))
+    monkeypatch.setattr(provider_mod, "ClaudeProvider", lambda *a, **k: stub)
+    return stub
+
+
+def test_chat_forwards_history_to_agent(monkeypatch):
+    stub = _stub_chat_provider(monkeypatch)
+
+    client = TestClient(create_app())
+    resp = client.post(
+        "/api/v1/chat",
+        json={
+            "message": "use those levels",
+            "history": [
+                {"role": "user", "text": "I'm bullish on RIVN"},
+                {"role": "assistant", "text": "Proposed: entry 14.2, stop 12.9"},
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    msgs = stub.calls[0]
+    assert msgs[0].text == "I'm bullish on RIVN"
+    assert msgs[1].turn.text == "Proposed: entry 14.2, stop 12.9"
+    assert msgs[2].text == "use those levels"
+
+
+def test_chat_rejects_malformed_history(monkeypatch):
+    _stub_chat_provider(monkeypatch)
+    client = TestClient(create_app())
+
+    for bad in (
+        "not a list",
+        [42],
+        [{"role": "system", "text": "x"}],
+        [{"text": "no role"}],
+    ):
+        resp = client.post("/api/v1/chat", json={"message": "hi", "history": bad})
+        assert resp.status_code == 400, f"accepted {bad!r}"
+
+
+def test_chat_history_absent_or_null_is_fine(monkeypatch):
+    _stub_chat_provider(monkeypatch)
+    client = TestClient(create_app())
+    resp = client.post("/api/v1/chat", json={"message": "hi", "history": None})
+    assert resp.status_code == 200
+
+
+def test_chat_history_caps_messages_and_chars(monkeypatch):
+    stub = _stub_chat_provider(monkeypatch)
+    client = TestClient(create_app())
+
+    long_history = []
+    for i in range(30):  # alternating, starts with user; only the last 20 survive
+        role = "user" if i % 2 == 0 else "assistant"
+        long_history.append({"role": role, "text": f"m{i}" + "x" * 5000})
+    resp = client.post("/api/v1/chat", json={"message": "tail", "history": long_history})
+    assert resp.status_code == 200
+    msgs = stub.calls[0]
+    assert len(msgs) == 21  # 20 history (alternating, no merging) + opening
+    assert msgs[0].text.startswith("m10")  # the cap keeps the most recent 20
+    assert all(
+        len(m.text if hasattr(m, "text") else m.turn.text) <= 4000 + len("tail") + 2 for m in msgs
+    )

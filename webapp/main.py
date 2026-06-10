@@ -31,6 +31,8 @@ from webapp.forms import request_from_payload
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _CHAT_LIMITER = RateLimiter(max_per_window=30)
+_HISTORY_MAX_MESSAGES = 20
+_HISTORY_MAX_CHARS = 4_000
 
 # The assistant console can run on the hosted Claude teacher ("claude") or our
 # fine-tuned LoRA adapter ("local"). The adapter path is env-overridable; the
@@ -181,6 +183,24 @@ def _chat_context(raw: Any) -> str | None:
     return "\n".join(lines) or None
 
 
+def _chat_history(raw: Any) -> list[tuple[str, str]] | None:
+    """Validate the client-replayed transcript. Returns None on a malformed
+    payload (the route 400s); caps are applied here so run_chat sees clean input."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        return None
+    history: list[tuple[str, str]] = []
+    for item in raw[-_HISTORY_MAX_MESSAGES:]:
+        if not isinstance(item, dict):
+            return None
+        role = item.get("role")
+        if role not in ("user", "assistant"):
+            return None
+        history.append((role, str(item.get("text", ""))[:_HISTORY_MAX_CHARS]))
+    return history
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Trading Models — Workbench")
 
@@ -312,6 +332,12 @@ def create_app() -> FastAPI:
             return JSONResponse({"error": "message is required"}, status_code=400)
 
         context = _chat_context(payload.get("context"))
+        history = _chat_history(payload.get("history"))
+        if history is None:
+            return JSONResponse(
+                {"error": "history must be a list of {role: user|assistant, text} objects"},
+                status_code=400,
+            )
         # "claude" (hosted teacher) or "local" (our fine-tuned LoRA adapter).
         use_local = str(payload.get("provider", "claude")).lower() == "local"
 
@@ -339,7 +365,9 @@ def create_app() -> FastAPI:
                         return
                 else:
                     provider = _assistant_provider.ClaudeProvider()
-                for event in run_chat(message, provider, Budget(), context=context):
+                for event in run_chat(
+                    message, provider, Budget(), context=context, history=history or None
+                ):
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception:  # never break the SSE stream; always end with a final event
                 yield (

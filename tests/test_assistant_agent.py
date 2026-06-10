@@ -2,7 +2,7 @@
 from tradinglib.assistant.agent import run_chat
 from tradinglib.assistant.budget import Budget
 from tradinglib.assistant.provider import StubProvider
-from tradinglib.assistant.types import AssistantTurn, ToolCall, Usage
+from tradinglib.assistant.types import AssistantMsg, AssistantTurn, ToolCall, Usage, UserMsg
 
 
 def _events(gen):
@@ -95,3 +95,77 @@ def test_budget_exhaustion_ends_gracefully():
     assert events[-1]["type"] == "final"
     assert "limit" in events[-1]["text"].lower()
     assert looping_provider.calls
+
+
+def _final(text="ok"):
+    return AssistantTurn(text=text, tool_calls=(), stop_reason="end_turn", usage=Usage(3, 3))
+
+
+def test_history_seeds_conversation_in_order():
+    provider = StubProvider([_final()])
+    _events(
+        run_chat(
+            "and the target?",
+            provider,
+            Budget(),
+            history=[("user", "I'm bullish on RIVN"), ("assistant", "Proposed: entry 14.2")],
+        )
+    )
+    msgs = provider.calls[0]
+    assert isinstance(msgs[0], UserMsg) and msgs[0].text == "I'm bullish on RIVN"
+    assert isinstance(msgs[1], AssistantMsg) and msgs[1].turn.text == "Proposed: entry 14.2"
+    assert isinstance(msgs[2], UserMsg) and msgs[2].text == "and the target?"
+
+
+def test_history_merges_consecutive_same_role_messages():
+    provider = StubProvider([_final()])
+    _events(
+        run_chat(
+            "next",
+            provider,
+            Budget(),
+            history=[("user", "a"), ("user", "b"), ("assistant", "c"), ("user", "d")],
+        )
+    )
+    msgs = provider.calls[0]
+    assert len(msgs) == 3
+    assert msgs[0].text == "a\n\nb"
+    assert msgs[1].turn.text == "c"
+    assert msgs[2].text == "d\n\nnext"  # trailing user history merges into the opening
+
+
+def test_history_drops_leading_assistant_and_empty_texts():
+    provider = StubProvider([_final()])
+    _events(
+        run_chat(
+            "q2",
+            provider,
+            Budget(),
+            history=[
+                ("assistant", "orphan greeting"),
+                ("user", ""),
+                ("user", "q1"),
+                ("assistant", "a1"),
+            ],
+        )
+    )
+    msgs = provider.calls[0]
+    assert isinstance(msgs[0], UserMsg) and msgs[0].text == "q1"
+    assert isinstance(msgs[1], AssistantMsg)
+    assert msgs[2].text == "q2"
+
+
+def test_history_with_context_folds_context_into_opening_only():
+    provider = StubProvider([_final()])
+    _events(
+        run_chat(
+            "explain",
+            provider,
+            Budget(),
+            context="Backtest: SMA · SPY",
+            history=[("user", "hello"), ("assistant", "hi")],
+        )
+    )
+    msgs = provider.calls[0]
+    assert msgs[0].text == "hello"  # history left verbatim
+    assert "Backtest: SMA · SPY" in msgs[2].text and "explain" in msgs[2].text

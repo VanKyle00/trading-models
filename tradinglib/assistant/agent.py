@@ -8,7 +8,7 @@ events the SSE route serializes. Provider-neutral: it never imports anthropic.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 from tradinglib.assistant.budget import Budget, BudgetExceeded
@@ -16,13 +16,52 @@ from tradinglib.assistant.provider import SYSTEM_PROMPT, LLMProvider
 from tradinglib.assistant.tools import TOOL_SPECS, dispatch
 from tradinglib.assistant.types import (
     AssistantMsg,
+    AssistantTurn,
     Message,
     ToolResult,
     ToolResultMsg,
+    Usage,
     UserMsg,
 )
 
 _MAX_TURNS = 16  # hard backstop on top of the budget
+
+
+def _seed(history: Sequence[tuple[str, str]] | None, opening: str) -> list[Message]:
+    """History pairs -> alternating Message list ending with the opening UserMsg.
+
+    Same-role runs are merged and leading assistant entries dropped: providers
+    reject conversations that don't alternate or don't start with a user turn.
+    Replayed assistant turns are plain text (tool calls are not reconstructed).
+    """
+    out: list[Message] = []
+    user_buf: list[str] = []
+
+    def flush_user() -> None:
+        if user_buf:
+            out.append(UserMsg("\n\n".join(user_buf)))
+            user_buf.clear()
+
+    for role, text in history or ():
+        if not text:
+            continue
+        if role == "user":
+            user_buf.append(text)
+        else:
+            if not out and not user_buf:
+                continue  # the first turn must be a user turn
+            flush_user()
+            last = out[-1]
+            if isinstance(last, AssistantMsg):
+                merged = AssistantTurn(
+                    last.turn.text + "\n\n" + text, (), "end_turn", last.turn.usage
+                )
+                out[-1] = AssistantMsg(merged)
+            else:
+                out.append(AssistantMsg(AssistantTurn(text, (), "end_turn", Usage(0, 0))))
+    user_buf.append(opening)
+    flush_user()
+    return out
 
 
 def run_chat(
@@ -30,6 +69,7 @@ def run_chat(
     provider: LLMProvider,
     budget: Budget,
     context: str | None = None,
+    history: Sequence[tuple[str, str]] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Drive the bounded tool-use loop, yielding SSE event dicts.
 
@@ -38,6 +78,10 @@ def run_chat(
     the assistant can answer "explain the worst month" against the on-screen run
     without first re-running it. Absent, the assistant behaves as a standalone
     agent that runs its own backtests via its tools.
+
+    ``history`` (optional) is the client-replayed transcript — (role, text)
+    pairs of prior user messages and final assistant replies. The server holds
+    no session state; the browser is the source of truth for the conversation.
     """
     opening = user_message
     if context:
@@ -46,7 +90,7 @@ def run_chat(
             f"{context}\n\n"
             f"Their question: {user_message}"
         )
-    conversation: list[Message] = [UserMsg(opening)]
+    conversation: list[Message] = _seed(history, opening)
 
     for _ in range(_MAX_TURNS):
         try:

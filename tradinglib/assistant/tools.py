@@ -1,5 +1,5 @@
 # tradinglib/assistant/tools.py
-"""The three tools the agent may call, each a thin wrapper over tradinglib.service.
+"""The assistant's tools: backtest service wrappers plus the options planner.
 
 ``dispatch`` NEVER raises on bad model input — validation/loader errors become a
 (message, is_error=True) tuple the model self-corrects from. The tool schemas are
@@ -13,6 +13,7 @@ import json
 from datetime import date
 from typing import Any
 
+from tradinglib.assistant import planner
 from tradinglib.service import (
     BacktestRequest,
     RequestError,
@@ -66,6 +67,64 @@ TOOL_SPECS: list[dict[str, Any]] = [
             "counterfactuals. Returns metrics + summary stats (not full series)."
         ),
         "input_schema": _PARAM_SCHEMA,
+    },
+    {
+        "name": "propose_trade_levels",
+        "description": (
+            "Propose data-grounded trade levels for a directional hypothesis on a ticker: "
+            "entry = last close (market order), stop = 2x ATR(14), target = 2R. Returns the "
+            "levels plus spot/ATR context. Present them to the user for confirmation or "
+            "adjustment before building a ticket."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Equity ticker, e.g. RIVN."},
+                "stance": {"type": "string", "enum": ["long", "short"]},
+            },
+            "required": ["ticker", "stance"],
+        },
+    },
+    {
+        "name": "build_options_ticket",
+        "description": (
+            "Build a sized options trade ticket from user-confirmed levels using live "
+            "option-chain quotes. Returns ranked structures (stock, long option, debit "
+            "spread, cash-secured put for longs, credit spread) with exactly one recommended, plus "
+            "warnings and a prefilled profit-calculator link per option structure. Only "
+            "call after the user confirmed levels, account size, and risk per trade."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "stance": {"type": "string", "enum": ["long", "short"]},
+                "entry": {"type": "number"},
+                "entry_type": {"type": "string", "enum": ["market", "stop", "limit"]},
+                "stop": {"type": "number"},
+                "target": {"type": "number"},
+                "account_size": {"type": "number", "description": "Account size in dollars."},
+                "risk_per_trade_pct": {
+                    "type": "number",
+                    "description": "Risk per trade as a FRACTION, e.g. 0.01 for 1%.",
+                },
+                "preference": {
+                    "type": "string",
+                    "enum": ["auto", "directional", "premium"],
+                    "description": "Structure tilt; 'auto' lets the IV/RV ratio decide.",
+                },
+                "hypothesis": {"type": "string", "description": "The user's one-line thesis."},
+            },
+            "required": [
+                "ticker",
+                "stance",
+                "entry",
+                "stop",
+                "target",
+                "account_size",
+                "risk_per_trade_pct",
+            ],
+        },
     },
 ]
 
@@ -140,6 +199,75 @@ def _run_backtest(args: dict[str, Any]) -> tuple[str, bool]:
         return _err(f"could not run: {exc}")
 
 
+def _ticker_stance(args: dict[str, Any]) -> tuple[str, str] | str:
+    """Common (ticker, stance) validation; returns an error string on failure."""
+    ticker = str(args.get("ticker", "")).strip().upper()
+    stance = str(args.get("stance", "")).strip().lower()
+    if not ticker:
+        return "ticker is required"
+    if stance not in ("long", "short"):
+        return f"stance must be 'long' or 'short', got {stance!r}"
+    return ticker, stance
+
+
+def _propose_trade_levels(args: dict[str, Any]) -> tuple[str, bool]:
+    parsed = _ticker_stance(args)
+    if isinstance(parsed, str):
+        return _err(parsed)
+    ticker, stance = parsed
+    try:
+        return _ok(planner.propose_levels(ticker, stance))
+    except Exception as exc:
+        return _err(f"could not propose levels for {ticker}: {exc}")
+
+
+def _build_options_ticket(args: dict[str, Any]) -> tuple[str, bool]:
+    parsed = _ticker_stance(args)
+    if isinstance(parsed, str):
+        return _err(parsed)
+    ticker, stance = parsed
+    try:
+        entry = float(args["entry"])
+        stop = float(args["stop"])
+        target = float(args["target"])
+        account_size = float(args["account_size"])
+        risk = float(args["risk_per_trade_pct"])
+    except (KeyError, TypeError, ValueError):
+        return _err("entry, stop, target, account_size, risk_per_trade_pct are required numbers")
+    entry_type = str(args.get("entry_type", "market"))
+    if entry_type not in ("market", "stop", "limit"):
+        return _err(f"entry_type must be market|stop|limit, got {entry_type!r}")
+    preference = str(args.get("preference", "auto"))
+    if preference not in ("auto", "directional", "premium"):
+        return _err(f"preference must be auto|directional|premium, got {preference!r}")
+    if min(entry, stop, target) <= 0:
+        return _err("entry, stop, and target must all be positive prices")
+    if stance == "long" and not (stop < entry < target):
+        return _err("long geometry requires stop < entry < target")
+    if stance == "short" and not (target < entry < stop):
+        return _err("short geometry requires target < entry < stop")
+    if account_size <= 0:
+        return _err("account_size must be positive")
+    if not 0 < risk <= 0.2:
+        return _err("risk_per_trade_pct must be a fraction (e.g. 0.01 for 1%), at most 0.2")
+    try:
+        ticket = planner.hypothesis_ticket(
+            ticker=ticker,
+            stance=stance,
+            levels={"entry": entry, "entry_type": entry_type, "stop": stop, "target": target},
+            account_size=account_size,
+            risk_per_trade_pct=risk,
+            preference=preference,
+            hypothesis=str(args.get("hypothesis", "")),
+        )
+        return _ok(ticket)
+    except Exception as exc:
+        return _err(
+            f"could not build a ticket for {ticker}: {exc} — if this was a data fetch "
+            "error, try again in a minute"
+        )
+
+
 def dispatch(name: str, args: dict[str, Any]) -> tuple[str, bool]:
     """Run a tool. Guarantees it never raises — any failure becomes (msg, is_error)
     so the agent loop and the public SSE stream can't be broken by a tool error."""
@@ -150,6 +278,10 @@ def dispatch(name: str, args: dict[str, Any]) -> tuple[str, bool]:
             return _get_model_spec(args)
         if name == "run_backtest":
             return _run_backtest(args)
+        if name == "propose_trade_levels":
+            return _propose_trade_levels(args)
+        if name == "build_options_ticket":
+            return _build_options_ticket(args)
         return _err(f"unknown tool {name!r}")
     except Exception as exc:  # tool boundary must never raise into the agent
         return _err(f"tool {name!r} failed: {type(exc).__name__}: {exc}")

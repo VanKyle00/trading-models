@@ -4,9 +4,15 @@ import json
 from tradinglib.assistant.tools import TOOL_SPECS, dispatch
 
 
-def test_tool_specs_are_the_three_service_tools():
+def test_tool_specs_are_the_five_assistant_tools():
     names = {t["name"] for t in TOOL_SPECS}
-    assert names == {"list_models", "get_model_spec", "run_backtest"}
+    assert names == {
+        "list_models",
+        "get_model_spec",
+        "run_backtest",
+        "propose_trade_levels",
+        "build_options_ticket",
+    }
     for t in TOOL_SPECS:
         assert "description" in t and "input_schema" in t
 
@@ -81,3 +87,166 @@ def test_dispatch_never_raises_on_internal_error(monkeypatch):
     out, is_error = dispatch("list_models", {})
     assert is_error is True
     assert "list_models" in out
+
+
+# ── options-planner tools ──────────────────────────────────────────────
+
+
+def test_propose_trade_levels_happy_path(monkeypatch):
+    import numpy as np
+    import pandas as pd
+
+    import tradinglib.assistant.planner as planner
+
+    close = 100.0 + np.sin(np.arange(300) / 5.0)
+    idx = pd.date_range("2025-06-01", periods=300, freq="B")
+    bars = pd.DataFrame(
+        {"open": close, "high": close * 1.01, "low": close * 0.99, "close": close, "volume": 1e6},
+        index=idx,
+    )
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+
+    out, is_error = dispatch("propose_trade_levels", {"ticker": "rivn", "stance": "LONG"})
+
+    assert is_error is False
+    payload = json.loads(out)
+    assert payload["ticker"] == "RIVN"
+    assert payload["levels"]["stop"] < payload["levels"]["entry"] < payload["levels"]["target"]
+
+
+def test_propose_trade_levels_rejects_bad_stance():
+    out, is_error = dispatch("propose_trade_levels", {"ticker": "RIVN", "stance": "sideways"})
+    assert is_error is True
+    assert "stance" in out
+
+
+def test_propose_trade_levels_requires_ticker():
+    out, is_error = dispatch("propose_trade_levels", {"stance": "long"})
+    assert is_error is True
+    assert "ticker" in out
+
+
+def test_build_options_ticket_rejects_bad_long_geometry():
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "RIVN",
+            "stance": "long",
+            "entry": 100.0,
+            "stop": 108.0,  # stop above entry on a long
+            "target": 96.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+        },
+    )
+    assert is_error is True
+    assert "stop < entry < target" in out
+
+
+def test_build_options_ticket_rejects_percent_style_risk():
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "RIVN",
+            "stance": "long",
+            "entry": 100.0,
+            "stop": 96.0,
+            "target": 108.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 1.0,  # "1" meaning 1% — must be 0.01
+        },
+    )
+    assert is_error is True
+    assert "fraction" in out
+
+
+def test_build_options_ticket_loader_failure_is_error_not_crash(monkeypatch):
+    import tradinglib.assistant.planner as planner
+
+    def boom(*a, **k):
+        raise ConnectionError("yfinance 429")
+
+    monkeypatch.setattr(planner, "load_daily", boom)
+
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "RIVN",
+            "stance": "long",
+            "entry": 100.0,
+            "stop": 96.0,
+            "target": 108.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+        },
+    )
+    assert is_error is True
+    assert "RIVN" in out
+
+
+def test_build_options_ticket_rejects_bad_short_geometry():
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "RIVN",
+            "stance": "short",
+            "entry": 100.0,
+            "stop": 96.0,  # stop below entry on a short
+            "target": 108.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+        },
+    )
+    assert is_error is True
+    assert "target < entry < stop" in out
+
+
+def test_build_options_ticket_happy_path_serializes(make_chain, monkeypatch):
+    import numpy as np
+    import pandas as pd
+
+    import tradinglib.assistant.planner as planner
+    from tradinglib.options.surface import realized_vol
+
+    close = 100.0 + np.sin(np.arange(300) / 5.0)
+    idx = pd.date_range("2025-06-01", periods=300, freq="B")
+    bars = pd.DataFrame(
+        {"open": close, "high": close * 1.01, "low": close * 0.99, "close": close, "volume": 1e6},
+        index=idx,
+    )
+    mids = {
+        ("call", 75, 95.0): 8.0,
+        ("call", 75, 100.0): 5.5,
+        ("call", 75, 105.0): 3.6,
+        ("call", 75, 110.0): 2.4,
+        ("put", 38, 85.0): 0.6,
+        ("put", 38, 90.0): 1.0,
+        ("put", 38, 95.0): 2.8,
+    }
+    rv = float(realized_vol(bars["close"]).iloc[-1])
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    monkeypatch.setattr(planner, "fetch_chain", lambda t: make_chain(mids=mids, iv=rv))
+    monkeypatch.setattr(
+        planner,
+        "get_earnings_dates",
+        lambda *a, **k: pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([], tz="UTC")}),
+    )
+
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "test",
+            "stance": "long",
+            "entry": 100.0,
+            "stop": 96.0,
+            "target": 108.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+            "hypothesis": "bullish on TEST",
+        },
+    )
+
+    assert is_error is False
+    ticket = json.loads(out)  # the whole point: the ticket survives json round-trip
+    assert ticket["source"] == "chat" and ticket["ticker"] == "TEST"
+    assert sum(s["recommended"] for s in ticket["structures"]) == 1
