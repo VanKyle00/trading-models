@@ -86,6 +86,8 @@ def build_watchlist(
                 survived = [
                     v for v in entry["verdicts"] if v["strategy"] in set(entry["survivors"])
                 ]
+                if not survived:
+                    continue  # malformed entry (survivors without verdicts) must not kill the scan
                 strategy = max(survived, key=lambda v: v["deflated_sharpe"])["strategy"]
             seen.add(key)
             watchlist[stance].append(
@@ -111,6 +113,8 @@ def build_watchlist(
             continue
         d = dsr_by_key.get(key)
         if d is None or d < watch_dsr_floor:
+            continue
+        if not cand.get("setups"):
             continue
         setup = max(cand["setups"], key=lambda s: s["score"])
         watchlist["long"].append(

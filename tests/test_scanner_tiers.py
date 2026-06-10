@@ -118,3 +118,36 @@ def test_watchlist_survivor_not_duplicated_by_setup_source() -> None:
     wl = build_watchlist(tournament, candidates, {("long", "BOTH"): False}, watch_dsr_floor=0.5)
     assert len(wl["long"]) == 1
     assert wl["long"][0]["tier_reason"] == "failed nightly FDR"
+
+
+def test_watchlist_tolerates_survivors_without_verdicts() -> None:
+    # survivors list is non-empty but no matching verdict dict exists — must not raise
+    tournament = {
+        "long": [
+            {
+                "ticker": "MALFORMED",
+                "stance": "long",
+                "winner": None,
+                "survivors": ["s0"],  # survivor key references a strategy not in verdicts
+                "verdicts": [],  # empty — no verdict to match
+            }
+        ],
+        "short": [],
+    }
+    fdr_passed: dict = {}
+    wl = build_watchlist(tournament, [], fdr_passed, watch_dsr_floor=0.5)
+    # must not raise and the malformed entry must be excluded (skipped, not crashed)
+    assert "MALFORMED" not in {w["ticker"] for w in wl["long"]}
+
+
+def test_watchlist_tolerates_candidate_without_setups() -> None:
+    # a candidate with no setups (or empty list) must not raise
+    tournament: dict = {"long": [], "short": []}
+    candidates = [
+        {"ticker": "NOSETUP", "setups": []},
+        {"ticker": "ALSONONE"},  # missing key entirely
+    ]
+    fdr_passed: dict = {}
+    wl = build_watchlist(tournament, candidates, fdr_passed, watch_dsr_floor=0.5)
+    assert "NOSETUP" not in {w["ticker"] for w in wl["long"]}
+    assert "ALSONONE" not in {w["ticker"] for w in wl["long"]}
