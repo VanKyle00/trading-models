@@ -254,6 +254,10 @@ def create_app() -> FastAPI:
             {"strategies": list(STRATEGIES.values()), "specs": list_specs()},
         )
 
+    @app.get("/planner", response_class=HTMLResponse)
+    def planner(request: Request) -> HTMLResponse:
+        return _TEMPLATES.TemplateResponse(request, "planner.html", {})
+
     @app.get("/tournaments", response_class=HTMLResponse)
     def tournaments_index(request: Request) -> HTMLResponse:
         ledger = _tournaments.load_ledger()

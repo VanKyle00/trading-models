@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trading Models — Models</title>
+  <title>Trading Models — Planner</title>
 
   <!-- set theme before first paint to avoid a flash -->
   <script>
@@ -35,8 +35,9 @@
       font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
       font-size: 13px; line-height: 1.5;
       transition: background .18s ease, color .18s ease;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
     }
-    .label, .brand, .m-label, .chip, .crumb { font-family: "Martian Mono", "JetBrains Mono", monospace;
+    .label, .brand, .crumb, .chip, .console-head { font-family: "Martian Mono", "JetBrains Mono", monospace;
       text-transform: uppercase; letter-spacing: .12em; }
 
     .topbar { display: flex; align-items: center; gap: 14px;
@@ -44,6 +45,7 @@
     .brand { font-size: 14px; font-weight: 600; letter-spacing: .18em; }
     .brand a { color: inherit; text-decoration: none; }
     .crumb { font-size: 10px; color: var(--muted); letter-spacing: .18em; }
+    .crumb a { color: inherit; text-decoration: none; }
     .spacer { flex: 1; }
     .toggle { display: flex; border: 1px solid var(--line-strong); }
     .toggle button { font-family: "Martian Mono", monospace; font-size: 9px; letter-spacing: .14em;
@@ -51,35 +53,20 @@
       cursor: pointer; text-transform: uppercase; }
     .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 
-    .wrap { max-width: 980px; margin: 0 auto; padding: 22px 18px 60px; }
-
-    .sec-head { font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
-                color: var(--muted); margin: 26px 0 10px; }
-    .note { color: var(--muted); font-size: 11px; margin: 0 0 14px; }
-    .desc { margin: 0 0 8px; }
-    .evidence { color: var(--muted); font-size: 11px; }
-
-    .card { border: 1px solid var(--line-strong); background: var(--panel); margin-bottom: 16px; }
-    .card-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px;
-                 border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-    .card-head .tkr { font-size: 17px; font-weight: 700; }
-    .card-head .nm { color: var(--muted); }
-    .chip { font-size: 8.5px; padding: 3px 8px; border: 1px solid var(--line); color: var(--muted); }
-    .card-body { padding: 12px 14px; }
-
-    .models-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .models-table th, .models-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-    .models-table th { font-family: "Martian Mono", monospace; font-size: 8.5px;
-                       text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
-    .models-table a { color: var(--accent); }
+    .strap { padding: 9px 18px; color: var(--muted); font-size: 11px;
+             border-bottom: 1px solid var(--line); }
+    /* full-page console: fills the viewport below the strapline */
+    .console { flex: 1; min-height: 0; background: var(--inset);
+               display: flex; flex-direction: column; }
   </style>
 </head>
 <body>
   <div class="topbar">
     <div class="brand"><a href="/">TRADING&nbsp;MODELS</a></div>
-    <div class="crumb">/ models</div>
-    <div class="crumb"><a href="/scans" style="color: inherit;">/ scans</a></div>
-    <div class="crumb"><a href="/planner" style="color: inherit;">/ planner</a></div>
+    <div class="crumb">/ planner</div>
+    <div class="crumb"><a href="/scans">/ scans</a></div>
+    <div class="crumb"><a href="/tournaments">/ tournaments</a></div>
+    <div class="crumb"><a href="/models">/ models</a></div>
     <div class="spacer"></div>
     <div class="toggle" role="group" aria-label="theme">
       <button type="button" data-theme-set="bone">Bone</button>
@@ -87,43 +74,11 @@
     </div>
   </div>
 
-  <div class="wrap">
-    <h2 class="sec-head">Tournament strategies</h2>
-    <p class="note">Walk-forward tested per ticker every night (anchored 378/63 windows,
-      costs on). Only survivors — deflated-Sharpe probability ≥ 0.90 with the trial count
-      deflated across every strategy and grid point tried, ≥ 12 OOS trades, stable params —
-      generate trade tickets. This list is generated from the strategy registry.</p>
+  <div class="strap">hypothesis → sized, liquidity-gated options ticket — decision support with a human executing, not an auto-trader</div>
 
-    {% for s in strategies %}
-      <div class="card">
-        <div class="card-head">
-          <span class="tkr">{{ s.name }}</span>
-          <span class="chip">{{ s.style | replace("_", " ") }}</span>
-          <span class="nm">{{ s.key }}</span>
-        </div>
-        <div class="card-body">
-          <p class="desc">{{ s.description }}</p>
-          <div class="evidence">
-            grid: {% for p, vals in s.param_grid.items() %}{{ p }} ∈ {{ vals | join(" / ") }}{{ " · " if not loop.last }}{% endfor %}
-          </div>
-          <div class="evidence">long + short stances · emits entry / stop / target levels for the next session</div>
-        </div>
-      </div>
-    {% endfor %}
-
-    <h2 class="sec-head">Standalone models</h2>
-    <table class="models-table">
-      <tr><th>model</th><th>family</th><th>tickers</th><th>source</th></tr>
-      {% for m in specs %}
-      <tr>
-        <td>{{ m.name }}</td>
-        <td>{{ m.family }}</td>
-        <td>{{ m.ticker_choices | join(", ") if m.ticker_choices else "any" }}</td>
-        <td><a href="https://github.com/VanKyle00/trading-models/tree/main/{{ m.id }}">{{ m.id }}</a></td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
+  {% set console_empty = "State a directional hypothesis and the assistant walks you to a ticket: it proposes ATR-based levels for you to confirm, asks for sizing, then prices live option structures." %}
+  {% set console_chips = ["I'm bullish on RIVN", "Bearish on TSLA over the next month", "I think NVDA chops sideways into September"] %}
+  {% include "_console.html" %}
 
   <script>
     (function () {

@@ -198,3 +198,27 @@ def test_console_ships_ticket_card_renderer():
     html = client.get("/").text
     assert "renderTicketCard" in html
     assert "build_options_ticket" in html  # the tool_result hook
+
+
+def test_planner_page_renders_console_and_chips():
+    client = TestClient(create_app())
+    resp = client.get("/planner")
+    assert resp.status_code == 200
+    html = resp.text
+    assert 'id="transcript"' in html and 'id="chat-input"' in html
+    assert 'class="chat-chip"' in html and "bullish on RIVN" in html  # chip BUTTONS render
+    assert "renderTicketCard" in html
+    assert 'id="console-resize"' not in html  # resize handle is index-only
+
+
+def test_planner_nav_crumbs():
+    client = TestClient(create_app())
+    assert 'href="/planner"' in client.get("/").text
+    assert 'href="/planner"' in client.get("/models").text
+
+
+def test_index_has_no_chip_buttons():
+    # The partial's CSS/JS mention chat-chip on every page; only the planner
+    # context (console_chips set) renders actual chip BUTTONS.
+    client = TestClient(create_app())
+    assert 'class="chat-chip"' not in client.get("/").text
