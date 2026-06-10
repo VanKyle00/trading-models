@@ -83,7 +83,8 @@ def _canonicalize_expiry(
 
 
 def _fetch_frames(ticker: str, *, snapshot: str, cutoff: pd.Timestamp) -> list[pd.DataFrame]:
-    """One canonical frame per in-window expiration; raises on yfinance failure."""
+    """One canonical frame per in-window expiration; raises on yfinance failure
+    (``snapshot_chains`` maps that to the -2 sentinel, ``fetch_chain`` propagates)."""
     t = yf.Ticker(ticker)
     spot = float(t.fast_info["lastPrice"])
     frames = []

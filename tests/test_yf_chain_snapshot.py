@@ -194,3 +194,6 @@ def test_fetch_chain_missing_oi_columns_yield_nan(monkeypatch: pytest.MonkeyPatc
 
     df = yf_chain.fetch_chain("AAPL")
     assert df["open_interest"].isna().all() and df["volume"].isna().all()
+    # the NaN fill must stay numeric — an object column would break the liquidity gate
+    assert pd.api.types.is_float_dtype(df["open_interest"])
+    assert pd.api.types.is_float_dtype(df["volume"])
