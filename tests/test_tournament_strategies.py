@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from tradinglib.tournament.strategies import STRATEGIES
+from tradinglib.validation.search import expand_grid
 
 
 def _bars(
@@ -137,3 +138,55 @@ def test_rsi2_levels_market_entry_with_atr_stop() -> None:
     assert lv.entry == 100.0 and lv.entry_type == "market"
     assert lv.stop == 96.0 and lv.target == 108.0
     assert "RSI(2)" in lv.condition and "SMA(5)" in lv.condition
+
+
+def test_macd_long_in_uptrend_short_in_downtrend() -> None:
+    params = {"fast": 12, "slow": 26, "signal": 9}
+    up = _trend_bars()
+    sig = STRATEGIES["macd"].make_signal(up.iloc[:300], up.iloc[300:], params, "long")
+    assert set(np.unique(sig)) <= {0.0, 1.0}
+    assert sig.iloc[-1] == 1.0
+    down = _trend_bars(rate=0.995)
+    short = STRATEGIES["macd"].make_signal(down.iloc[:300], down.iloc[300:], params, "short")
+    assert short.iloc[-1] == -1.0
+
+
+def test_macd_levels_market_entry_with_atr_stop() -> None:
+    bars = _flat_bars()
+    lv = STRATEGIES["macd"].levels(bars, {"fast": 12, "slow": 26, "signal": 9}, "long")
+    assert lv.entry == 100.0 and lv.entry_type == "market"
+    assert lv.stop == 96.0 and lv.target == 108.0
+
+
+def test_bollinger_long_fades_a_spike_below_the_lower_band() -> None:
+    close = 100.0 + np.sin(np.arange(120) / 3.0)  # mild oscillation
+    close[100] = 80.0  # crash through the lower band
+    close[101] = 80.5  # still below the mean
+    close[102] = 101.0  # back above the mean -> exit
+    bars = _bars(close)
+    train, test = bars.iloc[:90], bars.iloc[90:]
+    sig = STRATEGIES["bollinger"].make_signal(train, test, {"window": 20, "num_std": 2.0}, "long")
+    assert sig.loc[bars.index[100]] == 1.0
+    assert sig.loc[bars.index[101]] == 1.0
+    assert sig.loc[bars.index[102]] == 0.0
+
+
+def test_bollinger_levels_limit_at_band_target_at_mean() -> None:
+    rng = np.random.default_rng(7)
+    bars = _bars(100.0 + np.cumsum(rng.normal(0, 0.5, 80)))
+    lv = STRATEGIES["bollinger"].levels(bars, {"window": 20, "num_std": 2.0}, "long")
+    mid = float(bars["close"].rolling(20).mean().iloc[-1])
+    sd = float(bars["close"].rolling(20).std().iloc[-1])
+    assert lv.entry == pytest.approx(mid - 2.0 * sd)
+    assert lv.entry_type == "limit"
+    assert lv.target == pytest.approx(mid)
+    short = STRATEGIES["bollinger"].levels(bars, {"window": 20, "num_std": 2.0}, "short")
+    assert short.entry == pytest.approx(mid + 2.0 * sd)
+
+
+def test_registry_has_five_strategies_with_18_total_trials() -> None:
+    assert set(STRATEGIES) == {"sma_cross", "donchian", "rsi2", "macd", "bollinger"}
+    total = sum(len(expand_grid(s.param_grid)) for s in STRATEGIES.values())
+    assert total == 18  # the global n_trials the tournament deflates by
+    styles = {"trend", "breakout", "mean_reversion"}
+    assert all(s.style in styles and s.description for s in STRATEGIES.values())

@@ -218,3 +218,105 @@ register(
         levels=_rsi2_levels,
     )
 )
+
+
+# --- macd --------------------------------------------------------------------
+
+
+def _macd_signal(train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str) -> pd.Series:
+    close = _full_history(train, test)["close"]
+    fast_ema = close.ewm(span=params["fast"], adjust=False).mean()
+    slow_ema = close.ewm(span=params["slow"], adjust=False).mean()
+    if direction(stance) > 0:
+        pos = (fast_ema > slow_ema).astype(float)
+    else:
+        pos = -(fast_ema < slow_ema).astype(float)
+    return pos.loc[test.index]
+
+
+def _macd_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+    entry = float(bars["close"].iloc[-1])
+    stop = protective_stop(bars, entry, stance)
+    side = "above" if direction(stance) > 0 else "below"
+    return Levels(
+        entry=entry,
+        entry_type="market",
+        stop=stop,
+        target=two_r_target(entry, stop),
+        condition=(
+            f"enter while MACD({params['fast']},{params['slow']}) holds {side} its "
+            f"{params['signal']}-bar signal line; rule exits on the opposite cross"
+        ),
+    )
+
+
+register(
+    StrategyDef(
+        key="macd",
+        name="MACD cross",
+        style="trend",
+        description=(
+            "Long while the MACD line is above its signal line; short stance "
+            "shorts while it is below."
+        ),
+        param_grid={"fast": [8, 12], "slow": [17, 26], "signal": [9]},
+        make_signal=_macd_signal,
+        levels=_macd_levels,
+    )
+)
+
+
+# --- bollinger ---------------------------------------------------------------
+
+
+def _bollinger_bands(
+    close: pd.Series, window: int, num_std: float
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    mid = sma(close, window)
+    sd = close.rolling(window).std()
+    return mid, mid - num_std * sd, mid + num_std * sd
+
+
+def _bollinger_signal(
+    train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str
+) -> pd.Series:
+    close = _full_history(train, test)["close"]
+    mid, lower, upper = _bollinger_bands(close, params["window"], params["num_std"])
+    if direction(stance) > 0:
+        pos = _hold_between(close < lower, close >= mid)
+    else:
+        pos = -_hold_between(close > upper, close <= mid)
+    return pos.loc[test.index]
+
+
+def _bollinger_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+    mid, lower, upper = _bollinger_bands(bars["close"], params["window"], params["num_std"])
+    long_side = direction(stance) > 0
+    entry = float(lower.iloc[-1]) if long_side else float(upper.iloc[-1])
+    stop = protective_stop(bars, entry, stance)
+    return Levels(
+        entry=entry,
+        entry_type="limit",
+        stop=stop,
+        target=float(mid.iloc[-1]),
+        condition=(
+            f"fade to the {'lower' if long_side else 'upper'} "
+            f"Bollinger({params['window']}, {params['num_std']}) band; exit at the mean"
+        ),
+    )
+
+
+register(
+    StrategyDef(
+        key="bollinger",
+        name="Bollinger band fade",
+        style="mean_reversion",
+        description=(
+            "Buy a close below the lower band and exit at the mean; short stance "
+            "fades closes above the upper band back to the mean."
+        ),
+        param_grid={"window": [10, 20], "num_std": [2.0, 2.5]},
+        make_signal=_bollinger_signal,
+        levels=_bollinger_levels,
+    )
+)
