@@ -94,6 +94,32 @@ JSON-serialized to each model's `results/metrics.json`.
   and pass the true grid size as `n_trials` (9 for SMA, 4 for XGBoost), so
   their Deflated Sharpe is genuinely deflated below the Probabilistic Sharpe.
 
+### Tournament metrics conventions
+
+The nightly per-ticker tournament reuses `compute_metrics` unchanged; these are
+the conventions and known approximations behind its numbers.
+
+- **Flat bars are included in Sharpe.** The stitched out-of-sample Sharpe is
+  computed over every OOS bar, including bars where the strategy is flat.
+  Low-activity rules are diluted toward zero — intended: it is the Sharpe of
+  *running this rule on this ticker*, not of cherry-picked active periods.
+- **Drawdown baseline.** The engine's one-bar signal lag forces position 0 on
+  the first bar, so equity curves start exactly at initial capital and a
+  strategy that loses from its first active bar reports that loss as drawdown.
+- **Deflated Sharpe approximation.** The expected-maximum-Sharpe benchmark uses
+  the candidate's own estimator variance (Lo 2002) rather than the cross-trial
+  variance of all trial Sharpes (Bailey & López de Prado 2014); under the null
+  hypothesis the two coincide, and the estimator variance is available without
+  persisting every trial's stitched return series.
+- **Survivorship bias.** Tournaments test *today's* index constituents on ~4.8
+  years of history; names that fell out of the index are absent, which flatters
+  trend/breakout results. Until a point-in-time universe exists, treat absolute
+  metric levels with suspicion; comparisons between strategies on the same
+  ticker are unaffected.
+- **Costs.** 1 bp commission + 0.5 bp slippage per unit turnover, linear.
+  Defensible for liquid Russell 1000 names filled at the next open; optimistic
+  for less liquid names or stop-driven fills.
+
 ## Train / test discipline
 
 - **Chronological split only** — never shuffle time-series data before
