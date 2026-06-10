@@ -248,6 +248,7 @@ def run_scan(
             "earnings_warn_days": config.earnings_warn_days,
             "universe": config.universe,
             "skip_strategies": config.skip_strategies,
+            "tournament_lookback_days": config.tournament_lookback_days,
         },
         "funnel": {
             "universe": len(universe),
