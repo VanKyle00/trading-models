@@ -148,14 +148,18 @@ def _ma_pullback_setup(full: pd.DataFrame, band: float, stance: str) -> pd.Serie
 def _ma_pullback_signal(
     train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str
 ) -> pd.Series:
+    # Enter on the SMA(20) recapture bar (setup armed on the PRIOR bar) so the
+    # scored rule matches the levels' stop-entry at SMA(20); exit on losing
+    # SMA(20) or on trend failure at SMA(200).
     full = _full_history(train, test)
     close = full["close"]
     setup = _ma_pullback_setup(full, params["band"], stance)
+    armed = setup.shift(1, fill_value=False)
     s20, s200 = sma(close, 20), sma(close, 200)
     if direction(stance) > 0:
-        pos = _hold_between(setup, (close > s20) | (close < s200))
+        pos = _hold_between(armed & (close > s20), (close < s20) | (close < s200))
     else:
-        pos = -_hold_between(setup, (close < s20) | (close > s200))
+        pos = -_hold_between(armed & (close < s20), (close > s20) | (close > s200))
     return pos.loc[test.index]
 
 
@@ -192,8 +196,8 @@ register(
         style="mean_reversion",
         description=(
             "Orderly pullback to a rising SMA(50) inside an uptrend (RSI 30-50); "
-            "enter on SMA(20) recapture, exit there or on trend failure at SMA(200). "
-            "Short stance mirrors a downtrend rally."
+            "enter on the SMA(20) recapture, ride while SMA(20) holds, out on trend "
+            "failure at SMA(200). Short stance mirrors a downtrend rally."
         ),
         param_grid={"band": [0.02, 0.03]},
         make_signal=_ma_pullback_signal,

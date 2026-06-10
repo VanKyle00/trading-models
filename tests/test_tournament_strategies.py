@@ -277,6 +277,21 @@ def test_ma_pullback_signal_is_zero_in_flat_chop() -> None:
     assert (sig == 0.0).all()
 
 
+def test_ma_pullback_signal_enters_on_sma20_recapture_not_in_the_dip() -> None:
+    # Fixture probe: base ends at bar 438 with setup=True on the last two bars
+    # (armed=True on bar 438). rec_bar 0 closes above SMA20 with armed=True so
+    # the entry fires immediately on the first recovery bar regardless of rate.
+    base = _ma_pullback_bars()  # ends inside the dip (close < SMA20)
+    recovery = base["close"].iloc[-1] * 1.012 ** np.arange(1, 9)
+    close = np.concatenate([base["close"].to_numpy(), recovery])
+    bars = _bars(close)
+    train, test = bars.iloc[:300], bars.iloc[300:]
+    sig = STRATEGIES["ma_pullback"].make_signal(train, test, {"band": 0.03}, "long")
+    in_dip = sig.loc[base.index[-3] : base.index[-1]]
+    assert (in_dip == 0.0).all()  # no position while still below SMA(20)
+    assert sig.iloc[-1] == 1.0  # long after the recapture bar
+
+
 def test_base_breakout_short_fires_on_breakdown_from_tight_base(n_base: int = 60) -> None:
     trend = 100.0 * 0.996 ** np.arange(252)  # downtrend to the 52w low
     base = np.full(n_base, trend[-1] * 1.01)
