@@ -558,3 +558,144 @@ def test_run_scan_tournament_earnings_fetch_failure_attaches_all_false_column(
     assert any("earnings" in e["error"] for e in t_errors), (
         f"'earnings' not in error message: {t_errors}"
     )
+
+
+# ---------------------------------------------------------------------------
+# FDR tiering tests
+#
+# BH math for the stub family of 2 (fa_keep=1, short_keep=1):
+#   DRIFT long:  DSR=0.999 → p=0.001  rank 1 → 0.001 <= (1/2)*0.10=0.050  PASS
+#   QUIET short: DSR=0.92  → p=0.08   rank 2 → 0.08  <= (2/2)*0.10=0.100  PASS (0.08≤0.10)
+#
+# With m=2, QUIET (p=0.08) still passes (BH threshold 0.10 at rank 2).
+# To make QUIET fail we need a larger family.  Patch apply_fdr in the
+# pipeline module to return a controlled result that demotes QUIET — this
+# tests the pipeline's routing logic; BH arithmetic is already covered by
+# test_scanner_tiers.py::test_apply_fdr_passes_only_overwhelming_evidence.
+#
+# Concrete stub values used in fdr_pipeline:
+#   - DRIFT long DSR=0.999 (p=0.001) is the "passing" entry
+#   - QUIET long DSR=0.92  (p=0.08)  is the "failing" entry
+#   - apply_fdr is patched to return: DRIFT→True, QUIET→False (threshold=0.001, family=2)
+# ---------------------------------------------------------------------------
+
+
+def _fake_fdr_tournament_result(stance: str, ticker: str):
+    """Return DSR=0.999 for DRIFT, DSR=0.92 for QUIET."""
+    from tradinglib.tournament.levels import Levels
+    from tradinglib.tournament.run import StrategyVerdict, TournamentResult
+
+    dsr = 0.999 if ticker == "DRIFT" else 0.92
+    verdict = StrategyVerdict(
+        key="sma_cross",
+        survived=True,
+        reasons=[],
+        params={"fast": 10, "slow": 50},
+        metrics={"deflated_sharpe": dsr, "sharpe": dsr + 0.2},
+        n_trades=20,
+        param_stability={"fast": 0.0, "slow": 0.0},
+        n_windows=6,
+    )
+    return TournamentResult(
+        stance=stance,
+        verdicts=[verdict],
+        winner=verdict,
+        winner_levels=Levels(
+            entry=100.0, entry_type="market", stop=96.0, target=108.0, condition="test"
+        ),
+        n_trials=18,
+    )
+
+
+@pytest.fixture
+def fdr_pipeline(patched_pipeline, monkeypatch):
+    """patched_pipeline with controlled DSR + patched apply_fdr for routing tests.
+
+    Stub: DRIFT long passes (DSR=0.999), QUIET long fails (DSR=0.92).
+    apply_fdr is patched to return the controlled pass/fail map so pipeline
+    routing is tested independently of BH arithmetic (covered by tiers tests).
+    """
+    from tradinglib.scanner import pipeline
+
+    def fake_fdr_tournament(bars, stance, registry=None, config=None):
+        ticker = str(bars["symbol"].iloc[0])
+        return _fake_fdr_tournament_result(stance, ticker)
+
+    monkeypatch.setattr(pipeline, "run_tournament", fake_fdr_tournament)
+
+    # Patch apply_fdr: DRIFT long passes, QUIET long fails.
+    # fa_keep=1 → only DRIFT is a long candidate; short_keep=1 → QUIET is the short.
+    # We demote QUIET regardless of stance to verify watchlist routing.
+    def fake_apply_fdr(tournament, alpha):
+        passed = {}
+        for stance in ("long", "short"):
+            for entry in tournament.get(stance) or []:
+                ticker = entry["ticker"]
+                passed[(stance, ticker)] = ticker == "DRIFT"
+        family = sum(1 for v in passed.values())
+        threshold = 0.001 if any(v for v in passed.values()) else 0.0
+        return passed, threshold, family
+
+    monkeypatch.setattr(pipeline, "apply_fdr", fake_apply_fdr, raising=False)
+    return pipeline
+
+
+def test_fdr_tickets_only_for_passing_entries(fdr_pipeline) -> None:
+    # fa_keep=2, short_keep=0: DRIFT and QUIET both enter as long candidates.
+    # apply_fdr is patched: DRIFT→True, QUIET→False.
+    # Only DRIFT should get a ticket; QUIET is demoted to watchlist.
+    result = fdr_pipeline.run_scan(ScanConfig(fa_keep=2, short_keep=0, skip_llm=True))
+
+    tickets = result["tickets"]["long"] + result["tickets"]["short"]
+    tickers_with_tickets = {t["ticker"] for t in tickets}
+    assert "DRIFT" in tickers_with_tickets, "DRIFT must be ticketed (passes FDR)"
+    assert "QUIET" not in tickers_with_tickets, "QUIET must NOT be ticketed (fails FDR)"
+    assert all(t["tier"] == "ticket" for t in tickets), "all tickets must carry tier='ticket'"
+
+
+def test_fdr_demoted_entries_land_in_watchlist(fdr_pipeline) -> None:
+    result = fdr_pipeline.run_scan(ScanConfig(fa_keep=2, short_keep=0, skip_llm=True))
+
+    watchlist = result["watchlist"]
+    wl_rows = watchlist.get("long", []) + watchlist.get("short", [])
+    quiet_rows = [r for r in wl_rows if r["ticker"] == "QUIET"]
+    assert quiet_rows, "QUIET must appear in watchlist after failing BH"
+    for r in quiet_rows:
+        assert r["tier_reason"] == "failed nightly FDR"
+
+
+def test_fdr_report_keys(fdr_pipeline) -> None:
+    result = fdr_pipeline.run_scan(ScanConfig(fa_keep=2, short_keep=0, skip_llm=True))
+
+    assert result["fdr"] is not None
+    assert result["fdr"]["alpha"] == 0.10
+    assert isinstance(result["fdr"]["threshold"], float)
+    assert isinstance(result["fdr"]["family"], int)
+
+
+def test_fdr_funnel_keys(fdr_pipeline) -> None:
+    result = fdr_pipeline.run_scan(ScanConfig(fa_keep=2, short_keep=0, skip_llm=True))
+
+    assert "fdr_passed" in result["funnel"]
+    assert "watchlist" in result["funnel"]
+    # DRIFT long passes; QUIET long fails → 1 passed, 1 in watchlist
+    assert result["funnel"]["fdr_passed"] == 1
+    assert result["funnel"]["watchlist"] >= 1
+
+
+def test_fdr_config_echo(fdr_pipeline) -> None:
+    result = fdr_pipeline.run_scan(ScanConfig(fa_keep=2, short_keep=0, skip_llm=True))
+
+    assert result["config"]["fdr_alpha"] == 0.10
+    assert result["config"]["watch_dsr_floor"] == 0.5
+
+
+def test_fdr_skip_strategies_zeroes_out(patched_pipeline) -> None:
+    result = patched_pipeline.run_scan(
+        ScanConfig(fa_keep=1, short_keep=0, skip_llm=True, skip_strategies=True)
+    )
+
+    assert result["watchlist"] == {"long": [], "short": []}
+    assert result["fdr"] is None
+    assert result["funnel"]["fdr_passed"] == 0
+    assert result["funnel"]["watchlist"] == 0

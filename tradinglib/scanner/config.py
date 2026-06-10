@@ -19,6 +19,10 @@ class ScanConfig:
     378-bar anchored train leaves several OOS quarters).
     ``account_size`` x ``risk_per_trade_pct`` is the per-ticket risk budget
     the ticket playbook sizes against (the CSP is capital-sized).
+    ``fdr_alpha`` drives the nightly Benjamini-Hochberg pass over the tested family;
+    survivors that fail it demote to the watchlist, never silently dropped.
+    ``watch_dsr_floor`` is the minimum best-verdict DSR for a setup-fired ticker
+    to make the watchlist.
     """
 
     fa_keep: int = 40
@@ -35,3 +39,5 @@ class ScanConfig:
     tournament_lookback_days: int = 1200
     account_size: float = 100_000.0
     risk_per_trade_pct: float = 0.01
+    fdr_alpha: float = 0.10
+    watch_dsr_floor: float = 0.5

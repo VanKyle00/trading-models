@@ -28,6 +28,7 @@ from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.fa_gate import apply_edgar_trends, score_fundamentals
 from tradinglib.scanner.rank import rank_candidates
 from tradinglib.scanner.setups import detect_all
+from tradinglib.scanner.tiers import apply_fdr, build_watchlist
 from tradinglib.strategist import build_ticket
 from tradinglib.tournament.run import run_tournament
 
@@ -258,6 +259,16 @@ def run_scan(
                     }
                 )
 
+    fdr: dict | None = None
+    fdr_passed: dict[tuple[str, str], bool] = {}
+    watchlist: dict[str, list[dict]] = {"long": [], "short": []}
+    if not config.skip_strategies:
+        fdr_passed, fdr_threshold, fdr_family = apply_fdr(tournament, config.fdr_alpha)
+        fdr = {"alpha": config.fdr_alpha, "threshold": fdr_threshold, "family": fdr_family}
+        watchlist = build_watchlist(
+            tournament, candidates, fdr_passed, watch_dsr_floor=config.watch_dsr_floor
+        )
+
     tickets: dict[str, list[dict]] = {"long": [], "short": []}
     fa_by_key = {
         (stance, c["ticker"]): c for stance in ("long", "short") for c in fa_candidates[stance]
@@ -266,6 +277,8 @@ def run_scan(
         for entry in tournament[stance]:
             if entry["winner"] is None:
                 continue
+            if not fdr_passed.get((stance, entry["ticker"]), False):
+                continue  # demoted to the watchlist by the nightly FDR
             ticker = entry["ticker"]
             try:
                 try:
@@ -293,19 +306,22 @@ def run_scan(
                     and next_earnings <= asof + pd.Timedelta(days=config.earnings_warn_days)
                 )
                 tickets[stance].append(
-                    build_ticket(
-                        ticker=ticker,
-                        stance=stance,
-                        winner=entry["winner"],
-                        bars=winner_bars[(stance, ticker)],
-                        chain=chain,
-                        fa=fa_by_key.get((stance, ticker)),
-                        winner_changed=entry["winner_changed"],
-                        next_earnings=next_earnings,
-                        earnings_warning=earnings_soon,
-                        account_size=config.account_size,
-                        risk_per_trade_pct=config.risk_per_trade_pct,
-                    )
+                    {
+                        **build_ticket(
+                            ticker=ticker,
+                            stance=stance,
+                            winner=entry["winner"],
+                            bars=winner_bars[(stance, ticker)],
+                            chain=chain,
+                            fa=fa_by_key.get((stance, ticker)),
+                            winner_changed=entry["winner_changed"],
+                            next_earnings=next_earnings,
+                            earnings_warning=earnings_soon,
+                            account_size=config.account_size,
+                            risk_per_trade_pct=config.risk_per_trade_pct,
+                        ),
+                        "tier": "ticket",
+                    }
                 )
             except Exception as exc:
                 errors.append({"ticker": ticker, "stage": "tickets", "error": str(exc)})
@@ -326,6 +342,8 @@ def run_scan(
             "tournament_lookback_days": config.tournament_lookback_days,
             "account_size": config.account_size,
             "risk_per_trade_pct": config.risk_per_trade_pct,
+            "fdr_alpha": config.fdr_alpha,
+            "watch_dsr_floor": config.watch_dsr_floor,
         },
         "funnel": {
             "universe": len(universe),
@@ -341,10 +359,14 @@ def run_scan(
                 1 for entries in tournament.values() for e in entries if e["survivors"]
             ),
             "tickets": sum(len(entries) for entries in tickets.values()),
+            "fdr_passed": sum(1 for v in fdr_passed.values() if v) if fdr else 0,
+            "watchlist": sum(len(v) for v in watchlist.values()),
         },
         "fa_candidates": fa_candidates,
         "tournament": tournament,
         "tickets": tickets,
+        "watchlist": watchlist,
+        "fdr": fdr,
         "candidates": rank_candidates(candidates, top=config.top),
         "errors": errors,
     }
