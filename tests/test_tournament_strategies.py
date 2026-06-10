@@ -193,7 +193,7 @@ def test_bollinger_levels_limit_at_band_target_at_mean() -> None:
     assert short.entry == pytest.approx(mid + 2.0 * sd)
 
 
-def test_registry_has_eight_strategies_with_27_total_trials() -> None:
+def test_registry_has_nine_strategies_with_29_total_trials() -> None:
     assert set(STRATEGIES) == {
         "sma_cross",
         "donchian",
@@ -203,10 +203,11 @@ def test_registry_has_eight_strategies_with_27_total_trials() -> None:
         "base_breakout",
         "ma_pullback",
         "pead",
+        "ridge_momentum",
     }  # keep in sync with the registry
     total = sum(len(expand_grid(s.param_grid)) for s in STRATEGIES.values())
-    assert total == 27  # keep in sync with the registry (was 23; +4 for pead)
-    styles = {"trend", "breakout", "mean_reversion", "event"}
+    assert total == 29  # keep in sync with the registry (was 27; +2 for ridge_momentum)
+    styles = {"trend", "breakout", "mean_reversion", "event", "ml"}
     assert all(s.style in styles and s.description for s in STRATEGIES.values())
 
 
@@ -364,3 +365,30 @@ def test_pead_requires_both_move_and_volume_gates() -> None:
         small.iloc[:60], small.iloc[60:], {"min_move": 0.04, "hold": 12}, "long"
     )
     assert (sig2 == 0.0).all()
+
+
+def test_ridge_momentum_long_rides_a_persistent_trend() -> None:
+    # ML output is fit-dependent and not hand-predictable bar-by-bar, so the
+    # assertion is statistical: in a strong steady uptrend the momentum model
+    # should be long most of the time, not on any specific bar.
+    bars = _trend_bars(n=700, rate=1.003)
+    train, test = bars.iloc[:500], bars.iloc[500:]
+    sig = STRATEGIES["ridge_momentum"].make_signal(train, test, {"l2": 1.0}, "long")
+    assert set(np.unique(sig)) <= {0.0, 1.0}
+    assert float(sig.iloc[-100:].mean()) > 0.5
+
+
+def test_ridge_momentum_flat_market_stays_flat() -> None:
+    bars = _flat_bars(n=420)
+    sig = STRATEGIES["ridge_momentum"].make_signal(
+        bars.iloc[:300], bars.iloc[300:], {"l2": 1.0}, "long"
+    )
+    assert (sig == 0.0).all()
+
+
+def test_ridge_momentum_levels_market_entry_in_trend_none_when_flat() -> None:
+    bars = _trend_bars(n=700, rate=1.003)
+    lv = STRATEGIES["ridge_momentum"].levels(bars, {"l2": 1.0}, "long")
+    assert lv is not None and lv.entry_type == "market"
+    assert lv.stop < lv.entry < lv.target
+    assert STRATEGIES["ridge_momentum"].levels(_flat_bars(n=420), {"l2": 1.0}, "long") is None

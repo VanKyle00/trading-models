@@ -8,6 +8,7 @@ from tradinglib.tournament.strategies import (  # noqa: F401  (registration side
     breakout,
     event,
     mean_reversion,
+    ml,
     trend,
 )
 from tradinglib.tournament.strategies._core import (

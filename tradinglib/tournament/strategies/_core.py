@@ -32,7 +32,7 @@ LevelsFn = Callable[[pd.DataFrame, dict, str], Levels | None]
 class StrategyDef:
     key: str
     name: str
-    style: str  # "trend" | "breakout" | "mean_reversion" | "event"
+    style: str  # "trend" | "breakout" | "mean_reversion" | "event" | "ml"
     description: str  # plain-English rule; powers the /models page
     param_grid: dict[str, list]
     make_signal: TournamentSignalFn
