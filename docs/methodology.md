@@ -120,6 +120,12 @@ the conventions and known approximations behind its numbers.
 - **Costs.** 1 bp commission + 0.5 bp slippage per unit turnover, linear.
   Defensible for liquid Russell 1000 names filled at the next open; optimistic
   for less liquid names or stop-driven fills.
+- **1 − DSR as a pseudo-p-value.** The nightly Benjamini-Hochberg pass treats
+  `1 − DSR` as a p-value for "no edge" across every ticker-stance tournament
+  run that night (`fdr_alpha = 0.10`, matching the survival bar). It is a
+  Gaussian-approximation probability, not a textbook p-value; it orders and
+  tiers candidates — survivors failing it demote to the watchlist — and is
+  not a published significance claim.
 
 ## Train / test discipline
 
