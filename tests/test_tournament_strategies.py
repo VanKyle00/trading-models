@@ -193,7 +193,7 @@ def test_bollinger_levels_limit_at_band_target_at_mean() -> None:
     assert short.entry == pytest.approx(mid + 2.0 * sd)
 
 
-def test_registry_has_five_strategies_with_18_total_trials() -> None:
+def test_registry_has_eight_strategies_with_27_total_trials() -> None:
     assert set(STRATEGIES) == {
         "sma_cross",
         "donchian",
@@ -202,10 +202,11 @@ def test_registry_has_five_strategies_with_18_total_trials() -> None:
         "bollinger",
         "base_breakout",
         "ma_pullback",
+        "pead",
     }  # keep in sync with the registry
     total = sum(len(expand_grid(s.param_grid)) for s in STRATEGIES.values())
-    assert total == 23  # keep in sync with the registry (was 21; +2 for ma_pullback)
-    styles = {"trend", "breakout", "mean_reversion"}
+    assert total == 27  # keep in sync with the registry (was 23; +4 for pead)
+    styles = {"trend", "breakout", "mean_reversion", "event"}
     assert all(s.style in styles and s.description for s in STRATEGIES.values())
 
 
@@ -306,3 +307,41 @@ def test_base_breakout_short_fires_on_breakdown_from_tight_base(n_base: int = 60
     assert sig.iloc[-1] == -1.0
     lv = STRATEGIES["base_breakout"].levels(bars.iloc[:-1], {"base": 40}, "short")
     assert lv is not None and lv.target < lv.entry < lv.stop
+
+
+def _pead_bars() -> pd.DataFrame:
+    # flat, then a +8% earnings gap on 3x volume, then upward drift
+    pre = np.full(80, 100.0)
+    post = 108.0 * 1.002 ** np.arange(20)
+    close = np.concatenate([pre, [108.0], post])
+    bars = _bars(close)
+    vol = np.full(len(close), 1_000_000.0)
+    vol[80] = 3_000_000.0
+    bars["volume"] = vol
+    earnings = np.zeros(len(close), dtype=bool)
+    earnings[80] = True
+    bars["earnings"] = earnings
+    return bars
+
+
+def test_pead_long_drifts_after_the_gap() -> None:
+    bars = _pead_bars()
+    train, test = bars.iloc[:60], bars.iloc[60:]
+    sig = STRATEGIES["pead"].make_signal(train, test, {"min_move": 0.04, "hold": 12}, "long")
+    assert sig.iloc[-10] == 1.0  # in the drift window
+    assert sig.iloc[0] == 0.0  # not before the reaction
+
+
+def test_pead_without_earnings_column_is_flat_and_unactionable() -> None:
+    bars = _trend_bars(n=200)
+    train, test = bars.iloc[:150], bars.iloc[150:]
+    sig = STRATEGIES["pead"].make_signal(train, test, {"min_move": 0.04, "hold": 12}, "long")
+    assert (sig == 0.0).all()
+    assert STRATEGIES["pead"].levels(bars, {"min_move": 0.04, "hold": 12}, "long") is None
+
+
+def test_pead_levels_inside_the_drift_window() -> None:
+    bars = _pead_bars()
+    lv = STRATEGIES["pead"].levels(bars.iloc[:86], {"min_move": 0.04, "hold": 12}, "long")
+    assert lv is not None and lv.entry_type == "market"
+    assert lv.stop == pytest.approx(float(bars["low"].iloc[80]))

@@ -6,6 +6,7 @@ shared helpers so family modules never import this package root (no cycle).
 
 from tradinglib.tournament.strategies import (  # noqa: F401  (registration side effects)
     breakout,
+    event,
     mean_reversion,
     trend,
 )
