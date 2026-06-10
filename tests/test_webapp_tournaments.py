@@ -397,6 +397,7 @@ def test_day_page_tells_the_pipeline_story(tournaments_dir: Path) -> None:
     assert "buy shares; stop 195.00" in html
     assert 'class="spark"' in html  # ticket outcome strip
     assert "the bar held" not in html.lower()  # this night HAS a survivor
+    assert "AngloGold" not in html  # sanity: only fixture data
 
 
 def test_day_page_zero_survivors_is_intentional(tournaments_dir: Path) -> None:
@@ -434,6 +435,7 @@ def test_day_page_old_format_renders_available_stages(tournaments_dir: Path) -> 
 
 def test_day_page_unknown_date_is_404(tournaments_dir: Path) -> None:
     assert TestClient(create_app()).get("/tournaments/1999-01-01").status_code == 404
+    assert TestClient(create_app()).get("/tournaments/..%2F..%2Fsecrets").status_code == 404
 
 
 def test_index_empty_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
