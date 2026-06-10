@@ -50,6 +50,8 @@ def _preference(style: str, stance: str, iv_ratio: float | None) -> list[str]:
 
 
 def _naive(ts: pd.Timestamp) -> pd.Timestamp:
+    # unlike quotes._naive this converts to UTC first: an aware earnings timestamp
+    # must compare against expiration DATES as the UTC instant's calendar date
     return ts.tz_convert("UTC").tz_localize(None) if ts.tzinfo else ts
 
 
