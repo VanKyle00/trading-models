@@ -242,3 +242,19 @@ def test_base_breakout_levels_actionable_only_in_a_base() -> None:
     # an established uptrend with no consolidation is not actionable
     trending = _trend_bars(n=420)
     assert STRATEGIES["base_breakout"].levels(trending, {"base": 40}, "long") is None
+
+
+def test_base_breakout_short_fires_on_breakdown_from_tight_base(n_base: int = 60) -> None:
+    trend = 100.0 * 0.996 ** np.arange(252)  # downtrend to the 52w low
+    base = np.full(n_base, trend[-1] * 1.01)
+    breakdown = np.array([trend[-1] * 0.97])
+    close = np.concatenate([trend, base, breakdown])
+    bars = _bars(close, high=close * 1.002, low=close * 0.998)
+    vol = np.full(len(close), 1_000_000.0)
+    vol[-(n_base + 1) : -1] = np.linspace(900_000.0, 300_000.0, n_base)
+    bars["volume"] = vol
+    train, test = bars.iloc[:280], bars.iloc[280:]
+    sig = STRATEGIES["base_breakout"].make_signal(train, test, {"base": 40}, "short")
+    assert sig.iloc[-1] == -1.0
+    lv = STRATEGIES["base_breakout"].levels(bars.iloc[:-1], {"base": 40}, "short")
+    assert lv is not None and lv.target < lv.entry < lv.stop
