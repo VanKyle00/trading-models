@@ -168,14 +168,17 @@ stages — the first two are the **fundamental (FA) gate**:
 The FA gate is two-sided, and the same nightly run also feeds a **strategy
 tournament**: the top-N FA names become long candidates and the bottom-N short
 candidates, each walk-forward tested (anchored 378/63-bar windows, costs on)
-against a registry of 8 strategies across 27 parameter configurations: the
+against a registry of 9 strategies across 29 parameter configurations: the
 classic five (SMA crossover, Donchian breakout, RSI(2) pullback, MACD, Bollinger
 fade) plus three setup strategies translated directly from the scanner's own
 detectors — base breakout (tight consolidation near the 52-week extreme on drying
 volume), MA pullback (orderly retracement to a rising SMA(50) with recapture),
 and post-earnings drift (PEAD: holding in the drift direction after a
-high-volume earnings reaction bar). A ticket from one of the setup strategies
-means the setup has per-ticker walk-forward-validated edge *and* fired tonight.
+high-volume earnings reaction bar) — plus `ridge_momentum` (closed-form ridge
+regression on lagged returns, volatility, and SMA distances, fit per walk-forward
+window on train bars only; long while the predicted next-bar return is positive).
+A ticket from one of the setup strategies means the setup has per-ticker
+walk-forward-validated edge *and* fired tonight.
 Only survivors clear the bar (deflated-Sharpe probability ≥ 0.90 corrected for
 *every* strategy and parameter tried on that ticker, ≥ 12 OOS trades, stable
 parameters), and each surviving winner becomes a **trade ticket**: entry/stop/target
@@ -184,6 +187,7 @@ short-premium spreads, never naked calls — built from the real chain behind a
 liquidity gate. Tickets render below the watchlist on `/scans`, and the
 strategy registry plus the repo's standalone models are documented at
 [`/models`](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/models).
+To add a strategy see [docs/adding-a-model.md](docs/adding-a-model.md).
 Quotes are indicative last/close marks: this is decision support that accrues
 a forward paper-trading record, not an auto-trader.
 
