@@ -46,6 +46,8 @@ data/raw/
 data/processed/
 *.parquet
 *.feather
+# ...except deliberately frozen test fixtures
+!tests/fixtures/**/*.parquet
 
 # Self-generated SFT datasets + trained adapters (Step A; regenerable from scripts)
 data/dataset/
