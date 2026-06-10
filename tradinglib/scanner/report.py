@@ -109,3 +109,25 @@ def write_report(result: dict, out_dir: Path) -> tuple[Path, Path]:
     json_path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
     md_path.write_text(render_markdown(result), encoding="utf-8")
     return json_path, md_path
+
+
+def load_latest_report(base: Path, *, before: str) -> dict | None:
+    """Latest ``report.json`` under ``base`` from a date strictly before ``before``.
+
+    Scan directories are named ``YYYY-MM-DD`` so lexicographic order is
+    chronological. Returns ``None`` when there is no prior report (first run)
+    or the latest one is unreadable/corrupt (e.g. a partial write) — the
+    previous report is optional context and must never kill tonight's scan;
+    the tournament then marks ``winner_changed`` as unknown rather than false.
+    """
+    if not base.exists():
+        return None
+    dated = sorted(
+        d for d in base.iterdir() if d.is_dir() and d.name < before and (d / "report.json").exists()
+    )
+    if not dated:
+        return None
+    try:
+        return json.loads((dated[-1] / "report.json").read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None

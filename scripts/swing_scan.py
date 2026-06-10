@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from tradinglib.data.paths import processed_dir
 from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.pipeline import run_scan
-from tradinglib.scanner.report import write_report
+from tradinglib.scanner.report import load_latest_report, write_report
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -43,6 +44,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=40,
         help="short-candidate slate size (bottom of the FA ranking; 0 disables)",
     )
+    parser.add_argument(
+        "--skip-strategies",
+        action="store_true",
+        help="skip the per-ticker strategy tournament over the FA candidates",
+    )
     return parser.parse_args(argv)
 
 
@@ -57,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         skip_llm=args.skip_llm,
         edgar_enrich=not args.skip_edgar,
         universe=args.universe,
+        skip_strategies=args.skip_strategies,
     )
 
     provider = None
@@ -69,9 +76,10 @@ def main(argv: list[str] | None = None) -> int:
         load_dotenv()  # pick up ANTHROPIC_API_KEY from a local .env
         provider = ClaudeProvider()
 
-    result = run_scan(config, provider)
-
     base = args.out_dir if args.out_dir is not None else processed_dir("scans")
+    previous = load_latest_report(base, before=datetime.now(UTC).strftime("%Y-%m-%d"))
+    result = run_scan(config, provider, previous_report=previous)
+
     json_path, md_path = write_report(result, base / result["asof"])
 
     funnel = result["funnel"]
@@ -89,6 +97,21 @@ def main(argv: list[str] | None = None) -> int:
         f"FA candidates: {len(result['fa_candidates']['long'])} long, "
         f"{len(result['fa_candidates']['short'])} short"
     )
+    print(
+        f"tournament: {result['funnel']['tournament_candidates']} candidates -> "
+        f"{result['funnel']['tournament_survivors']} with surviving strategies"
+    )
+    for stance in ("long", "short"):
+        for entry in result["tournament"][stance]:
+            winner = entry["winner"]
+            if winner:
+                lv = winner["levels"]
+                changed = " [winner changed]" if entry["winner_changed"] else ""
+                print(
+                    f"  {entry['ticker']:<6} {stance:<5} {winner['strategy']:<10} "
+                    f"entry {lv['entry']:.2f} stop {lv['stop']:.2f} "
+                    f"target {lv['target']:.2f}{changed}"
+                )
     print(f"report: {json_path}")
     print(f"        {md_path}")
     return 0
