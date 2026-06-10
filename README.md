@@ -113,14 +113,14 @@ Full steps and the persistent-cache notes are in [`docs/DEPLOY.md`](docs/DEPLOY.
 
 **▶ [Open the scans page →](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/scans)**
 — every weekday after the US close (22:00 UTC) a Modal cron sweeps the full
-S&P 500 for swing setups on the 2-week-to-6-month horizon and publishes a
+Russell 1000 (~1,000 names; S&P 500 available via `--universe sp500`) for swing setups on the 2-week-to-6-month horizon and publishes a
 ranked watchlist to the workbench's `/scans` page: funnel stats up top, then
 one card per candidate with the detected setup, trigger/stop levels, and a
 grounded LLM brief.
 
 [![A nightly scan report: the S&P 500 funnel (universe 503 → 40 past the FA gate → 4 setups forming) and the top-ranked candidate cards with trigger/stop levels and grounded LLM briefs](docs/assets/scans.png)](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/scans)
 
-The funnel (`tradinglib/scanner/`) narrows ~503 names to a handful in four
+The funnel (`tradinglib/scanner/`) narrows ~1,000 names to a handful in four
 stages — the first two are the **fundamental (FA) gate**:
 
 1. **FA gate, pass 1 — snapshot percentiles.** Six metrics — revenue growth,
