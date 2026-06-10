@@ -335,3 +335,25 @@ def test_two_sided_gate_disjoint_under_overflow() -> None:
     assert out["passed_gate"].sum() == 2
     assert out["passed_short_gate"].sum() == 1
     assert not (out["passed_gate"] & out["passed_short_gate"]).any()
+
+
+def test_edgar_no_data_short_outranks_improving_short() -> None:
+    # an improving-trend short loses its slot to a no-data short: the blend
+    # raises the improving name's score and ascending rank prefers the lower
+    uni = _universe(["LONGY", "S1", "S2"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "LONGY": {"revenue_growth": 0.30},
+            "S1": {"revenue_growth": 0.02},
+            "S2": {"revenue_growth": 0.03},
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
+    trends = _trends(
+        {"S2": {"revenue_yoy": 0.30, "revenue_accel": 0.10, "eps_change_yoy": 0.5}}
+    )
+
+    out = apply_edgar_trends(scored, trends, keep=1, short_keep=1).set_index("ticker")
+
+    assert bool(out.loc["S1", "passed_short_gate"])  # no-data short keeps the slot
+    assert not bool(out.loc["S2", "passed_short_gate"])
