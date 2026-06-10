@@ -56,7 +56,12 @@ def _full_history(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame:
 
 
 def _hold_between(entry: pd.Series, exit_: pd.Series) -> pd.Series:
-    """Flip-flop position state: 1 from an entry bar until the next exit bar."""
+    """Flip-flop position state: 1 from an entry bar until the next exit bar.
+
+    Returns ``{0, 1}`` regardless of stance; short-stance callers negate the
+    result themselves (an IEEE ``-0.0`` on flat bars compares equal to ``0.0``
+    everywhere downstream, so the sign of zero is irrelevant).
+    """
     state = pd.Series(np.nan, index=entry.index)
     state[exit_] = 0.0
     state[entry] = 1.0  # entry wins when both fire on the same bar
