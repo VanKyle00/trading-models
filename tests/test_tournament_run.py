@@ -114,7 +114,7 @@ def test_run_tournament_real_registry_structural() -> None:
     bars = _uptrend_bars(700)
     result = run_tournament(bars, "long", config=TournamentConfig(initial_train=300, test_size=63))
     assert {v.key for v in result.verdicts} == set(STRATEGIES)
-    assert result.n_trials == 21  # keep in sync with the registry
+    assert result.n_trials == 23  # keep in sync with the registry (was 21; +2 for ma_pullback)
     survivors = {v.key for v in result.verdicts if v.survived}
     if result.winner is None:
         assert not survivors
