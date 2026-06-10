@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from tradinglib.features.technical import sma
+from tradinglib.features.technical import rsi, sma
 from tradinglib.tournament.levels import Levels, direction, protective_stop, two_r_target
 
 # (train, test, params, stance) -> target-position series indexed like test
@@ -109,5 +109,112 @@ register(
         param_grid={"fast": [10, 20], "slow": [50, 100]},
         make_signal=_sma_cross_signal,
         levels=_sma_cross_levels,
+    )
+)
+
+
+# --- donchian ----------------------------------------------------------------
+
+
+def _donchian_signal(
+    train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str
+) -> pd.Series:
+    full = _full_history(train, test)
+    n = params["n"]
+    upper = full["high"].rolling(n).max().shift(1)
+    lower = full["low"].rolling(n).min().shift(1)
+    mid = (upper + lower) / 2.0
+    if direction(stance) > 0:
+        pos = _hold_between(full["close"] > upper, full["close"] < mid)
+    else:
+        pos = -_hold_between(full["close"] < lower, full["close"] > mid)
+    return pos.loc[test.index]
+
+
+def _donchian_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+    n = params["n"]
+    upper = float(bars["high"].rolling(n).max().iloc[-1])
+    lower = float(bars["low"].rolling(n).min().iloc[-1])
+    mid = (upper + lower) / 2.0
+    long_side = direction(stance) > 0
+    entry = upper if long_side else lower
+    if not abs(entry - mid) > 0:
+        raise ValueError("degenerate Donchian channel; cannot place a stop")
+    return Levels(
+        entry=entry,
+        entry_type="stop",
+        stop=mid,
+        target=two_r_target(entry, mid),
+        condition=(
+            f"{'buy' if long_side else 'sell'}-stop at the {n}-day "
+            f"{'high' if long_side else 'low'}; exit at mid-channel"
+        ),
+    )
+
+
+register(
+    StrategyDef(
+        key="donchian",
+        name="Donchian channel breakout",
+        style="breakout",
+        description=(
+            "Enter on a close beyond the N-day channel extreme (high for longs, "
+            "low for shorts); exit when the close crosses back through mid-channel."
+        ),
+        param_grid={"n": [20, 40, 55]},
+        make_signal=_donchian_signal,
+        levels=_donchian_levels,
+    )
+)
+
+
+# --- rsi2 --------------------------------------------------------------------
+
+
+def _rsi2_signal(train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str) -> pd.Series:
+    close = _full_history(train, test)["close"]
+    trend = sma(close, 200)
+    fast = sma(close, 5)
+    r = rsi(close, 2)
+    if direction(stance) > 0:
+        entries = (close > trend) & (r < params["entry_thr"])
+        exits = (close > fast) | (close < trend)
+        pos = _hold_between(entries, exits)
+    else:
+        entries = (close < trend) & (r > 100.0 - params["entry_thr"])
+        exits = (close < fast) | (close > trend)
+        pos = -_hold_between(entries, exits)
+    return pos.loc[test.index]
+
+
+def _rsi2_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+    entry = float(bars["close"].iloc[-1])
+    stop = protective_stop(bars, entry, stance)
+    long_side = direction(stance) > 0
+    thr = params["entry_thr"] if long_side else 100 - params["entry_thr"]
+    return Levels(
+        entry=entry,
+        entry_type="market",
+        stop=stop,
+        target=two_r_target(entry, stop),
+        condition=(
+            f"enter when RSI(2) {'<' if long_side else '>'} {thr} with close "
+            f"{'above' if long_side else 'below'} SMA(200); rule exits at SMA(5)"
+        ),
+    )
+
+
+register(
+    StrategyDef(
+        key="rsi2",
+        name="RSI(2) pullback",
+        style="mean_reversion",
+        description=(
+            "Inside an SMA(200) trend filter, buy 2-period-RSI oversold dips and "
+            "exit above SMA(5); short stance fades overbought pops in downtrends."
+        ),
+        param_grid={"entry_thr": [5, 10, 15]},
+        make_signal=_rsi2_signal,
+        levels=_rsi2_levels,
     )
 )

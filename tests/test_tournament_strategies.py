@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from tradinglib.tournament.strategies import STRATEGIES
 
@@ -68,3 +69,71 @@ def test_sma_cross_levels_atr_stop_and_2r_target() -> None:
     assert lv.target == 108.0  # entry + 2R
     short = STRATEGIES["sma_cross"].levels(bars, {"fast": 10, "slow": 50}, "short")
     assert short.stop == 104.0 and short.target == 92.0
+
+
+def test_donchian_long_enters_on_breakout_and_exits_mid_channel() -> None:
+    flat = np.full(80, 100.0)
+    spike = np.array([106.0, 107.0, 96.0])  # breakout, hold, collapse through mid
+    bars = _bars(np.concatenate([flat, spike]))
+    train, test = bars.iloc[:60], bars.iloc[60:]
+    sig = STRATEGIES["donchian"].make_signal(train, test, {"n": 20}, "long")
+    assert sig.loc[bars.index[80]] == 1.0  # close 106 > prior 20d high (101)
+    assert sig.loc[bars.index[81]] == 1.0  # still above mid-channel
+    assert sig.loc[bars.index[82]] == 0.0  # 96 below mid-channel -> exit
+
+
+def test_donchian_short_sells_the_low_break() -> None:
+    flat = np.full(80, 100.0)
+    bars = _bars(np.concatenate([flat, [93.0, 92.0]]))
+    train, test = bars.iloc[:60], bars.iloc[60:]
+    sig = STRATEGIES["donchian"].make_signal(train, test, {"n": 20}, "short")
+    assert sig.loc[bars.index[80]] == -1.0  # close 93 < prior 20d low (99)
+    assert sig.loc[bars.index[81]] == -1.0
+
+
+def test_donchian_levels_stop_at_mid_channel() -> None:
+    bars = _flat_bars()
+    lv = STRATEGIES["donchian"].levels(bars, {"n": 20}, "long")
+    assert lv.entry == 101.0 and lv.entry_type == "stop"  # buy-stop at the 20d high
+    assert lv.stop == 100.0  # mid-channel is the native exit
+    assert lv.target == 103.0  # entry + 2R
+    short = STRATEGIES["donchian"].levels(bars, {"n": 20}, "short")
+    assert short.entry == 99.0 and short.stop == 100.0 and short.target == 97.0
+
+
+def test_donchian_levels_reject_degenerate_channel() -> None:
+    bars = _flat_bars(spread=0.0)  # zero-width channel
+    with pytest.raises(ValueError, match="channel"):
+        STRATEGIES["donchian"].levels(bars, {"n": 20}, "long")
+
+
+def test_rsi2_long_buys_the_dip_in_an_uptrend_and_exits_above_sma5() -> None:
+    rise = 100.0 * 1.004 ** np.arange(280)
+    dipped = rise.copy()
+    dipped[260] = rise[260] * 0.97  # two-bar slide pins RSI(2) near 0
+    dipped[261] = dipped[260] * 0.97
+    dipped[262] = dipped[261] * 1.06  # snap back above SMA(5)
+    bars = _bars(dipped)
+    train, test = bars.iloc[:250], bars.iloc[250:]
+    sig = STRATEGIES["rsi2"].make_signal(train, test, {"entry_thr": 10}, "long")
+    assert sig.loc[bars.index[261]] == 1.0  # oversold inside the uptrend
+    assert sig.loc[bars.index[262]] == 0.0  # snapped back above SMA(5) -> exit
+
+
+def test_rsi2_short_fades_the_pop_in_a_downtrend() -> None:
+    fall = 100.0 * 0.996 ** np.arange(280)
+    popped = fall.copy()
+    popped[260] = fall[260] * 1.03  # two-bar pop pins RSI(2) near 100
+    popped[261] = popped[260] * 1.03
+    bars = _bars(popped)
+    train, test = bars.iloc[:250], bars.iloc[250:]
+    sig = STRATEGIES["rsi2"].make_signal(train, test, {"entry_thr": 10}, "short")
+    assert sig.loc[bars.index[261]] == -1.0  # overbought pop inside the downtrend
+
+
+def test_rsi2_levels_market_entry_with_atr_stop() -> None:
+    bars = _flat_bars()
+    lv = STRATEGIES["rsi2"].levels(bars, {"entry_thr": 10}, "long")
+    assert lv.entry == 100.0 and lv.entry_type == "market"
+    assert lv.stop == 96.0 and lv.target == 108.0
+    assert "RSI(2)" in lv.condition and "SMA(5)" in lv.condition
