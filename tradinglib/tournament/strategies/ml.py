@@ -48,7 +48,9 @@ def _fit(train_close: pd.Series, l2: float) -> tuple[np.ndarray, np.ndarray, np.
     target = frame["_y"].to_numpy(dtype=float)
     mean = x.mean(axis=0)
     std = x.std(axis=0)
-    std[std == 0.0] = 1.0  # a constant column contributes nothing, not a NaN
+    std[std == 0.0] = 1.0  # bit-exact constant columns center to 0; NEAR-constant
+    # columns (FP-dust variance) pass through un-normalized — do not rely on this
+    # guard to neutralize features that are only mathematically constant
     xs = (x - mean) / std
     n_features = xs.shape[1]
     w = np.linalg.solve(xs.T @ xs + l2 * np.eye(n_features), xs.T @ target)

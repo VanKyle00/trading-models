@@ -368,14 +368,17 @@ def test_pead_requires_both_move_and_volume_gates() -> None:
 
 
 def test_ridge_momentum_long_rides_a_persistent_trend() -> None:
-    # ML output is fit-dependent and not hand-predictable bar-by-bar, so the
-    # assertion is statistical: in a strong steady uptrend the momentum model
-    # should be long most of the time, not on any specific bar.
-    bars = _trend_bars(n=700, rate=1.003)
+    # ML output is fit-dependent, so the assertion is statistical — but the
+    # fixture must have genuine feature variance: on a perfectly geometric
+    # trend every feature is constant and the fit is floating-point dust.
+    rng = np.random.default_rng(11)
+    rets = rng.normal(0.002, 0.01, 700)  # strong drift, real volatility
+    close = 100.0 * np.cumprod(1.0 + rets)
+    bars = _bars(close)
     train, test = bars.iloc[:500], bars.iloc[500:]
     sig = STRATEGIES["ridge_momentum"].make_signal(train, test, {"l2": 1.0}, "long")
     assert set(np.unique(sig)) <= {0.0, 1.0}
-    assert float(sig.iloc[-100:].mean()) > 0.5
+    assert float(sig.iloc[-100:].mean()) > 0.6
 
 
 def test_ridge_momentum_flat_market_stays_flat() -> None:
