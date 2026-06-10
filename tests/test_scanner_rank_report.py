@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from tradinglib.scanner.rank import rank_candidates
-from tradinglib.scanner.report import write_report
+from tradinglib.scanner.report import load_latest_report, write_report
 
 
 def _candidate(ticker: str, **overrides: object) -> dict:
@@ -118,3 +118,24 @@ def test_write_report_creates_json_and_md(tmp_path: Path) -> None:
     assert "503" in md  # funnel counts surface in the header
     assert "base_breakout" in md
     assert "BAD" in md  # errors are reported, not swallowed
+
+
+def test_load_latest_report_returns_most_recent_prior(tmp_path: Path) -> None:
+    for day, marker in (("2026-06-07", "old"), ("2026-06-08", "newer")):
+        d = tmp_path / day
+        d.mkdir()
+        (d / "report.json").write_text(json.dumps({"asof": day, "marker": marker}))
+    (tmp_path / "2026-06-09").mkdir()  # today's dir exists but has no report yet
+
+    out = load_latest_report(tmp_path, before="2026-06-09")
+
+    assert out is not None and out["marker"] == "newer"
+
+
+def test_load_latest_report_excludes_today_and_handles_missing(tmp_path: Path) -> None:
+    d = tmp_path / "2026-06-09"
+    d.mkdir()
+    (d / "report.json").write_text(json.dumps({"asof": "2026-06-09"}))
+
+    assert load_latest_report(tmp_path, before="2026-06-09") is None  # strictly before
+    assert load_latest_report(tmp_path / "missing", before="2026-06-09") is None
