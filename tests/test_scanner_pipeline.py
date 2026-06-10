@@ -699,3 +699,22 @@ def test_fdr_skip_strategies_zeroes_out(patched_pipeline) -> None:
     assert result["fdr"] is None
     assert result["funnel"]["fdr_passed"] == 0
     assert result["funnel"]["watchlist"] == 0
+
+
+def test_fdr_wiring_unmocked(patched_pipeline) -> None:
+    # No apply_fdr patch: proves the real call-site signature and alpha pass-through.
+    #
+    # Family m=1 (fa_keep=1, short_keep=0 → only DRIFT enters as a long candidate;
+    # all 3 fixture tickers share identical fundamentals so rank(method="first")
+    # assigns DRIFT rank=1 first):
+    #   p = 1 - 0.95 = 0.05
+    #   BH rank 1: 0.05 <= (1/1)*0.10 = 0.10  → PASS
+    #   threshold = 0.05  (the p-value at the last passing rank)
+    config = ScanConfig(fa_keep=1, short_keep=0, skip_llm=True)
+    result = patched_pipeline.run_scan(config)
+
+    assert result["fdr"]["alpha"] == 0.10
+    assert result["fdr"]["family"] == 1
+    assert result["fdr"]["threshold"] == pytest.approx(0.05)
+    assert isinstance(result["fdr"]["threshold"], float)
+    assert result["funnel"]["fdr_passed"] == 1
