@@ -173,3 +173,210 @@ def test_malformed_ticket_becomes_error_record(base: Path) -> None:
     ledger = build_ledger(base, asof="2026-06-11", loader=_loader_with({"TST": _tst_bars()}))
     errors = [r for r in ledger["tickets"] if r["status"] == "error"]
     assert {"BRK", "MISS"} <= {r["ticker"] for r in errors}
+
+
+# ---------------------------------------------------------------------------
+# Tiered ledger tests (C3)
+# ---------------------------------------------------------------------------
+
+
+def _watch_row(ticker: str, entry: float = 100.0, with_levels: bool = True) -> dict:
+    row: dict = {
+        "ticker": ticker,
+        "stance": "long",
+        "strategy": "sma_cross",
+        "tier": "watch",
+        "tier_reason": "below DS threshold",
+        "deflated_sharpe": 0.75,
+    }
+    if with_levels:
+        row["levels"] = {
+            "entry": entry,
+            "entry_type": "market",
+            "stop": entry - 5.0,
+            "target": entry + 10.0,
+        }
+    else:
+        row["levels"] = None
+    return row
+
+
+def _report_with_watchlist(
+    asof: str,
+    long: list[dict],
+    short: list[dict],
+    watchlist_long: list[dict] | None = None,
+    watchlist_short: list[dict] | None = None,
+) -> dict:
+    return {
+        "asof": asof,
+        "funnel": {},
+        "candidates": [],
+        "errors": [],
+        "tickets": {"long": long, "short": short},
+        "watchlist": {
+            "long": watchlist_long or [],
+            "short": watchlist_short or [],
+        },
+    }
+
+
+def _base_with_watchlist(tmp_path: Path) -> Path:
+    root = tmp_path / "scans"
+    (root / "2026-06-08").mkdir(parents=True)
+    ticket = _ticket("TST")
+    ticket["tier"] = "ticket"
+    watch_with_levels = _watch_row("WLVL")
+    watch_no_levels = _watch_row("WNOL", with_levels=False)
+    (root / "2026-06-08" / "report.json").write_text(
+        json.dumps(
+            _report_with_watchlist(
+                "2026-06-08",
+                [ticket],
+                [],
+                watchlist_long=[watch_with_levels, watch_no_levels],
+            )
+        ),
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_issues_includes_watchlist_rows_with_levels(tmp_path: Path) -> None:
+    """_issues yields watch rows that have levels; skips those without."""
+    from tradinglib.scanner.ledger import _issues
+
+    base = _base_with_watchlist(tmp_path)
+    issues = _issues(base)
+    tickers = {t["ticker"] for _, t in issues}
+    assert "TST" in tickers
+    assert "WLVL" in tickers
+    assert "WNOL" not in tickers  # no levels => skipped
+
+
+def test_records_carry_tier_field(tmp_path: Path) -> None:
+    """Every ledger record has a 'tier' key; old reports default to 'ticket'."""
+    base = _base_with_watchlist(tmp_path)
+    loader = _loader_with({"TST": _tst_bars(), "WLVL": _tst_bars()})
+    ledger = build_ledger(base, asof="2026-06-11", loader=loader)
+    tiers = {r["ticker"]: r["tier"] for r in ledger["tickets"]}
+    assert tiers["TST"] == "ticket"
+    assert tiers["WLVL"] == "watch"
+
+
+def test_old_reports_default_tier_to_ticket(base: Path) -> None:
+    """Reports without tier key on ticket dicts default to 'ticket'."""
+    loader = _loader_with({"TST": _tst_bars()})
+    ledger = build_ledger(base, asof="2026-06-11", loader=loader)
+    for r in ledger["tickets"]:
+        assert r["tier"] == "ticket"
+
+
+def test_stats_has_by_tier(tmp_path: Path) -> None:
+    """stats block has 'by_tier' with 'ticket' and 'watch' sub-blocks."""
+    base = _base_with_watchlist(tmp_path)
+    loader = _loader_with({"TST": _tst_bars(), "WLVL": _tst_bars()})
+    ledger = build_ledger(base, asof="2026-06-11", loader=loader)
+    by_tier = ledger["stats"]["by_tier"]
+    assert "ticket" in by_tier
+    assert "watch" in by_tier
+    assert by_tier["ticket"]["issued"] == 1
+    assert by_tier["watch"]["issued"] == 1
+
+
+def test_stats_has_max_drawdown_r(tmp_path: Path) -> None:
+    """stats block has 'max_drawdown_r'; None when no closed trades."""
+    base = _base_with_watchlist(tmp_path)
+    loader = _loader_with({"TST": _tst_bars(), "WLVL": _tst_bars()})
+    ledger = build_ledger(base, asof="2026-06-11", loader=loader)
+    # The stats block must carry the key
+    assert "max_drawdown_r" in ledger["stats"]
+    # by_tier sub-blocks too
+    assert "max_drawdown_r" in ledger["stats"]["by_tier"]["ticket"]
+    assert "max_drawdown_r" in ledger["stats"]["by_tier"]["watch"]
+
+
+def test_max_drawdown_r_golden() -> None:
+    """Golden path: rs [+2, -1, -1, +1] in exit order → max DD == 2.0."""
+    from tradinglib.scanner.ledger import _max_drawdown_r
+
+    records = [
+        {
+            "status": "target",
+            "r": 2.0,
+            "exit_date": "2026-06-01",
+            "ticker": "A",
+            "date": "2026-05-28",
+        },
+        {
+            "status": "stopped",
+            "r": -1.0,
+            "exit_date": "2026-06-02",
+            "ticker": "B",
+            "date": "2026-05-28",
+        },
+        {
+            "status": "stopped",
+            "r": -1.0,
+            "exit_date": "2026-06-03",
+            "ticker": "C",
+            "date": "2026-05-28",
+        },
+        {
+            "status": "target",
+            "r": 1.0,
+            "exit_date": "2026-06-04",
+            "ticker": "D",
+            "date": "2026-05-28",
+        },
+    ]
+    assert _max_drawdown_r(records) == pytest.approx(2.0)
+
+
+def test_max_drawdown_r_none_when_no_closed() -> None:
+    """Returns None when there are no closed trades."""
+    from tradinglib.scanner.ledger import _max_drawdown_r
+
+    records = [
+        {"status": "open", "r": 0.5, "exit_date": None, "ticker": "A", "date": "2026-06-01"},
+        {"status": "waiting", "r": None, "exit_date": None, "ticker": "B", "date": "2026-06-01"},
+    ]
+    assert _max_drawdown_r(records) is None
+
+
+def test_watch_rows_simulate_like_tickets(tmp_path: Path) -> None:
+    """Watch rows with levels are scored by simulate_ticket and appear in records."""
+    base = _base_with_watchlist(tmp_path)
+    loader = _loader_with({"TST": _tst_bars(), "WLVL": _tst_bars()})
+    ledger = build_ledger(base, asof="2026-06-11", loader=loader)
+    watch_records = [r for r in ledger["tickets"] if r["tier"] == "watch"]
+    assert len(watch_records) == 1
+    assert watch_records[0]["ticker"] == "WLVL"
+    assert watch_records[0]["status"] in (
+        "target",
+        "stopped",
+        "open",
+        "waiting",
+        "expired",
+        "error",
+    )
+
+
+def test_combined_stats_unchanged_shape(tmp_path: Path) -> None:
+    """The top-level stats block retains existing keys (back-compat)."""
+    base = _base_with_watchlist(tmp_path)
+    loader = _loader_with({"TST": _tst_bars(), "WLVL": _tst_bars()})
+    ledger = build_ledger(base, asof="2026-06-11", loader=loader)
+    required_keys = {
+        "issued",
+        "waiting",
+        "expired",
+        "open",
+        "stopped",
+        "target",
+        "errors",
+        "hit_rate",
+        "total_r",
+        "avg_r",
+    }
+    assert required_keys <= set(ledger["stats"])
