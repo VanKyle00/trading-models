@@ -1,4 +1,4 @@
-"""CLI for the S&P 500 swing-setup scanner.
+"""CLI for the swing-setup scanner.
 
 Examples:
     uv run python scripts/swing_scan.py --limit 10 --skip-llm   # smoke run
@@ -21,7 +21,7 @@ from tradinglib.scanner.report import write_report
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Scan the S&P 500 for swing setups.")
+    parser = argparse.ArgumentParser(description="Scan the constituent universe for swing setups.")
     parser.add_argument("--limit", type=int, default=None, help="truncate the universe (smoke)")
     parser.add_argument("--fa-keep", type=int, default=40, help="shortlist size after the FA gate")
     parser.add_argument("--top", type=int, default=15, help="max names in the ranked watchlist")
@@ -31,6 +31,18 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--skip-edgar", action="store_true", help="skip the EDGAR quarterly-trend gate pass"
     )
     parser.add_argument("--out-dir", type=Path, default=None, help="report directory")
+    parser.add_argument(
+        "--universe",
+        choices=("russell1000", "sp500"),
+        default="russell1000",
+        help="constituent universe to scan",
+    )
+    parser.add_argument(
+        "--short-keep",
+        type=int,
+        default=40,
+        help="short-candidate slate size (bottom of the FA ranking; 0 disables)",
+    )
     return parser.parse_args(argv)
 
 
@@ -38,11 +50,13 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     config = ScanConfig(
         fa_keep=args.fa_keep,
+        short_keep=args.short_keep,
         top=args.top,
         limit=args.limit,
         refresh=args.refresh,
         skip_llm=args.skip_llm,
         edgar_enrich=not args.skip_edgar,
+        universe=args.universe,
     )
 
     provider = None
@@ -71,6 +85,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{i:>3}. {c['ticker']:<6} {c['final_score']:.2f}  {setups}{flag}")
     if result["errors"]:
         print(f"{len(result['errors'])} ticker(s) errored — see the report for details")
+    print(
+        f"FA candidates: {len(result['fa_candidates']['long'])} long, "
+        f"{len(result['fa_candidates']['short'])} short"
+    )
     print(f"report: {json_path}")
     print(f"        {md_path}")
     return 0

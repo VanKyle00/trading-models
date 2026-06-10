@@ -50,6 +50,7 @@ def _canned_result() -> dict:
             }
         ],
         "errors": [],
+        "fa_candidates": {"long": ["AAPL"], "short": []},
     }
 
 
