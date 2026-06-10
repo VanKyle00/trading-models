@@ -26,6 +26,7 @@ _BARS_LOOKBACK_DAYS = 270  # ~9 calendar months of dailies for ATR(14) + realize
 def propose_levels(ticker: str, stance: str) -> dict:
     """Default levels for a hypothesis: entry = last close, stop = 2x ATR(14),
     target = 2R — the same conventions tournament rules without native exits use."""
+    ticker = ticker.upper()
     start = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=_BARS_LOOKBACK_DAYS)).strftime(
         "%Y-%m-%d"
     )
@@ -37,7 +38,7 @@ def propose_levels(ticker: str, stance: str) -> dict:
     target = float(two_r_target(entry, stop))
     atr14 = float(atr(bars["high"], bars["low"], bars["close"], _ATR_WINDOW).iloc[-1])
     return {
-        "ticker": ticker.upper(),
+        "ticker": ticker,
         "stance": stance,
         "levels": {
             "entry": round(entry, 2),
@@ -68,37 +69,37 @@ def hypothesis_ticket(
     """Live-data ticket for a user hypothesis. Raises on bar/chain failures
     (the dispatcher relays them); an earnings-fetch failure only loses the
     earnings demotion, mirroring the scan pipeline's isolation."""
-    start = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=_BARS_LOOKBACK_DAYS)).strftime(
-        "%Y-%m-%d"
-    )
+    ticker = ticker.upper()
+    now = pd.Timestamp.now(tz="UTC")
+    start = (now - pd.Timedelta(days=_BARS_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
     bars = load_daily(ticker, start=start, refresh=True)
     if len(bars) == 0:
         raise ValueError(f"no daily bars for {ticker!r} — is the ticker valid?")
     chain = fetch_chain(ticker)
 
-    last_bar = pd.Timestamp(bars.index[-1])
-    asof = last_bar.tz_localize("UTC") if last_bar.tzinfo is None else last_bar.tz_convert("UTC")
     next_earnings = None
+    earnings_failed = False
     try:
         earnings = get_earnings_dates([ticker], refresh=True)
         dts = pd.DatetimeIndex(earnings["earnings_datetime"])
         if dts.tz is None:
             dts = dts.tz_localize("UTC")
-        future = dts[dts > asof]
+        future = dts[dts > now]
         if len(future):
             next_earnings = future.min()
     except Exception:  # non-fatal: the ticket just loses the earnings demotion
         next_earnings = None
+        earnings_failed = True
     earnings_warning = bool(
-        next_earnings is not None and next_earnings <= asof + pd.Timedelta(days=_EARNINGS_WARN_DAYS)
+        next_earnings is not None and next_earnings <= now + pd.Timedelta(days=_EARNINGS_WARN_DAYS)
     )
 
     full_levels = {
         **levels,
-        "condition": hypothesis or f"user hypothesis: {stance} {ticker.upper()}",
+        "condition": hypothesis or f"user hypothesis: {stance} {ticker}",
     }
     ticket = build_hypothesis_ticket(
-        ticker=ticker.upper(),
+        ticker=ticker,
         stance=stance,
         levels=full_levels,
         bars=bars,
@@ -109,6 +110,8 @@ def hypothesis_ticket(
         account_size=account_size,
         risk_per_trade_pct=risk_per_trade_pct,
     )
+    if earnings_failed:
+        ticket["warnings"].append("earnings lookup failed; earnings risk unchecked")
     for s in ticket["structures"]:
         s["calculator_url"] = optionstrat_url(ticket["ticker"], s)
     return ticket

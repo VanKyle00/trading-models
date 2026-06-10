@@ -158,7 +158,7 @@ def test_hypothesis_ticket_earnings_inside_warn_window_flags(make_chain, monkeyp
     # here: the fixture chain's expirations fall before the earnings date, so only
     # the no-expiry stock plan spans it — kind-order tests live in Task 1's file.
     bars = _bars()
-    soon = pd.Timestamp(bars.index[-1], tz="UTC") + pd.Timedelta(days=7)
+    soon = pd.Timestamp.now(tz="UTC") + pd.Timedelta(days=7)
 
     def _earnings(*a, **k) -> pd.DataFrame:
         return pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([soon])})
@@ -196,6 +196,7 @@ def test_hypothesis_ticket_earnings_failure_is_nonfatal(make_chain, monkeypatch)
     )
 
     assert ticket["next_earnings"] is None  # lost the demotion signal, kept the ticket
+    assert any("earnings lookup failed" in w for w in ticket["warnings"])
 
 
 def test_hypothesis_ticket_chain_failure_propagates(monkeypatch) -> None:
