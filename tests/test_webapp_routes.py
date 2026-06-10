@@ -191,3 +191,10 @@ def test_index_console_extraction_preserves_markup():
     assert 'id="chat-input"' in html and 'id="chat-clear"' in html
     assert "Run a backtest, then ask about it" in html  # default empty-state text
     assert html.count('id="transcript"') == 1
+
+
+def test_console_ships_ticket_card_renderer():
+    client = TestClient(create_app())
+    html = client.get("/").text
+    assert "renderTicketCard" in html
+    assert "build_options_ticket" in html  # the tool_result hook
