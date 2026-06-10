@@ -27,6 +27,7 @@ from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.fa_gate import apply_edgar_trends, score_fundamentals
 from tradinglib.scanner.rank import rank_candidates
 from tradinglib.scanner.setups import detect_all
+from tradinglib.tournament.run import run_tournament
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,23 @@ def _gate_rows(scored: pd.DataFrame, gate_col: str, rank_col: str) -> list[dict]
     ]
 
 
-def run_scan(config: ScanConfig, provider: LLMProvider | None = None) -> dict:
+def _previous_winners(previous_report: dict | None) -> dict[tuple[str, str], str | None]:
+    """(ticker, stance) -> last night's winner key (None = had no survivor)."""
+    if not previous_report:
+        return {}
+    out: dict[tuple[str, str], str | None] = {}
+    for stance, entries in (previous_report.get("tournament") or {}).items():
+        for entry in entries:
+            winner = entry.get("winner")
+            out[(entry["ticker"], stance)] = winner["strategy"] if winner else None
+    return out
+
+
+def run_scan(
+    config: ScanConfig,
+    provider: LLMProvider | None = None,
+    previous_report: dict | None = None,
+) -> dict:
     """Run the full funnel and return the report-ready result dict."""
     asof = _now()
     start = (asof - pd.Timedelta(days=config.lookback_days)).strftime("%Y-%m-%d")
@@ -173,8 +190,50 @@ def run_scan(config: ScanConfig, provider: LLMProvider | None = None) -> dict:
         except Exception as exc:
             errors.append({"ticker": ticker, "stage": "bars", "error": str(exc)})
 
+    bars_failed: set[str] = {e["ticker"] for e in errors if e["stage"] == "bars"}
+
     if provider is not None and not config.skip_llm and candidates:
         brief_candidates(provider, candidates, ciks=ciks, errors=errors, refresh=config.refresh)
+
+    fa_candidates = {
+        "long": _gate_rows(scored, "passed_gate", "fa_rank"),
+        "short": _gate_rows(scored, "passed_short_gate", "short_rank"),
+    }
+
+    tournament: dict[str, list[dict]] = {"long": [], "short": []}
+    if not config.skip_strategies:
+        prev_winners = _previous_winners(previous_report)
+        t_start = (asof - pd.Timedelta(days=config.tournament_lookback_days)).strftime("%Y-%m-%d")
+        for stance in ("long", "short"):
+            for cand in fa_candidates[stance]:
+                ticker = cand["ticker"]
+                if ticker in bars_failed:
+                    continue
+                try:
+                    t_bars = load_daily(ticker, start=t_start)
+                    tr = run_tournament(t_bars, stance)
+                except Exception as exc:
+                    errors.append({"ticker": ticker, "stage": "tournament", "error": str(exc)})
+                    continue
+                winner_key = tr.winner.key if tr.winner else None
+                winner = None
+                if tr.winner is not None and tr.winner_levels is not None:
+                    winner = {**tr.winner.as_dict(), "levels": tr.winner_levels.as_dict()}
+                tournament[stance].append(
+                    {
+                        "ticker": ticker,
+                        "stance": stance,
+                        "winner": winner,
+                        "winner_changed": (
+                            None
+                            if (ticker, stance) not in prev_winners
+                            else prev_winners[(ticker, stance)] != winner_key
+                        ),
+                        "survivors": [v.key for v in tr.verdicts if v.survived],
+                        "n_trials": tr.n_trials,
+                        "verdicts": [v.as_dict() for v in tr.verdicts],
+                    }
+                )
 
     return {
         "asof": asof.strftime("%Y-%m-%d"),
@@ -188,17 +247,24 @@ def run_scan(config: ScanConfig, provider: LLMProvider | None = None) -> dict:
             "lookback_days": config.lookback_days,
             "earnings_warn_days": config.earnings_warn_days,
             "universe": config.universe,
+            "skip_strategies": config.skip_strategies,
         },
         "funnel": {
             "universe": len(universe),
             "fa_shortlist": len(shortlist),
             "fa_shortlist_short": int(scored["passed_short_gate"].sum()),
             "with_setups": len(candidates),
+            "tournament_candidates": (
+                0
+                if config.skip_strategies
+                else len(fa_candidates["long"]) + len(fa_candidates["short"])
+            ),
+            "tournament_survivors": sum(
+                1 for entries in tournament.values() for e in entries if e["survivors"]
+            ),
         },
-        "fa_candidates": {
-            "long": _gate_rows(scored, "passed_gate", "fa_rank"),
-            "short": _gate_rows(scored, "passed_short_gate", "short_rank"),
-        },
+        "fa_candidates": fa_candidates,
+        "tournament": tournament,
         "candidates": rank_candidates(candidates, top=config.top),
         "errors": errors,
     }

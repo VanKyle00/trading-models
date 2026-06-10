@@ -21,6 +21,31 @@ def _universe() -> pd.DataFrame:
     )
 
 
+def _fake_tournament_result(stance: str):
+    from tradinglib.tournament.levels import Levels
+    from tradinglib.tournament.run import StrategyVerdict, TournamentResult
+
+    verdict = StrategyVerdict(
+        key="sma_cross",
+        survived=True,
+        reasons=[],
+        params={"fast": 10, "slow": 50},
+        metrics={"deflated_sharpe": 0.95, "sharpe": 1.2},
+        n_trades=20,
+        param_stability={"fast": 0.0, "slow": 0.0},
+        n_windows=6,
+    )
+    return TournamentResult(
+        stance=stance,
+        verdicts=[verdict],
+        winner=verdict,
+        winner_levels=Levels(
+            entry=100.0, entry_type="market", stop=96.0, target=108.0, condition="test"
+        ),
+        n_trials=18,
+    )
+
+
 def _fundamentals(tickers: list[str]) -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -127,6 +152,19 @@ def patched_pipeline(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(pipeline, "load_daily", fake_load_daily)
     monkeypatch.setattr(pipeline, "get_earnings_dates", fake_earnings)
     monkeypatch.setattr(pipeline, "get_quarterly_trends", fake_trends)
+
+    tournament_calls: list[tuple[str, str]] = []
+
+    def fake_tournament(bars, stance, registry=None, config=None):
+        tournament_calls.append((str(bars["symbol"].iloc[0]), stance))
+        return _fake_tournament_result(stance)
+
+    # raising=False: during this task's red phase the pipeline doesn't import
+    # run_tournament yet; a strict setattr would error in fixture setup and
+    # break the existing tests instead of letting the new ones fail cleanly.
+    monkeypatch.setattr(pipeline, "run_tournament", fake_tournament, raising=False)
+    pipeline._test_tournament_calls = tournament_calls
+
     pipeline._test_trend_calls = trend_calls  # for assertions
     monkeypatch.setattr(
         pipeline, "_now", lambda: pd.Timestamp(_pead_bars("x").index[-1]) + pd.Timedelta(days=1)
@@ -271,3 +309,82 @@ def test_run_scan_reports_stale_universe(patched_pipeline, monkeypatch) -> None:
     stale = [e for e in result["errors"] if e["stage"] == "universe"]
     assert len(stale) == 1
     assert "2026-06-01" in stale[0]["error"]
+
+
+def test_run_scan_runs_tournament_on_fa_candidates(patched_pipeline) -> None:
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    entries = result["tournament"]["long"] + result["tournament"]["short"]
+    t_errors = [e for e in result["errors"] if e["stage"] == "tournament"]
+    # one long + one short candidate; each either produced an entry or an error
+    assert len(entries) + len(t_errors) == 2
+    assert entries  # at most one fixture ticker (BROKEN) can fail bar loading
+    for entry in entries:
+        assert entry["winner"]["strategy"] == "sma_cross"
+        assert entry["winner"]["levels"]["entry"] == 100.0
+        assert entry["survivors"] == ["sma_cross"]
+        assert entry["winner_changed"] is None  # no previous report
+        assert entry["n_trials"] == 18
+        assert entry["verdicts"][0]["survived"] is True
+    assert result["funnel"]["tournament_candidates"] == 2
+    assert result["funnel"]["tournament_survivors"] == len(entries)
+    assert result["config"]["skip_strategies"] is False
+
+
+def test_run_scan_skip_strategies(patched_pipeline) -> None:
+    result = patched_pipeline.run_scan(
+        ScanConfig(fa_keep=1, short_keep=1, skip_llm=True, skip_strategies=True)
+    )
+
+    assert patched_pipeline._test_tournament_calls == []
+    assert result["tournament"] == {"long": [], "short": []}
+    assert result["funnel"]["tournament_candidates"] == 0
+    assert result["funnel"]["tournament_survivors"] == 0
+    assert result["config"]["skip_strategies"] is True
+
+
+def test_run_scan_winner_changed_against_previous_report(patched_pipeline) -> None:
+    config = ScanConfig(fa_keep=1, short_keep=1, skip_llm=True)
+    first = patched_pipeline.run_scan(config)
+
+    unchanged = patched_pipeline.run_scan(config, previous_report=first)
+    entries = unchanged["tournament"]["long"] + unchanged["tournament"]["short"]
+    assert entries and all(e["winner_changed"] is False for e in entries)
+
+    for stance in ("long", "short"):
+        for e in first["tournament"][stance]:
+            e["winner"] = None  # pretend last night had no survivor here
+    flipped = patched_pipeline.run_scan(config, previous_report=first)
+    entries = flipped["tournament"]["long"] + flipped["tournament"]["short"]
+    assert entries and all(e["winner_changed"] is True for e in entries)
+
+
+def test_run_scan_isolates_tournament_failures(patched_pipeline, monkeypatch) -> None:
+    def exploding(bars, stance, registry=None, config=None):
+        raise RuntimeError("walk-forward blew up")
+
+    monkeypatch.setattr(patched_pipeline, "run_tournament", exploding)
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    t_errors = [e for e in result["errors"] if e["stage"] == "tournament"]
+    assert len(t_errors) == 2  # both candidates failed, scan completed
+    assert result["tournament"] == {"long": [], "short": []}
+    assert result["funnel"]["tournament_candidates"] == 2
+    assert result["funnel"]["tournament_survivors"] == 0
+    assert result["fa_candidates"]["long"]  # earlier stages untouched
+
+
+def test_run_scan_tournament_loads_longer_history(patched_pipeline, monkeypatch) -> None:
+    starts: list[str] = []
+    original = patched_pipeline.load_daily
+
+    def recording(symbol, start=None, end=None, *, refresh=False):
+        starts.append(start)
+        return original(symbol, start=start, end=end, refresh=refresh)
+
+    monkeypatch.setattr(patched_pipeline, "load_daily", recording)
+    patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    asof = patched_pipeline._now()
+    expected = (asof - pd.Timedelta(days=1200)).strftime("%Y-%m-%d")
+    assert expected in starts  # tournament bars span ~3y+, not the 450d watchlist window

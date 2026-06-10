@@ -13,7 +13,10 @@ class ScanConfig:
     long shortlist size after the fundamental gate and ``short_keep`` the
     short-candidate slate (bottom of the FA ranking, 0 disables); ``top``
     caps the ranked watchlist in the report. ``universe`` selects the
-    constituent list (``"russell1000"`` or ``"sp500"``).
+    constituent list (``"russell1000"`` or ``"sp500"``). ``skip_strategies``
+    disables the per-ticker strategy tournament over the FA candidates;
+    ``tournament_lookback_days`` is the bar history it loads (~3y+ so the
+    378-bar anchored train leaves several OOS quarters).
     """
 
     fa_keep: int = 40
@@ -26,3 +29,5 @@ class ScanConfig:
     lookback_days: int = 450
     earnings_warn_days: int = 14
     universe: str = "russell1000"
+    skip_strategies: bool = False
+    tournament_lookback_days: int = 1200
