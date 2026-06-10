@@ -32,6 +32,7 @@ def _canned_result() -> dict:
             "with_setups": 1,
             "tournament_candidates": 2,
             "tournament_survivors": 1,
+            "tickets": 1,
         },
         "candidates": [
             {
@@ -75,6 +76,23 @@ def _canned_result() -> dict:
                         },
                     },
                     "winner_changed": False,
+                }
+            ],
+            "short": [],
+        },
+        "tickets": {
+            "long": [
+                {
+                    "ticker": "AAPL",
+                    "strategy": "sma_cross",
+                    "structures": [
+                        {
+                            "kind": "stock",
+                            "label": "buy 100 shares",
+                            "quantity": 4,
+                            "recommended": True,
+                        }
+                    ],
                 }
             ],
             "short": [],

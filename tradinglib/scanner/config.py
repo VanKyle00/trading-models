@@ -17,6 +17,8 @@ class ScanConfig:
     disables the per-ticker strategy tournament over the FA candidates;
     ``tournament_lookback_days`` is the bar history it loads (~3y+ so the
     378-bar anchored train leaves several OOS quarters).
+    ``account_size`` x ``risk_per_trade_pct`` is the per-ticket risk budget
+    the ticket playbook sizes against (the CSP is capital-sized).
     """
 
     fa_keep: int = 40
@@ -31,3 +33,5 @@ class ScanConfig:
     universe: str = "russell1000"
     skip_strategies: bool = False
     tournament_lookback_days: int = 1200
+    account_size: float = 100_000.0
+    risk_per_trade_pct: float = 0.01
