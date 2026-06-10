@@ -140,15 +140,20 @@ def test_rsi2_levels_market_entry_with_atr_stop() -> None:
     assert "RSI(2)" in lv.condition and "SMA(5)" in lv.condition
 
 
-def test_macd_long_in_uptrend_short_in_downtrend() -> None:
+def test_macd_long_in_uptrend_short_on_breakdown() -> None:
     params = {"fast": 12, "slow": 26, "signal": 9}
     up = _trend_bars()
     sig = STRATEGIES["macd"].make_signal(up.iloc[:300], up.iloc[300:], params, "long")
     assert set(np.unique(sig)) <= {0.0, 1.0}
     assert sig.iloc[-1] == 1.0
-    down = _trend_bars(rate=0.995)
-    short = STRATEGIES["macd"].make_signal(down.iloc[:300], down.iloc[300:], params, "short")
-    assert short.iloc[-1] == -1.0
+    # A constant-rate decay converges to MACD >= signal (the signal line lags a
+    # shrinking-magnitude negative), so the short rule needs WORSENING momentum:
+    # flat then breaking down keeps the MACD line under its own lagging EMA.
+    breakdown = _bars(np.concatenate([np.full(300, 100.0), 100.0 * 0.99 ** np.arange(1, 31)]))
+    train, test = breakdown.iloc[:300], breakdown.iloc[300:]
+    short = STRATEGIES["macd"].make_signal(train, test, params, "short")
+    assert set(np.unique(short)) <= {-1.0, 0.0}
+    assert (short == -1.0).all()  # MACD below its signal line on every decline bar
 
 
 def test_macd_levels_market_entry_with_atr_stop() -> None:

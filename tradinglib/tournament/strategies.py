@@ -225,12 +225,15 @@ register(
 
 def _macd_signal(train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str) -> pd.Series:
     close = _full_history(train, test)["close"]
-    fast_ema = close.ewm(span=params["fast"], adjust=False).mean()
-    slow_ema = close.ewm(span=params["slow"], adjust=False).mean()
+    macd_line = (
+        close.ewm(span=params["fast"], adjust=False).mean()
+        - close.ewm(span=params["slow"], adjust=False).mean()
+    )
+    signal_line = macd_line.ewm(span=params["signal"], adjust=False).mean()
     if direction(stance) > 0:
-        pos = (fast_ema > slow_ema).astype(float)
+        pos = (macd_line > signal_line).astype(float)
     else:
-        pos = -(fast_ema < slow_ema).astype(float)
+        pos = -(macd_line < signal_line).astype(float)
     return pos.loc[test.index]
 
 
