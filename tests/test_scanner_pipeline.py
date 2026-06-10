@@ -489,3 +489,72 @@ def test_run_scan_skip_strategies_means_no_tickets(patched_pipeline) -> None:
 
     assert result["tickets"] == {"long": [], "short": []}
     assert result["funnel"]["tickets"] == 0
+
+
+def test_run_scan_tournament_bars_carry_earnings_column(patched_pipeline, monkeypatch) -> None:
+    """Bars passed into run_tournament must have a bool 'earnings' column."""
+    captured: list[pd.DataFrame] = []
+
+    def capturing(bars, stance, registry=None, config=None):
+        captured.append(bars.copy())
+        return _fake_tournament_result(stance)
+
+    monkeypatch.setattr(patched_pipeline, "run_tournament", capturing)
+    patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    assert captured, "run_tournament was never called"
+    for bars in captured:
+        assert "earnings" in bars.columns, "earnings column missing"
+        assert bars["earnings"].dtype == bool, f"dtype was {bars['earnings'].dtype}, expected bool"
+
+    # The fixture stubs drift_earnings = index[110] for DRIFT; that position
+    # must be True and the out-of-range next_earnings must NOT be flagged.
+    drift_bars = next(b for b in captured if b["symbol"].iloc[0] == "DRIFT")
+    assert bool(drift_bars["earnings"].iloc[110]) is True, "reaction bar not flagged"
+    # next_earnings is after the last bar so no extra bar should be True beyond index 110
+    flagged_positions = drift_bars["earnings"].to_numpy().nonzero()[0]
+    assert list(flagged_positions) == [110], f"unexpected flagged positions: {flagged_positions}"
+
+
+def test_run_scan_tournament_earnings_fetch_failure_attaches_all_false_column(
+    patched_pipeline, monkeypatch
+) -> None:
+    """If get_earnings_dates raises in the tournament stage, the bars still get an
+    all-False earnings column and an error entry is appended with stage='tournament'
+    and 'earnings' in the message."""
+    captured: list[pd.DataFrame] = []
+
+    def capturing(bars, stance, registry=None, config=None):
+        captured.append(bars.copy())
+        return _fake_tournament_result(stance)
+
+    monkeypatch.setattr(patched_pipeline, "run_tournament", capturing)
+
+    call_count = {"n": 0}
+    original_earnings = patched_pipeline.get_earnings_dates
+
+    def earnings_that_fails_on_second_call(tickers, start=None, end=None, *, refresh=False):
+        call_count["n"] += 1
+        # First call is from the setups stage (bars loop); second+ are from tournament.
+        # We want to fail the tournament-stage call(s) only.
+        if call_count["n"] > 1:
+            raise RuntimeError("earnings API unavailable")
+        return original_earnings(tickers, start=start, end=end, refresh=refresh)
+
+    monkeypatch.setattr(patched_pipeline, "get_earnings_dates", earnings_that_fails_on_second_call)
+
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    # Scan must not skip the ticker — run_tournament should still have been called.
+    assert captured, "tournament was skipped entirely — ticker should not be dropped"
+
+    for bars in captured:
+        assert "earnings" in bars.columns, "earnings column missing on failure path"
+        assert bars["earnings"].dtype == bool, f"dtype was {bars['earnings'].dtype}"
+        assert not bars["earnings"].any(), "all-False expected when earnings fetch raises"
+
+    t_errors = [e for e in result["errors"] if e["stage"] == "tournament"]
+    assert t_errors, "no tournament-stage error recorded"
+    assert any("earnings" in e["error"] for e in t_errors), (
+        f"'earnings' not in error message: {t_errors}"
+    )
