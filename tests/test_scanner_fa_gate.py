@@ -256,3 +256,82 @@ def test_short_gate_off_by_default() -> None:
     assert "passed_short_gate" in out.columns
     assert out["passed_short_gate"].sum() == 0
     assert (out["stance"].dropna() == "long").all()
+
+
+def test_edgar_trends_decelerating_revenue_improves_short_rank() -> None:
+    # S1 and S2 are both short candidates; S1's trends are improving (bad
+    # short), S2's are deteriorating (good short). EDGAR must keep S2.
+    uni = _universe(["LONGY", "S1", "S2"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "LONGY": {"revenue_growth": 0.30},
+            "S1": {"revenue_growth": 0.02},
+            "S2": {"revenue_growth": 0.03},
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
+    trends = _trends(
+        {
+            "S1": {"revenue_yoy": 0.30, "revenue_accel": 0.10, "eps_change_yoy": 0.5},
+            "S2": {"revenue_yoy": -0.20, "revenue_accel": -0.10, "eps_change_yoy": -0.4},
+        }
+    )
+
+    out = apply_edgar_trends(scored, trends, keep=1, short_keep=1).set_index("ticker")
+
+    assert bool(out.loc["S2", "passed_short_gate"])
+    assert not bool(out.loc["S1", "passed_short_gate"])
+    assert out.loc["S2", "stance"] == "short"
+
+
+def test_edgar_trends_missing_short_data_keeps_unblended_score() -> None:
+    uni = _universe(["LONGY", "S1", "S2"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "LONGY": {"revenue_growth": 0.30},
+            "S1": {"revenue_growth": 0.02},
+            "S2": {"revenue_growth": 0.03},
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
+    before = scored.set_index("ticker").loc["S1", "fa_score"]
+
+    out = apply_edgar_trends(scored, _trends({}), keep=1, short_keep=2).set_index("ticker")
+
+    assert out.loc["S1", "fa_score"] == before  # no EDGAR data -> unblended
+    assert bool(out.loc["S1", "passed_short_gate"])  # still ranked, not dropped
+
+
+def test_edgar_trends_cannot_resurrect_failed_short_candidates() -> None:
+    uni = _universe(["LONGY", "S1", "INELIGIBLE"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "LONGY": {"revenue_growth": 0.30},
+            "S1": {"revenue_growth": 0.02},
+            "INELIGIBLE": {"total_revenue": 0.0},  # hard-filtered in pass 1
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
+
+    out = apply_edgar_trends(
+        scored,
+        _trends({"INELIGIBLE": {"revenue_yoy": -9.9, "revenue_accel": -9.9}}),
+        keep=1,
+        short_keep=2,
+    ).set_index("ticker")
+
+    assert not bool(out.loc["INELIGIBLE", "passed_short_gate"])
+
+
+def test_two_sided_gate_disjoint_under_overflow() -> None:
+    # regression for the ~passed_gate guard: 3 eligible, keep=2, short_keep=2
+    # must yield 2 longs + 1 short with zero overlap (longs take precedence
+    # on ties because method="first" ranks do not mirror)
+    uni = _universe(["A", "B", "C"], ["Tech"] * 3)
+    fnd = _fundamentals({"A": {}, "B": {}, "C": {}})
+
+    out = score_fundamentals(uni, fnd, keep=2, short_keep=2)
+
+    assert out["passed_gate"].sum() == 2
+    assert out["passed_short_gate"].sum() == 1
+    assert not (out["passed_gate"] & out["passed_short_gate"]).any()

@@ -59,8 +59,10 @@ def score_fundamentals(
 
     df["fa_rank"] = df["fa_score"].where(eligible).rank(ascending=False, method="first")
     df["passed_gate"] = eligible & (df["fa_rank"] <= keep)
-    df["short_rank"] = df["fa_score"].where(eligible).rank(ascending=True, method="first")
-    df["passed_short_gate"] = eligible & (df["short_rank"] <= short_keep) & ~df["passed_gate"]
+    df["short_rank"] = (
+        df["fa_score"].where(eligible & ~df["passed_gate"]).rank(ascending=True, method="first")
+    )
+    df["passed_short_gate"] = eligible & ~df["passed_gate"] & (df["short_rank"] <= short_keep)
     df["stance"] = pd.Series(pd.NA, index=df.index, dtype="string")
     df.loc[df["passed_gate"], "stance"] = "long"
     df.loc[df["passed_short_gate"], "stance"] = "short"
@@ -72,28 +74,48 @@ _EDGAR_METRICS = ("revenue_yoy", "revenue_accel", "eps_change_yoy")
 _EDGAR_WEIGHT = 0.3
 
 
-def apply_edgar_trends(scored: pd.DataFrame, trends: pd.DataFrame, *, keep: int) -> pd.DataFrame:
-    """Second gate pass: blend EDGAR quarterly trends and re-rank the survivors.
+def _cohort_edgar_score(df: pd.DataFrame, mask: pd.Series, suffix: str) -> pd.Series:
+    """Mean EDGAR-trend percentile within one cohort (higher = better trends)."""
+    cols = []
+    for metric in _EDGAR_METRICS:
+        col = f"pct_{metric}{suffix}"
+        df[col] = df[metric].where(mask).rank(pct=True)
+        cols.append(col)
+    return df[cols].mean(axis=1)
 
-    ``trends`` has one row per ticker (``revenue_yoy``, ``revenue_accel``,
-    ``eps_change_yoy``); metrics are percentiled among pass-1 survivors and
-    blended as ``0.7*fa_score + 0.3*edgar_score``. Tickers without EDGAR data
-    keep their unblended score; tickers that failed pass 1 stay failed.
+
+def apply_edgar_trends(
+    scored: pd.DataFrame, trends: pd.DataFrame, *, keep: int, short_keep: int = 0
+) -> pd.DataFrame:
+    """Second gate pass: blend EDGAR quarterly trends and re-rank both cohorts.
+
+    Trend percentiles are computed within each cohort and blended as
+    ``0.7*fa_score + 0.3*edgar_score``. Longs re-rank descending (improving
+    trends help); shorts re-rank ascending, so *decelerating* trends lower
+    the blended score and improve the short rank — the sign flip falls out
+    of the ranking direction, no negation needed. Tickers without EDGAR data
+    keep their unblended score; pass-1 failures stay failed.
     """
     df = scored.merge(trends, on="ticker", how="left")
     passed = df["passed_gate"]
+    passed_short = df["passed_short_gate"]
 
-    pct_cols = []
-    for metric in _EDGAR_METRICS:
-        col = f"pct_{metric}"
-        df[col] = df[metric].where(passed).rank(pct=True)
-        pct_cols.append(col)
-    df["edgar_score"] = df[pct_cols].mean(axis=1)
+    df["edgar_score"] = _cohort_edgar_score(df, passed, "")
+    df["edgar_score_short"] = _cohort_edgar_score(df, passed_short, "_short")
 
-    blended = (1.0 - _EDGAR_WEIGHT) * df["fa_score"] + _EDGAR_WEIGHT * df["edgar_score"]
+    blended_long = (1.0 - _EDGAR_WEIGHT) * df["fa_score"] + _EDGAR_WEIGHT * df["edgar_score"]
+    blended_short = (1.0 - _EDGAR_WEIGHT) * df["fa_score"] + _EDGAR_WEIGHT * df["edgar_score_short"]
     df["fa_score_yf"] = df["fa_score"]
-    df["fa_score"] = blended.where(passed & df["edgar_score"].notna(), df["fa_score"])
+    score = df["fa_score"].copy()
+    score = blended_long.where(passed & df["edgar_score"].notna(), score)
+    score = blended_short.where(passed_short & df["edgar_score_short"].notna(), score)
+    df["fa_score"] = score
 
     df["fa_rank"] = df["fa_score"].where(passed).rank(ascending=False, method="first")
     df["passed_gate"] = passed & (df["fa_rank"] <= keep)
+    df["short_rank"] = df["fa_score"].where(passed_short).rank(ascending=True, method="first")
+    df["passed_short_gate"] = passed_short & (df["short_rank"] <= short_keep)
+    df["stance"] = pd.Series(pd.NA, index=df.index, dtype="string")
+    df.loc[df["passed_gate"], "stance"] = "long"
+    df.loc[df["passed_short_gate"], "stance"] = "short"
     return df.sort_values("fa_rank").reset_index(drop=True)
