@@ -176,3 +176,16 @@ def test_open_prices_and_execution_prices_both_raises(rising_prices: pd.Series) 
     opens = rising_prices.copy()
     with pytest.raises(ValueError, match="not both"):
         run_backtest(rising_prices, signals, open_prices=opens, execution_prices=opens)
+
+
+def test_equity_starts_at_capital_and_first_loss_is_drawdown() -> None:
+    # Signal is long from bar 0, but the one-bar lag means position starts flat:
+    # equity[0] == initial capital exactly. The bar-1 entry (open 100 -> close 95)
+    # loses 5% plus 1.5bp turnover cost, all of it counted as drawdown.
+    idx = pd.date_range("2024-01-01", periods=4, freq="B")
+    closes = pd.Series([100.0, 95.0, 95.0, 95.0], index=idx)
+    opens = pd.Series([100.0, 100.0, 95.0, 95.0], index=idx)
+    signals = pd.Series([1.0, 1.0, 1.0, 1.0], index=idx)
+    res = run_backtest(closes, signals, open_prices=opens)
+    assert res.equity_curve.iloc[0] == 100_000.0
+    assert res.metrics["max_drawdown"] == pytest.approx(-0.05015, rel=1e-9)
