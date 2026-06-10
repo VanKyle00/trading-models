@@ -111,8 +111,9 @@ the conventions and known approximations behind its numbers.
   variance of all trial Sharpes (Bailey & López de Prado 2014); under the null
   hypothesis the two coincide, and the estimator variance is available without
   persisting every trial's stitched return series.
-- **Survivorship bias.** Tournaments test *today's* index constituents on ~4.8
-  years of history; names that fell out of the index are absent, which flatters
+- **Survivorship bias.** Tournaments test *today's* index constituents on ~3.3
+  years of history (a 1,200 *calendar*-day lookback); names that fell out of
+  the index are absent, which flatters
   trend/breakout results. Until a point-in-time universe exists, treat absolute
   metric levels with suspicion; comparisons between strategies on the same
   ticker are unaffected.
