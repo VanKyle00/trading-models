@@ -50,7 +50,12 @@ def _canned_result() -> dict:
             }
         ],
         "errors": [],
-        "fa_candidates": {"long": ["AAPL"], "short": []},
+        "fa_candidates": {
+            "long": [
+                {"ticker": "AAPL", "name": "Apple", "sector": "Tech", "fa_score": 0.9, "rank": 1}
+            ],
+            "short": [],
+        },
     }
 
 
@@ -67,7 +72,21 @@ def test_cli_writes_report_and_passes_config(
     monkeypatch.setattr(swing_scan, "run_scan", fake_run_scan)
 
     exit_code = swing_scan.main(
-        ["--limit", "5", "--fa-keep", "10", "--top", "3", "--skip-llm", "--out-dir", str(tmp_path)]
+        [
+            "--limit",
+            "5",
+            "--fa-keep",
+            "10",
+            "--top",
+            "3",
+            "--skip-llm",
+            "--universe",
+            "sp500",
+            "--short-keep",
+            "5",
+            "--out-dir",
+            str(tmp_path),
+        ]
     )
 
     assert exit_code == 0
@@ -75,6 +94,8 @@ def test_cli_writes_report_and_passes_config(
     assert seen["config"].fa_keep == 10
     assert seen["config"].top == 3
     assert seen["config"].skip_llm is True
+    assert seen["config"].universe == "sp500"
+    assert seen["config"].short_keep == 5
     assert seen["provider"] is None
 
     out_dir = tmp_path / "2026-06-09"
