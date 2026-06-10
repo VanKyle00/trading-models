@@ -1,1 +1,1 @@
-"""Swing-setup scanner: S&P 500 funnel from FA gate to ranked watchlist."""
+"""Swing-setup scanner: constituent-universe funnel (Russell 1000 by default) from FA gate to ranked watchlist."""

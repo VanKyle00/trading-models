@@ -117,6 +117,9 @@ def patched_pipeline(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(pipeline, "get_sp500_constituents", lambda *, refresh=False: _universe())
     monkeypatch.setattr(
+        pipeline, "get_russell1000_constituents", lambda *, refresh=False: _universe()
+    )
+    monkeypatch.setattr(
         pipeline,
         "get_fundamental_snapshot",
         lambda tickers, *, refresh=False, max_workers=8: _fundamentals(tickers),
@@ -206,3 +209,65 @@ def test_run_scan_skips_briefs_with_skip_llm(
     patched_pipeline.run_scan(ScanConfig(fa_keep=3), provider=None)
 
     assert called["n"] == 0
+
+
+def test_run_scan_emits_fa_candidates(patched_pipeline) -> None:
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    longs = result["fa_candidates"]["long"]
+    shorts = result["fa_candidates"]["short"]
+    assert len(longs) == 1 and len(shorts) == 1
+    assert longs[0]["rank"] == 1 and shorts[0]["rank"] == 1
+    assert {"ticker", "name", "sector", "fa_score", "rank"} <= set(longs[0])
+    assert longs[0]["ticker"] != shorts[0]["ticker"]
+    assert result["funnel"]["fa_shortlist_short"] == 1
+    assert result["config"]["universe"] == "russell1000"
+    assert result["config"]["short_keep"] == 1
+
+
+def test_run_scan_selects_universe_loader(patched_pipeline, monkeypatch) -> None:
+    calls = {"sp500": 0, "russell1000": 0}
+
+    def fake_sp500(*, refresh=False):
+        calls["sp500"] += 1
+        return _universe()
+
+    def fake_r1000(*, refresh=False):
+        calls["russell1000"] += 1
+        return _universe()
+
+    monkeypatch.setattr(patched_pipeline, "get_sp500_constituents", fake_sp500)
+    monkeypatch.setattr(patched_pipeline, "get_russell1000_constituents", fake_r1000)
+
+    patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))  # default universe
+    patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True, universe="sp500"))
+
+    assert calls == {"sp500": 1, "russell1000": 1}
+
+
+def test_run_scan_skips_edgar_for_missing_cik(patched_pipeline, monkeypatch) -> None:
+    uni = _universe()
+    uni["cik"] = pd.array([1, pd.NA, 3], dtype="Int64")  # QUIET loses its CIK
+    monkeypatch.setattr(
+        patched_pipeline, "get_russell1000_constituents", lambda *, refresh=False: uni
+    )
+
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))
+
+    edgar_errors = [e for e in result["errors"] if e["stage"] == "edgar"]
+    assert any(e["ticker"] == "QUIET" and "CIK" in e["error"] for e in edgar_errors)
+    assert patched_pipeline._test_trend_calls["n"] == 2  # the other two still fetched
+
+
+def test_run_scan_reports_stale_universe(patched_pipeline, monkeypatch) -> None:
+    uni = _universe()
+    uni.attrs["snapshot"] = "2026-06-01"  # loader served an old snapshot
+    monkeypatch.setattr(
+        patched_pipeline, "get_russell1000_constituents", lambda *, refresh=False: uni
+    )
+
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))
+
+    stale = [e for e in result["errors"] if e["stage"] == "universe"]
+    assert len(stale) == 1
+    assert "2026-06-01" in stale[0]["error"]

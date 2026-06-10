@@ -177,7 +177,7 @@ def fastapi_app():
     # the scan sees the day's final bars. The report lands on the shared data
     # Volume, which the /scans page in fastapi_app reads.
     schedule=modal.Cron("0 22 * * 1-5"),
-    timeout=3600,  # ~500 .info fetches + EDGAR + ~15 LLM briefs fits comfortably
+    timeout=3600,  # ~1000 .info fetches (threaded+cached) + ~160 EDGAR companyfacts + ~15 LLM briefs; live smoke pending
 )
 def scheduled_swing_scan() -> None:
     from tradinglib.assistant.provider import ClaudeProvider

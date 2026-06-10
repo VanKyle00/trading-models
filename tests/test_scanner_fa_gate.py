@@ -199,3 +199,159 @@ def test_missing_metric_does_not_zero_the_score() -> None:
 
     assert not np.isnan(out.loc["A", "fa_score"])
     assert out.loc["A", "fa_score"] > 0
+
+
+def test_short_gate_keeps_worst_fundamentals() -> None:
+    tickers = [f"T{i}" for i in range(6)]
+    uni = _universe(tickers, ["Tech"] * 6)
+    fnd = _fundamentals({t: {"revenue_growth": 0.05 + i * 0.01} for i, t in enumerate(tickers)})
+
+    out = score_fundamentals(uni, fnd, keep=2, short_keep=2).set_index("ticker")
+
+    assert bool(out.loc["T0", "passed_short_gate"])  # worst growth
+    assert bool(out.loc["T1", "passed_short_gate"])
+    assert out["passed_short_gate"].sum() == 2
+    assert not (out["passed_gate"] & out["passed_short_gate"]).any()  # disjoint cohorts
+
+
+def test_stance_column_labels_both_cohorts() -> None:
+    tickers = [f"T{i}" for i in range(4)]
+    uni = _universe(tickers, ["Tech"] * 4)
+    fnd = _fundamentals({t: {"revenue_growth": 0.05 + i * 0.01} for i, t in enumerate(tickers)})
+
+    out = score_fundamentals(uni, fnd, keep=1, short_keep=1).set_index("ticker")
+
+    assert out.loc["T3", "stance"] == "long"
+    assert out.loc["T0", "stance"] == "short"
+    assert out["stance"].isna().sum() == 2
+
+
+def test_short_gate_excludes_sparse_coverage() -> None:
+    # bad data must not masquerade as bad fundamentals: a ticker failing the
+    # coverage filter is ineligible for the short side too
+    uni = _universe(["FULL", "SPARSE"], ["Tech", "Tech"])
+    fnd = _fundamentals(
+        {
+            "FULL": {},
+            "SPARSE": {
+                "revenue_growth": np.nan,
+                "earnings_growth": np.nan,
+                "operating_margin": np.nan,
+            },
+        }
+    )
+
+    out = score_fundamentals(uni, fnd, keep=1, short_keep=2).set_index("ticker")
+
+    assert not bool(out.loc["SPARSE", "passed_short_gate"])
+    assert out["passed_short_gate"].sum() == 0  # FULL is long, SPARSE ineligible
+
+
+def test_short_gate_off_by_default() -> None:
+    uni = _universe(["A", "B"], ["Tech", "Tech"])
+    fnd = _fundamentals({"A": {}, "B": {}})
+
+    out = score_fundamentals(uni, fnd, keep=1)
+
+    assert "passed_short_gate" in out.columns
+    assert out["passed_short_gate"].sum() == 0
+    assert (out["stance"].dropna() == "long").all()
+
+
+def test_edgar_trends_decelerating_revenue_improves_short_rank() -> None:
+    # S1 and S2 are both short candidates; S1's trends are improving (bad
+    # short), S2's are deteriorating (good short). EDGAR must keep S2.
+    uni = _universe(["LONGY", "S1", "S2"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "LONGY": {"revenue_growth": 0.30},
+            "S1": {"revenue_growth": 0.02},
+            "S2": {"revenue_growth": 0.03},
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
+    trends = _trends(
+        {
+            "S1": {"revenue_yoy": 0.30, "revenue_accel": 0.10, "eps_change_yoy": 0.5},
+            "S2": {"revenue_yoy": -0.20, "revenue_accel": -0.10, "eps_change_yoy": -0.4},
+        }
+    )
+
+    out = apply_edgar_trends(scored, trends, keep=1, short_keep=1).set_index("ticker")
+
+    assert bool(out.loc["S2", "passed_short_gate"])
+    assert not bool(out.loc["S1", "passed_short_gate"])
+    assert out.loc["S2", "stance"] == "short"
+
+
+def test_edgar_trends_missing_short_data_keeps_unblended_score() -> None:
+    uni = _universe(["LONGY", "S1", "S2"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "LONGY": {"revenue_growth": 0.30},
+            "S1": {"revenue_growth": 0.02},
+            "S2": {"revenue_growth": 0.03},
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
+    before = scored.set_index("ticker").loc["S1", "fa_score"]
+
+    out = apply_edgar_trends(scored, _trends({}), keep=1, short_keep=2).set_index("ticker")
+
+    assert out.loc["S1", "fa_score"] == before  # no EDGAR data -> unblended
+    assert bool(out.loc["S1", "passed_short_gate"])  # still ranked, not dropped
+
+
+def test_edgar_trends_cannot_resurrect_failed_short_candidates() -> None:
+    uni = _universe(["LONGY", "S1", "INELIGIBLE"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "LONGY": {"revenue_growth": 0.30},
+            "S1": {"revenue_growth": 0.02},
+            "INELIGIBLE": {"total_revenue": 0.0},  # hard-filtered in pass 1
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
+
+    out = apply_edgar_trends(
+        scored,
+        _trends({"INELIGIBLE": {"revenue_yoy": -9.9, "revenue_accel": -9.9}}),
+        keep=1,
+        short_keep=2,
+    ).set_index("ticker")
+
+    assert not bool(out.loc["INELIGIBLE", "passed_short_gate"])
+
+
+def test_two_sided_gate_disjoint_under_overflow() -> None:
+    # regression for the ~passed_gate guard: 3 eligible, keep=2, short_keep=2
+    # must yield 2 longs + 1 short with zero overlap (longs take precedence
+    # on ties because method="first" ranks do not mirror)
+    uni = _universe(["A", "B", "C"], ["Tech"] * 3)
+    fnd = _fundamentals({"A": {}, "B": {}, "C": {}})
+
+    out = score_fundamentals(uni, fnd, keep=2, short_keep=2)
+
+    assert out["passed_gate"].sum() == 2
+    assert out["passed_short_gate"].sum() == 1
+    assert not (out["passed_gate"] & out["passed_short_gate"]).any()
+
+
+def test_edgar_no_data_short_outranks_improving_short() -> None:
+    # an improving-trend short loses its slot to a no-data short: the blend
+    # raises the improving name's score and ascending rank prefers the lower
+    uni = _universe(["LONGY", "S1", "S2"], ["Tech"] * 3)
+    fnd = _fundamentals(
+        {
+            "LONGY": {"revenue_growth": 0.30},
+            "S1": {"revenue_growth": 0.02},
+            "S2": {"revenue_growth": 0.03},
+        }
+    )
+    scored = score_fundamentals(uni, fnd, keep=1, short_keep=2)
+    trends = _trends({"S2": {"revenue_yoy": 0.30, "revenue_accel": 0.10, "eps_change_yoy": 0.5}})
+
+    out = apply_edgar_trends(scored, trends, keep=1, short_keep=1).set_index("ticker")
+
+    assert bool(out.loc["S1", "passed_short_gate"])  # no-data short keeps the slot
+    assert not bool(out.loc["S2", "passed_short_gate"])
