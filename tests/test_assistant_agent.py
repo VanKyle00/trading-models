@@ -169,3 +169,21 @@ def test_history_with_context_folds_context_into_opening_only():
     msgs = provider.calls[0]
     assert msgs[0].text == "hello"  # history left verbatim
     assert "Backtest: SMA · SPY" in msgs[2].text and "explain" in msgs[2].text
+
+
+def test_tool_result_events_carry_output():
+    provider = StubProvider(
+        [
+            AssistantTurn(
+                text="",
+                tool_calls=(ToolCall("t1", "list_models", {}),),
+                stop_reason="tool_use",
+                usage=Usage(5, 5),
+            ),
+            _final("done"),
+        ]
+    )
+    events = _events(run_chat("list them", provider, Budget()))
+    tr = next(e for e in events if e["type"] == "tool_result")
+    assert "output" in tr
+    assert "models" in tr["output"]  # list_models returns a JSON string with a models key

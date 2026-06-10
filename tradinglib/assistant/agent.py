@@ -119,7 +119,12 @@ def run_chat(
                 return
             yield {"type": "tool_call", "name": call.name, "input": call.input}
             content, is_error = dispatch(call.name, call.input)
-            yield {"type": "tool_result", "name": call.name, "is_error": is_error}
+            yield {
+                "type": "tool_result",
+                "name": call.name,
+                "is_error": is_error,
+                "output": content,
+            }
             results.append(ToolResult(call.id, content, is_error))
 
         conversation.append(ToolResultMsg(tuple(results)))
