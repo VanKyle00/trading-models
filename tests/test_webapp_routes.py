@@ -181,3 +181,13 @@ def test_run_partial_bad_ticker_shows_error_not_500():
     )
     assert resp.status_code == 400
     assert "could not run" in resp.text.lower()
+
+
+def test_index_console_extraction_preserves_markup():
+    client = TestClient(create_app())
+    html = client.get("/").text
+    assert 'id="console"' in html
+    assert 'id="console-resize"' in html  # index keeps the resize handle
+    assert 'id="chat-input"' in html and 'id="chat-clear"' in html
+    assert "Run a backtest, then ask about it" in html  # default empty-state text
+    assert html.count('id="transcript"') == 1
