@@ -30,7 +30,7 @@ def _donchian_signal(
     return pos.loc[test.index]
 
 
-def _donchian_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+def _donchian_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None:
     n = params["n"]
     upper = float(bars["high"].rolling(n).max().iloc[-1])
     lower = float(bars["low"].rolling(n).min().iloc[-1])
@@ -38,7 +38,7 @@ def _donchian_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
     long_side = direction(stance) > 0
     entry = upper if long_side else lower
     if not abs(entry - mid) > 0:
-        raise ValueError("degenerate Donchian channel; cannot place a stop")
+        return None  # degenerate channel -> no stop distance, no actionable entry
     return Levels(
         entry=entry,
         entry_type="stop",

@@ -24,7 +24,8 @@ from tradinglib.tournament.levels import Levels
 
 # (train, test, params, stance) -> target-position series indexed like test
 TournamentSignalFn = Callable[[pd.DataFrame, pd.DataFrame, dict, str], pd.Series]
-LevelsFn = Callable[[pd.DataFrame, dict, str], Levels]
+# (bars, params, stance) -> Levels for tomorrow, or None when not actionable tonight
+LevelsFn = Callable[[pd.DataFrame, dict, str], Levels | None]
 
 
 @dataclass(frozen=True)

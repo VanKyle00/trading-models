@@ -102,10 +102,12 @@ def test_donchian_levels_stop_at_mid_channel() -> None:
     assert short.entry == 99.0 and short.stop == 100.0 and short.target == 97.0
 
 
-def test_donchian_levels_reject_degenerate_channel() -> None:
-    bars = _flat_bars(spread=0.0)  # zero-width channel
-    with pytest.raises(ValueError, match="channel"):
-        STRATEGIES["donchian"].levels(bars, {"n": 20}, "long")
+def test_donchian_degenerate_channel_returns_none() -> None:
+    # A dead-flat channel has no stop distance; the contract answer is
+    # None ("no actionable entry"), not an exception that poisons the ticker.
+    bars = _flat_bars(n=80, spread=0.0)  # high == low == close
+    lv = STRATEGIES["donchian"].levels(bars, {"n": 20}, "long")
+    assert lv is None
 
 
 def test_rsi2_long_buys_the_dip_in_an_uptrend_and_exits_above_sma5() -> None:

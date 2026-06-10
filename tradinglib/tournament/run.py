@@ -6,7 +6,9 @@ registered grids — the Deflated Sharpe penalty for the whole menu we tried,
 not just the winning strategy's own grid (CON-02 multiple-testing
 discipline). Survival is a hard bar (DSR probability, trade count, parameter
 stability); most tickers should have zero survivors most nights, and that is
-the correct output, not a failure.
+the correct output, not a failure.  A winner whose ``levels`` builder returns
+``None`` has no actionable entry tonight; the pipeline records the survivor
+but issues no ticket.
 """
 
 from __future__ import annotations

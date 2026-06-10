@@ -21,7 +21,7 @@ def _sma_cross_signal(
     return pos.loc[test.index]
 
 
-def _sma_cross_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+def _sma_cross_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None:
     entry = float(bars["close"].iloc[-1])
     stop = protective_stop(bars, entry, stance)
     side = "above" if direction(stance) > 0 else "below"
@@ -70,7 +70,7 @@ def _macd_signal(train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: 
     return pos.loc[test.index]
 
 
-def _macd_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels:
+def _macd_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None:
     entry = float(bars["close"].iloc[-1])
     stop = protective_stop(bars, entry, stance)
     side = "above" if direction(stance) > 0 else "below"
