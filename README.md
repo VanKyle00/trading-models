@@ -154,6 +154,22 @@ stages — the first two are the **fundamental (FA) gate**:
    shown — never silently dropped. Candidates reporting earnings within 14
    days carry a warning chip.
 
+The FA gate is two-sided, and the same nightly run also feeds a **strategy
+tournament**: the top-N FA names become long candidates and the bottom-N short
+candidates, each walk-forward tested (anchored 378/63-bar windows, costs on)
+against a registry of classic retail strategies — SMA crossover, Donchian
+breakout, RSI(2) pullback, MACD, Bollinger fade. Only survivors clear the bar
+(deflated-Sharpe probability ≥ 0.90 corrected for *every* strategy and
+parameter tried on that ticker, ≥ 12 OOS trades, stable parameters), and each
+surviving winner becomes a **trade ticket**: entry/stop/target from the
+winning rule, risk-based sizing, and option structures — including
+short-premium spreads, never naked calls — built from the real chain behind a
+liquidity gate. Tickets render below the watchlist on `/scans`, and the
+strategy registry plus the repo's standalone models are documented at
+[`/models`](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/models).
+Quotes are indicative last/close marks: this is decision support that accrues
+a forward paper-trading record, not an auto-trader.
+
 Run it yourself (`--limit` for a quick smoke run, `--skip-llm` to stop after
 setup detection):
 

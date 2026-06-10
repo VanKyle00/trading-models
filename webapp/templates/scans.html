@@ -66,6 +66,15 @@
     .m-label { font-size: 8.5px; color: var(--muted); margin-bottom: 5px; }
     .m-value { font-size: 22px; font-weight: 700; }
 
+    .sec-head { font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+                color: var(--muted); margin: 26px 0 10px; }
+    .ticket-note { color: var(--muted); font-size: 11px; margin: 0 0 14px; }
+    .structs { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 12px; }
+    .structs th, .structs td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+    .structs th { font-family: "Martian Mono", monospace; font-size: 8.5px;
+                  text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+    .structs tr.rec td { background: var(--inset); font-weight: 700; }
+
     .card { border: 1px solid var(--line-strong); background: var(--panel); margin-bottom: 16px; }
     .card.pinned { opacity: .75; border-style: dashed; }
     .card-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px;
@@ -125,6 +134,14 @@
         <div class="metric"><div class="m-label">Setups forming</div><div class="m-value">{{ scan.funnel.with_setups }}</div></div>
       </div>
 
+      {% if scan.funnel.tournament_candidates is defined %}
+      <div class="funnel">
+        <div class="metric"><div class="m-label">Tournament candidates</div><div class="m-value">{{ scan.funnel.tournament_candidates }}</div></div>
+        <div class="metric"><div class="m-label">With survivors</div><div class="m-value">{{ scan.funnel.tournament_survivors }}</div></div>
+        <div class="metric"><div class="m-label">Tickets</div><div class="m-value">{{ scan.funnel.tickets }}</div></div>
+      </div>
+      {% endif %}
+
       {% if not scan.candidates %}
         <p class="placeholder">No setups forming on this date.</p>
       {% endif %}
@@ -175,6 +192,58 @@
           </div>
         </div>
       {% endfor %}
+
+      {% if scan.tickets is defined and (scan.tickets.long or scan.tickets.short) %}
+        <h2 class="sec-head">Trade tickets</h2>
+        <p class="ticket-note">Indicative last/close marks — re-check at the open, use limit orders.
+          PoP is market-implied from the chain IV, not an edge claim. Risk figures are per share.</p>
+        {% for stance in ("long", "short") %}
+          {% for t in scan.tickets[stance] %}
+            <div class="card">
+              <div class="card-head">
+                <span class="tkr">{{ t.ticker }}</span>
+                <span class="chip {{ 'favorable' if stance == 'long' else 'flag' }}">{{ stance }}</span>
+                <span class="nm">{{ t.strategy }} · {{ t.style | replace("_", " ") }}</span>
+                {% if t.evidence.winner_changed %}<span class="chip warn">winner changed</span>{% endif %}
+              </div>
+              <div class="card-body">
+                <div class="setup">
+                  <b>entry {{ '%.2f' | format(t.levels.entry) }}</b> ({{ t.levels.entry_type }})
+                  <span class="levels">· stop {{ '%.2f' | format(t.levels.stop) }}
+                  · target {{ '%.2f' | format(t.levels.target) }}</span>
+                  <div class="evidence">{{ t.levels.condition }}</div>
+                </div>
+                <div class="scores">
+                  DSR {{ '%.3f' | format(t.evidence.deflated_sharpe) }}
+                  · Sharpe {{ '%.2f' | format(t.evidence.sharpe) }}
+                  · {{ t.evidence.n_trades }} trades / {{ t.evidence.n_windows }} windows
+                  {% if t.iv_ratio is not none %} · IV/RV {{ '%.2f' | format(t.iv_ratio) }}{% endif %}
+                  {% if t.quotes_asof %} · quotes {{ t.quotes_asof }}{% endif %}
+                </div>
+                <table class="structs">
+                  <tr><th>structure</th><th>size</th><th>max loss</th><th>max gain</th><th>breakeven</th><th>PoP</th><th>R:R</th></tr>
+                  {% for s in t.structures %}
+                  <tr class="{{ 'rec' if s.recommended else '' }}">
+                    <td>{{ s.label }}</td>
+                    <td>{% if s.quantity %}{{ s.quantity }} {{ s.unit }}{{ 's' if s.quantity != 1 }}{% else %}UNSIZED{% endif %}</td>
+                    <td>{{ '%.2f' | format(s.max_loss) if s.max_loss is not none else '-' }}</td>
+                    <td>{{ '%.2f' | format(s.max_gain) if s.max_gain is not none else 'uncapped' }}</td>
+                    <td>{{ '%.2f' | format(s.breakeven) if s.breakeven is not none else '-' }}</td>
+                    <td>{{ '%.0f%%' | format(s.pop_market_implied * 100) if s.pop_market_implied is not none else '-' }}</td>
+                    <td>{{ '%.2f' | format(s.rr) if s.rr is not none else '-' }}</td>
+                  </tr>
+                  {% endfor %}
+                </table>
+                {% for w in t.warnings %}<div class="evidence">⚠ {{ w }}</div>{% endfor %}
+                {% for s in t.structures %}{% for w in s.warnings %}
+                  <div class="evidence">⚠ {{ s.label }}: {{ w }}</div>
+                {% endfor %}{% endfor %}
+                {% if stance == 'short' %}<div class="evidence">⚠ stock-short borrow/locate cost not modeled</div>{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        {% endfor %}
+      {% endif %}
 
       {% if scan.errors %}
         <div class="errors">

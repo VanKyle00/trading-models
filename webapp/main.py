@@ -22,6 +22,7 @@ from fastapi.templating import Jinja2Templates
 from tradinglib.assistant import Budget, RateLimiter, run_chat
 from tradinglib.assistant import provider as _assistant_provider
 from tradinglib.service import RequestError, list_specs, model_spec, run, run_to_dict
+from tradinglib.tournament.strategies import STRATEGIES
 from webapp import scans as _scans
 from webapp.charts import build_all
 from webapp.events import events_for_assets
@@ -222,6 +223,14 @@ def create_app() -> FastAPI:
             return HTMLResponse("<p>scan not found</p>", status_code=404)
         return _TEMPLATES.TemplateResponse(
             request, "scans.html", {"dates": _scans.list_scan_dates(), "scan": scan}
+        )
+
+    @app.get("/models", response_class=HTMLResponse)
+    def models(request: Request) -> HTMLResponse:
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "models.html",
+            {"strategies": list(STRATEGIES.values()), "specs": list_specs()},
         )
 
     @app.post("/run", response_class=HTMLResponse)

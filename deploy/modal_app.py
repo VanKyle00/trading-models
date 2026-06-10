@@ -177,16 +177,25 @@ def fastapi_app():
     # the scan sees the day's final bars. The report lands on the shared data
     # Volume, which the /scans page in fastapi_app reads.
     schedule=modal.Cron("0 22 * * 1-5"),
-    timeout=3600,  # ~1000 .info fetches (threaded+cached) + ~160 EDGAR companyfacts + ~15 LLM briefs; live smoke pending
+    # ~1000 .info fetches + ~160 EDGAR companyfacts + ~80 walk-forward tournaments
+    # + chains for survivors + ~15 LLM briefs. The 2026-06-10 live smoke ran in
+    # ~2.5 min on a warm cache; a cold Russell-scale night is unmeasured, and a
+    # timeout kill costs the whole nightly report — so take the headroom.
+    timeout=7200,
 )
 def scheduled_swing_scan() -> None:
+    from datetime import UTC, datetime
+
     from tradinglib.assistant.provider import ClaudeProvider
     from tradinglib.data.paths import processed_dir
     from tradinglib.scanner.config import ScanConfig
     from tradinglib.scanner.pipeline import run_scan
-    from tradinglib.scanner.report import write_report
+    from tradinglib.scanner.report import load_latest_report, write_report
 
-    result = run_scan(ScanConfig(), ClaudeProvider())
-    json_path, _ = write_report(result, processed_dir("scans") / result["asof"])
+    base = processed_dir("scans")
+    # without last night's report every winner_changed stays null forever
+    previous = load_latest_report(base, before=datetime.now(UTC).strftime("%Y-%m-%d"))
+    result = run_scan(ScanConfig(), ClaudeProvider(), previous_report=previous)
+    json_path, _ = write_report(result, base / result["asof"])
     data_volume.commit()  # persist before the container scales down
     print(f"swing scan {result['asof']}: {result['funnel']} -> {json_path}")

@@ -72,6 +72,103 @@ def _md_sections(candidates: list[dict]) -> list[str]:
     return lines
 
 
+_TICKET_NOTE = (
+    "_Quotes are indicative last/close marks — re-check at the open, use limit "
+    "orders. PoP is the market-implied probability from the chain IV, not an "
+    "edge claim. Option risk figures are per share; one contract = 100 shares._"
+)
+_BORROW_FOOTNOTE = (
+    "_Stock-short borrow/locate cost is not modeled — one reason short tickets "
+    "prefer defined-risk option structures._"
+)
+
+
+def _fmt(value: object, spec: str = "{:.2f}", none: str = "-") -> str:
+    return spec.format(value) if isinstance(value, (int, float)) else none
+
+
+def _size(structure: dict) -> str:
+    qty = structure.get("quantity")
+    if not qty:
+        return "UNSIZED"
+    return f"{qty} {structure.get('unit', 'unit')}{'s' if qty != 1 else ''}"
+
+
+def _ticket_flags(ticket: dict) -> str:
+    """Terse per-ticket flags for the summary table (the indicative warning is
+    section-level, not a flag; full warnings appear in the detail block)."""
+    flags = [w.split(":")[0] for w in ticket.get("warnings", []) if not w.startswith("indicative")]
+    if ticket.get("evidence", {}).get("winner_changed"):
+        flags.insert(0, "winner changed")
+    return ", ".join(flags)
+
+
+def _ticket_table(tickets: list[dict]) -> list[str]:
+    lines = [
+        "| Ticker | Winner | Entry | Stop | Target | Recommended | Size | Flags |",
+        "|--------|--------|-------|------|--------|-------------|------|-------|",
+    ]
+    for t in tickets:
+        lv = t["levels"]
+        rec = next((s for s in t["structures"] if s.get("recommended")), t["structures"][0])
+        lines.append(
+            f"| {t['ticker']} | {t['strategy']} | {lv['entry']:.2f} | {lv['stop']:.2f} "
+            f"| {lv['target']:.2f} | {rec['label']} | {_size(rec)} | {_ticket_flags(t)} |"
+        )
+    return lines
+
+
+def _ticket_sections(tickets: list[dict]) -> list[str]:
+    lines: list[str] = []
+    for t in tickets:
+        lv, ev = t["levels"], t.get("evidence", {})
+        lines.append(f"#### {t['ticker']} — {t['strategy']} ({t['stance']})")
+        lines.append("")
+        lines.append(
+            f"Entry {lv['entry']:.2f} ({lv['entry_type']}) · stop {lv['stop']:.2f} "
+            f"· target {lv['target']:.2f} — {lv['condition']}"
+        )
+        lines.append("")
+        evidence = (
+            f"OOS evidence: DSR {_fmt(ev.get('deflated_sharpe'), '{:.3f}')} · "
+            f"Sharpe {_fmt(ev.get('sharpe'))} · {ev.get('n_trades', '?')} trades "
+            f"over {ev.get('n_windows', '?')} windows"
+        )
+        if ev.get("winner_changed"):
+            evidence += " · **winner changed overnight**"
+        lines.append(evidence)
+        meta = []
+        if t.get("quotes_asof"):
+            meta.append(f"quotes as of {t['quotes_asof']}")
+        if isinstance(t.get("iv_ratio"), (int, float)):
+            meta.append(f"IV/RV {t['iv_ratio']:.2f}")
+        if t.get("next_earnings"):
+            meta.append(f"next earnings {t['next_earnings']}")
+        if meta:
+            lines.append("")
+            lines.append(" · ".join(meta))
+        lines.append("")
+        lines.append("| Structure | Size | Max loss | Max gain | Breakeven | PoP | R:R |")
+        lines.append("|-----------|------|----------|----------|-----------|-----|-----|")
+        for s in t["structures"]:
+            label = f"**{s['label']}**" if s.get("recommended") else s["label"]
+            lines.append(
+                f"| {label} | {_size(s)} | {_fmt(s.get('max_loss'))} "
+                f"| {_fmt(s.get('max_gain'), none='uncapped')} "
+                f"| {_fmt(s.get('breakeven'))} "
+                f"| {_fmt(s.get('pop_market_implied'), '{:.0%}')} "
+                f"| {_fmt(s.get('rr'))} |"
+            )
+        lines.append("")
+        for w in t.get("warnings", []):
+            lines.append(f"- ⚠ {w}")
+        for s in t["structures"]:
+            for w in s.get("warnings", []):
+                lines.append(f"- ⚠ {s['label']}: {w}")
+        lines.append("")
+    return lines
+
+
 def render_markdown(result: dict) -> str:
     funnel = result.get("funnel", {})
     lines = [
@@ -82,6 +179,13 @@ def render_markdown(result: dict) -> str:
         f"{funnel.get('with_setups', '?')} with setups forming",
         "",
     ]
+    if "tournament_candidates" in funnel:
+        lines += [
+            f"Tournament: {funnel.get('tournament_candidates', '?')} candidates → "
+            f"{funnel.get('tournament_survivors', '?')} with surviving strategies → "
+            f"{funnel.get('tickets', '?')} tickets",
+            "",
+        ]
     candidates = result.get("candidates", [])
     if candidates:
         lines.extend(_md_table(candidates))
@@ -90,6 +194,25 @@ def render_markdown(result: dict) -> str:
     else:
         lines.append("No setups forming today.")
         lines.append("")
+
+    tickets = result.get("tickets") or {}
+    if any(tickets.get(stance) for stance in ("long", "short")):
+        lines.append("## Tickets")
+        lines.append("")
+        lines.append(_TICKET_NOTE)
+        lines.append("")
+        for stance, title in (("long", "Long"), ("short", "Short")):
+            entries = tickets.get(stance) or []
+            if not entries:
+                continue
+            lines.append(f"### {title}")
+            lines.append("")
+            lines.extend(_ticket_table(entries))
+            lines.append("")
+            if stance == "short":
+                lines.append(_BORROW_FOOTNOTE)
+                lines.append("")
+            lines.extend(_ticket_sections(entries))
 
     errors = result.get("errors", [])
     if errors:

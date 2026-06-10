@@ -120,6 +120,131 @@ def test_write_report_creates_json_and_md(tmp_path: Path) -> None:
     assert "BAD" in md  # errors are reported, not swallowed
 
 
+def _structure(**overrides: object) -> dict:
+    base: dict = {
+        "kind": "stock",
+        "label": "buy shares; stop 195.00",
+        "unit": "share",
+        "legs": [],
+        "premium": None,
+        "max_loss": 15.0,
+        "max_gain": None,
+        "breakeven": 210.0,
+        "pop_market_implied": None,
+        "rr": 2.0,
+        "premium_yield": None,
+        "warnings": [],
+        "recommended": True,
+        "quantity": 66,
+        "loss_at_stop": None,
+    }
+    base.update(overrides)
+    return base
+
+
+def _ticket(ticker: str = "AAPL", stance: str = "long", **overrides: object) -> dict:
+    base: dict = {
+        "ticker": ticker,
+        "stance": stance,
+        "strategy": "sma_cross",
+        "style": "trend",
+        "params": {"fast": 10, "slow": 50},
+        "levels": {
+            "entry": 210.0,
+            "entry_type": "market",
+            "stop": 195.0,
+            "target": 240.0,
+            "condition": "enter while SMA(10) holds above SMA(50)",
+        },
+        "evidence": {
+            "deflated_sharpe": 0.93,
+            "sharpe": 1.1,
+            "n_trades": 18,
+            "n_windows": 6,
+            "winner_changed": False,
+            "fa_rank": 1,
+            "fa_score": 0.9,
+        },
+        "quotes_asof": "2026-06-10",
+        "iv_ratio": 1.05,
+        "next_earnings": "2026-07-30",
+        "account_size": 100000.0,
+        "risk_per_trade_pct": 0.01,
+        "structures": [_structure()],
+        "warnings": ["indicative quotes: last/close marks as of quotes_asof"],
+    }
+    base.update(overrides)
+    return base
+
+
+def _ticket_result() -> dict:
+    result = _result()
+    result["funnel"].update({"tournament_candidates": 4, "tournament_survivors": 2, "tickets": 2})
+    result["tickets"] = {
+        "long": [_ticket()],
+        "short": [
+            _ticket(
+                ticker="WEAK",
+                stance="short",
+                structures=[
+                    _structure(
+                        kind="stock_short",
+                        label="short shares; stop 52.00",
+                        max_loss=2.0,
+                        quantity=None,
+                        warnings=["borrow/squeeze risk; cost not modeled"],
+                    ),
+                    _structure(
+                        kind="long_put",
+                        label="buy 1x 50P 2026-07-17",
+                        unit="contract",
+                        max_loss=3.1,
+                        max_gain=46.9,
+                        pop_market_implied=0.42,
+                        recommended=False,
+                        quantity=3,
+                    ),
+                ],
+                evidence={
+                    "deflated_sharpe": 0.91,
+                    "sharpe": 0.9,
+                    "n_trades": 14,
+                    "n_windows": 6,
+                    "winner_changed": True,
+                    "fa_rank": 2,
+                    "fa_score": 0.1,
+                },
+            )
+        ],
+    }
+    return result
+
+
+def test_render_markdown_tickets_section(tmp_path: Path) -> None:
+    _, md_path = write_report(_ticket_result(), tmp_path)
+    md = md_path.read_text(encoding="utf-8")
+
+    assert "## Tickets" in md
+    assert "4 candidates" in md and "2 tickets" in md  # tournament funnel line
+    assert "| AAPL | sma_cross | 210.00 | 195.00 | 240.00 |" in md  # table row
+    assert "buy shares; stop 195.00" in md  # recommended structure label
+    assert "66 shares" in md  # sized quantity
+    assert "UNSIZED" in md  # zero-quantity structure is flagged, not hidden
+    assert "winner changed" in md
+    assert "indicative" in md.lower()  # quotes framing survives into the report
+    assert "42%" in md  # PoP rendered as a percent
+    assert "borrow" in md.lower()  # short-side borrow-cost footnote
+
+
+def test_render_markdown_without_tickets_keys_is_unchanged(tmp_path: Path) -> None:
+    _, md_path = write_report(_result(), tmp_path)  # pre-C report shape
+    md = md_path.read_text(encoding="utf-8")
+
+    assert "## Tickets" not in md
+    assert "Tournament:" not in md
+    assert "AAPL" in md  # classic watchlist still renders
+
+
 def test_load_latest_report_returns_most_recent_prior(tmp_path: Path) -> None:
     for day, marker in (("2026-06-07", "old"), ("2026-06-08", "newer")):
         d = tmp_path / day
