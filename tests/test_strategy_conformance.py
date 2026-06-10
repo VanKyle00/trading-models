@@ -64,13 +64,16 @@ CASES = [
 
 @pytest.mark.parametrize(("key", "params", "stance"), CASES)
 def test_signal_is_causal(key: str, params: dict, stance: str) -> None:
-    # Truncating future bars must not change past signal values.
+    # Truncating future bars must not change past signal values. The
+    # len(test)-1 cut places a boundary inside the final bars, where a
+    # fit-on-the-whole-window-then-slice strategy would otherwise leak
+    # undetected.
     sdef = STRATEGIES[key]
     train, test = _BARS.iloc[:TRAIN_BARS], _BARS.iloc[TRAIN_BARS:]
     full = sdef.make_signal(train, test, params, stance)
-    for k in (10, 60, 150):
+    for k in (10, 60, 150, len(test) - 1):
         part = sdef.make_signal(train, test.iloc[:k], params, stance)
-        pd.testing.assert_series_equal(part, full.iloc[:k], check_names=False)
+        pd.testing.assert_series_equal(part, full.iloc[:k], check_names=False, check_exact=True)
 
 
 @pytest.mark.parametrize(("key", "params", "stance"), CASES)
@@ -81,7 +84,10 @@ def test_signal_contract(key: str, params: dict, stance: str) -> None:
     sig = sdef.make_signal(train, test, params, stance)
     assert sig.index.equals(test.index)
     allowed = {0.0, 1.0} if direction(stance) > 0 else {-1.0, 0.0}
-    assert set(np.unique(sig)) <= allowed
+    # A strategy that never fires passes vacuously: this is an upper-bound
+    # contract (no illegal values), not proof the rule triggers on this fixture.
+    illegal = set(np.unique(sig)) - allowed
+    assert not illegal, f"{key} {stance}: illegal signal values {illegal}"
 
 
 @pytest.mark.parametrize(("key", "params", "stance"), CASES)
@@ -100,7 +106,7 @@ def test_determinism(key: str, params: dict, stance: str) -> None:
     train, test = _BARS.iloc[:TRAIN_BARS], _BARS.iloc[TRAIN_BARS:]
     a = sdef.make_signal(train, test, params, stance)
     b = sdef.make_signal(train, test, params, stance)
-    pd.testing.assert_series_equal(a, b)
+    pd.testing.assert_series_equal(a, b, check_exact=True)
 
 
 @pytest.mark.parametrize(("key", "params", "stance"), CASES)
@@ -115,5 +121,9 @@ def test_levels_contract(key: str, params: dict, stance: str) -> None:
         return
     d = direction(stance)
     assert lv.entry_type in ("market", "stop", "limit")
-    assert d * (lv.entry - lv.stop) > 0
-    assert d * (lv.target - lv.entry) > 0
+    assert d * (lv.entry - lv.stop) > 0, (
+        f"{key} {stance}: stop {lv.stop} not on loss side of entry {lv.entry}"
+    )
+    assert d * (lv.target - lv.entry) > 0, (
+        f"{key} {stance}: target {lv.target} not on profit side of entry {lv.entry}"
+    )
