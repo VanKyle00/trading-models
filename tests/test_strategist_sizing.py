@@ -42,6 +42,13 @@ def test_floor_to_zero_is_reported_unsized_never_bumped() -> None:
     assert any("unsized" in w for w in s.warnings)
 
 
+def test_missing_max_loss_is_unsized_not_a_crash() -> None:
+    s = _structure("long_call", "contract", max_loss=None)
+    size_structure(s, account_size=100_000.0, risk_per_trade_pct=0.01)
+    assert s.quantity == 0
+    assert any("unsized" in w for w in s.warnings)
+
+
 def test_csp_is_capital_sized() -> None:
     s = _structure("csp", "contract", max_loss=92.2, legs=[{"strike": 95.0}])
     size_structure(s, account_size=100_000.0, risk_per_trade_pct=0.01)
