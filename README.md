@@ -193,9 +193,7 @@ every ticker-stance run that night (α = 0.10); **watchlist** entries are labele
 demotions — survivors that cleared the hard bar but failed the nightly FDR —
 with the demotion reason recorded alongside the candidate. The forward ledger
 tracks both tiers identically, so the tiering itself is validated by out-of-sample
-performance rather than assumed. Max drawdown is reported in R units throughout;
-no ledger Sharpe is published by design — the ledger is too short and sparse for
-a Sharpe estimate to be meaningful.
+performance rather than assumed.
 
 That forward record is kept honest on the
 [`/tournaments`](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/tournaments)
