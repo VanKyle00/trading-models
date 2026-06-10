@@ -74,6 +74,7 @@ def test_get_russell1000_constituents_caches(
     assert calls["n"] == 1  # second read served from the snapshot cache
     assert first.equals(second)
     assert len(first) == 3
+    assert second.attrs["snapshot"] == first.attrs["snapshot"]  # fresh + cache-hit stamped
 
 
 def test_get_russell1000_constituents_falls_back_to_latest_cache(
@@ -105,6 +106,7 @@ def test_get_russell1000_constituents_falls_back_to_latest_cache(
         out = loader.get_russell1000_constituents()
 
     assert list(out["ticker"]) == ["OLD"]  # served the stale snapshot, not an error
+    assert out.attrs["snapshot"] == "2026-06-01"  # staleness visible to the pipeline
 
 
 def test_get_russell1000_constituents_raises_without_any_cache(

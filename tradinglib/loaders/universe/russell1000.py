@@ -78,7 +78,9 @@ def get_russell1000_constituents(
     cache_dir = processed_dir(SOURCE) / _SUBDIR
     out = cache_dir / f"{snapshot}.parquet"
     if out.exists() and not refresh:
-        return pd.read_parquet(out)
+        df = pd.read_parquet(out)
+        df.attrs["snapshot"] = snapshot
+        return df
     try:
         df = _download(get_cik_map(refresh=refresh, client=client))
     except Exception:
@@ -88,7 +90,10 @@ def get_russell1000_constituents(
         logger.warning(
             "Russell 1000 scrape failed; serving the %s snapshot", cached[-1].stem, exc_info=True
         )
-        return pd.read_parquet(cached[-1])
+        stale = pd.read_parquet(cached[-1])
+        stale.attrs["snapshot"] = cached[-1].stem
+        return stale
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out)
+    df.attrs["snapshot"] = snapshot
     return df
