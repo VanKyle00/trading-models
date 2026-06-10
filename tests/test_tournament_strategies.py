@@ -390,7 +390,12 @@ def test_ridge_momentum_flat_market_stays_flat() -> None:
 
 
 def test_ridge_momentum_levels_market_entry_in_trend_none_when_flat() -> None:
-    bars = _trend_bars(n=700, rate=1.003)
+    # Seeded drift walk for the same reason as the signal test above: on a
+    # perfectly geometric trend the prediction is floating-point dust and the
+    # not-None outcome would be a coin flip across BLAS versions.
+    rng = np.random.default_rng(7)  # probe-verified: predicts long on the last bar
+    close = 100.0 * np.cumprod(1.0 + rng.normal(0.002, 0.01, 700))
+    bars = _bars(close)
     lv = STRATEGIES["ridge_momentum"].levels(bars, {"l2": 1.0}, "long")
     assert lv is not None and lv.entry_type == "market"
     assert lv.stop < lv.entry < lv.target
