@@ -14,15 +14,23 @@ failure logged); with no cache at all the error propagates.
 
 from __future__ import annotations
 
+import logging
 from io import StringIO
 from typing import cast
 
 import httpx
 import pandas as pd
 
+from tradinglib.data.paths import processed_dir
+from tradinglib.loaders.edgar_client import EdgarClient
+from tradinglib.loaders.universe.cik_map import get_cik_map
 from tradinglib.loaders.universe.sp500 import _normalize_ticker
 
+SOURCE = "universe"
+_SUBDIR = "russell1000"
 _WIKI_URL = "https://en.wikipedia.org/wiki/Russell_1000_Index"
+
+logger = logging.getLogger(__name__)
 
 
 def _canonicalize(raw: pd.DataFrame, cik_map: dict[str, int]) -> pd.DataFrame:
@@ -37,7 +45,7 @@ def _canonicalize(raw: pd.DataFrame, cik_map: dict[str, int]) -> pd.DataFrame:
             "cik": pd.array([cik_map.get(t) for t in tickers], dtype="Int64"),
         }
     )
-    df = df.sort_values("ticker").reset_index(drop=True)
+    df = df.drop_duplicates("ticker").sort_values("ticker").reset_index(drop=True)
     return cast(pd.DataFrame, df[["ticker", "name", "sector", "sub_industry", "cik"]])
 
 
@@ -55,3 +63,32 @@ def _download(cik_map: dict[str, int]) -> pd.DataFrame:
         if "Symbol" in table.columns and "Company" in table.columns:
             return _canonicalize(table, cik_map)
     raise ValueError("no components table found on the Wikipedia page")
+
+
+def get_russell1000_constituents(
+    *, refresh: bool = False, client: EdgarClient | None = None
+) -> pd.DataFrame:
+    """Return the current Russell 1000 constituent list.
+
+    Snapshot-cached per download date. On scrape failure the most recent
+    cached snapshot is returned with a warning; with no cache the error
+    propagates (a failed nightly run is visible, a silent empty one is not).
+    """
+    snapshot = pd.Timestamp.now("UTC").strftime("%Y-%m-%d")
+    cache_dir = processed_dir(SOURCE) / _SUBDIR
+    out = cache_dir / f"{snapshot}.parquet"
+    if out.exists() and not refresh:
+        return pd.read_parquet(out)
+    try:
+        df = _download(get_cik_map(refresh=refresh, client=client))
+    except Exception:
+        cached = sorted(cache_dir.glob("*.parquet"))
+        if not cached:
+            raise
+        logger.warning(
+            "Russell 1000 scrape failed; serving the %s snapshot", cached[-1].stem, exc_info=True
+        )
+        return pd.read_parquet(cached[-1])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(out)
+    return df

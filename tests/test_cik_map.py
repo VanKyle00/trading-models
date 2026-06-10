@@ -51,3 +51,19 @@ def test_get_cik_map_caches_per_day(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert calls["n"] == 1  # second read served from the snapshot cache
     assert first == second
     assert len(list((tmp_path / "universe" / "cik_map").glob("*.parquet"))) == 1
+
+
+def test_get_cik_map_rejects_empty_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # an empty 200 must raise (and not poison the day's cache with an empty map)
+    from tradinglib.loaders.universe import cik_map as loader
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    client = EdgarClient(transport=httpx.MockTransport(handler), sleep=lambda s: None)
+
+    with pytest.raises(ValueError, match="empty"):
+        loader.get_cik_map(client=client)
+    assert not list((tmp_path / "universe" / "cik_map").glob("*.parquet"))

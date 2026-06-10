@@ -49,6 +49,9 @@ def get_cik_map(*, refresh: bool = False, client: EdgarClient | None = None) -> 
         if ticker and ticker not in mapping:
             mapping[ticker] = int(entry["cik_str"])
 
+    if not mapping:
+        raise ValueError("SEC company_tickers.json returned an empty payload")
+
     df = pd.DataFrame({"ticker": list(mapping), "cik": list(mapping.values())})
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out)
