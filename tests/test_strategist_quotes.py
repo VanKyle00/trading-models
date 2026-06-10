@@ -20,11 +20,11 @@ from tradinglib.strategist.quotes import (
 ASOF = pd.Timestamp("2026-06-10")
 
 
-def _q(strike: float, *, delta: float = 0.5, mid: float = 1.0) -> LegQuote:
+def _q(strike: float, *, delta: float = 0.5, mid: float = 1.0, right: str = "call") -> LegQuote:
     return LegQuote(
         expiration=ASOF + pd.Timedelta(days=38),
         strike=strike,
-        right="call",
+        right=right,
         bid=mid - 0.05,
         ask=mid + 0.05,
         mid=mid,
@@ -35,7 +35,7 @@ def _q(strike: float, *, delta: float = 0.5, mid: float = 1.0) -> LegQuote:
 
 
 def test_gate_drops_junk_rows(make_chain) -> None:
-    keys = [("call", 38, s) for s in (90.0, 95.0, 100.0, 105.0, 110.0)]
+    keys = [("call", 38, s) for s in (90.0, 95.0, 100.0, 105.0, 110.0, 115.0)]
     chain = make_chain(
         mids={k: 2.0 for k in keys},
         overrides={
@@ -43,6 +43,7 @@ def test_gate_drops_junk_rows(make_chain) -> None:
             ("call", 38, 95.0): {"bid": 1.0, "ask": 1.2},  # 18% of mid spread
             ("call", 38, 100.0): {"open_interest": 50.0},  # thin OI
             ("call", 38, 105.0): {"iv": float("nan")},  # junk IV
+            ("call", 38, 115.0): {"iv": 0.0},  # zero IV
         },
     )
 
@@ -103,6 +104,23 @@ def test_strike_pickers() -> None:
     assert strictly_above(quotes, 105.0) is None
     assert nearest_strike(quotes, 101.0).strike == 100.0
     assert nearest_strike([], 101.0) is None
+
+    # Put deltas are NEGATIVE (BS convention); negative target picks the right strike.
+    put_quotes = [
+        _q(95.0, delta=-0.30, right="put"),
+        _q(90.0, delta=-0.65, right="put"),
+    ]
+    assert by_delta(put_quotes, -0.65).delta == -0.65
+
+
+def test_liquid_quotes_tz_aware_asof_matches_naive(make_chain) -> None:
+    chain = make_chain(mids={("call", 38, 110.0): 2.0})
+    exp = chain["expiration"].iloc[0]
+    naive_quotes = liquid_quotes(chain, right="call", expiration=exp, spot=100.0, asof=ASOF)
+    tz_quotes = liquid_quotes(
+        chain, right="call", expiration=exp, spot=100.0, asof=pd.Timestamp("2026-06-10", tz="UTC")
+    )
+    assert [q.strike for q in tz_quotes] == [q.strike for q in naive_quotes]
 
 
 def test_atm_iv_uses_income_window_quote_nearest_spot(make_chain) -> None:
