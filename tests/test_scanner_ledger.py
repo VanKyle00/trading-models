@@ -367,8 +367,20 @@ def test_max_drawdown_r_counts_losses_from_inception() -> None:
     from tradinglib.scanner.ledger import _max_drawdown_r
 
     records = [
-        {"status": "stopped", "r": -1.0, "exit_date": "2026-06-01", "ticker": "A", "date": "2026-05-28"},
-        {"status": "stopped", "r": -1.0, "exit_date": "2026-06-02", "ticker": "B", "date": "2026-05-28"},
+        {
+            "status": "stopped",
+            "r": -1.0,
+            "exit_date": "2026-06-01",
+            "ticker": "A",
+            "date": "2026-05-28",
+        },
+        {
+            "status": "stopped",
+            "r": -1.0,
+            "exit_date": "2026-06-02",
+            "ticker": "B",
+            "date": "2026-05-28",
+        },
     ]
     assert _max_drawdown_r(records) == pytest.approx(2.0)
 
