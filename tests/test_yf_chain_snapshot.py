@@ -18,6 +18,8 @@ def _fake_leg(strikes: list[float]) -> pd.DataFrame:
             "bid": [1.0] * len(strikes),
             "ask": [1.2] * len(strikes),
             "impliedVolatility": [0.30] * len(strikes),
+            "openInterest": [500] * len(strikes),
+            "volume": [25] * len(strikes),
         }
     )
 
@@ -131,3 +133,64 @@ def test_snapshot_roundtrip_preserves_dtypes(
     assert pd.api.types.is_datetime64_any_dtype(df["expiration"])
     for col in ("strike", "bid", "ask", "iv", "spot"):
         assert pd.api.types.is_float_dtype(df[col]), col
+
+
+def test_fetch_chain_returns_extended_schema_in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tradinglib.loaders.options import yf_chain
+
+    monkeypatch.setattr(yf_chain.yf, "Ticker", _FakeTicker)
+
+    df = yf_chain.fetch_chain("AAPL")
+
+    assert list(df.columns) == yf_chain.CHAIN_COLUMNS
+    assert (df["open_interest"] == 500).all()
+    assert (df["volume"] == 25).all()
+    # of the two fake expirations (10d and 200d), only 10d sits inside the 120-day window
+    assert df["expiration"].nunique() == 1
+    assert len(df) == 4  # 1 expiration x 2 strikes x 2 rights
+
+
+def test_fetch_chain_window_is_wider_than_snapshots(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tradinglib.loaders.options import yf_chain
+
+    class _MidTicker(_FakeTicker):
+        def __init__(self, symbol: str) -> None:
+            super().__init__(symbol)
+            today = pd.Timestamp.now("UTC").tz_localize(None).normalize()
+            self.options = ((today + pd.Timedelta(days=80)).strftime("%Y-%m-%d"),)
+
+    monkeypatch.setattr(yf_chain.yf, "Ticker", _MidTicker)
+
+    df = yf_chain.fetch_chain("AAPL")  # default 120-day window
+    assert df["expiration"].nunique() == 1  # 80 DTE is in for tickets, out for snapshots
+
+
+def test_fetch_chain_empty_options_returns_empty_frame(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tradinglib.loaders.options import yf_chain
+
+    class _NoOptionsTicker(_FakeTicker):
+        def __init__(self, symbol: str) -> None:
+            super().__init__(symbol)
+            self.options = ()
+
+    monkeypatch.setattr(yf_chain.yf, "Ticker", _NoOptionsTicker)
+
+    df = yf_chain.fetch_chain("AAPL")
+    assert df.empty
+    assert list(df.columns) == yf_chain.CHAIN_COLUMNS
+
+
+def test_fetch_chain_missing_oi_columns_yield_nan(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tradinglib.loaders.options import yf_chain
+
+    class _BareTicker(_FakeTicker):
+        def option_chain(self, expiration: str):  # legs without openInterest/volume
+            from types import SimpleNamespace
+
+            leg = _fake_leg([95.0, 100.0]).drop(columns=["openInterest", "volume"])
+            return SimpleNamespace(calls=leg, puts=leg)
+
+    monkeypatch.setattr(yf_chain.yf, "Ticker", _BareTicker)
+
+    df = yf_chain.fetch_chain("AAPL")
+    assert df["open_interest"].isna().all() and df["volume"].isna().all()
