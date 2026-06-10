@@ -199,3 +199,60 @@ def test_missing_metric_does_not_zero_the_score() -> None:
 
     assert not np.isnan(out.loc["A", "fa_score"])
     assert out.loc["A", "fa_score"] > 0
+
+
+def test_short_gate_keeps_worst_fundamentals() -> None:
+    tickers = [f"T{i}" for i in range(6)]
+    uni = _universe(tickers, ["Tech"] * 6)
+    fnd = _fundamentals({t: {"revenue_growth": 0.05 + i * 0.01} for i, t in enumerate(tickers)})
+
+    out = score_fundamentals(uni, fnd, keep=2, short_keep=2).set_index("ticker")
+
+    assert bool(out.loc["T0", "passed_short_gate"])  # worst growth
+    assert bool(out.loc["T1", "passed_short_gate"])
+    assert out["passed_short_gate"].sum() == 2
+    assert not (out["passed_gate"] & out["passed_short_gate"]).any()  # disjoint cohorts
+
+
+def test_stance_column_labels_both_cohorts() -> None:
+    tickers = [f"T{i}" for i in range(4)]
+    uni = _universe(tickers, ["Tech"] * 4)
+    fnd = _fundamentals({t: {"revenue_growth": 0.05 + i * 0.01} for i, t in enumerate(tickers)})
+
+    out = score_fundamentals(uni, fnd, keep=1, short_keep=1).set_index("ticker")
+
+    assert out.loc["T3", "stance"] == "long"
+    assert out.loc["T0", "stance"] == "short"
+    assert out["stance"].isna().sum() == 2
+
+
+def test_short_gate_excludes_sparse_coverage() -> None:
+    # bad data must not masquerade as bad fundamentals: a ticker failing the
+    # coverage filter is ineligible for the short side too
+    uni = _universe(["FULL", "SPARSE"], ["Tech", "Tech"])
+    fnd = _fundamentals(
+        {
+            "FULL": {},
+            "SPARSE": {
+                "revenue_growth": np.nan,
+                "earnings_growth": np.nan,
+                "operating_margin": np.nan,
+            },
+        }
+    )
+
+    out = score_fundamentals(uni, fnd, keep=1, short_keep=2).set_index("ticker")
+
+    assert not bool(out.loc["SPARSE", "passed_short_gate"])
+    assert out["passed_short_gate"].sum() == 0  # FULL is long, SPARSE ineligible
+
+
+def test_short_gate_off_by_default() -> None:
+    uni = _universe(["A", "B"], ["Tech", "Tech"])
+    fnd = _fundamentals({"A": {}, "B": {}})
+
+    out = score_fundamentals(uni, fnd, keep=1)
+
+    assert "passed_short_gate" in out.columns
+    assert out["passed_short_gate"].sum() == 0
+    assert (out["stance"].dropna() == "long").all()

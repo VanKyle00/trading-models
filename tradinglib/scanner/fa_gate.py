@@ -24,12 +24,21 @@ _MIN_COVERAGE = 4
 
 
 def score_fundamentals(
-    universe: pd.DataFrame, fundamentals: pd.DataFrame, *, keep: int = 40
+    universe: pd.DataFrame,
+    fundamentals: pd.DataFrame,
+    *,
+    keep: int = 40,
+    short_keep: int = 0,
 ) -> pd.DataFrame:
     """Merge universe + fundamentals and score every ticker.
 
     Returns one row per universe ticker with ``pct_<metric>`` percentile
-    columns, ``fa_score``, ``fa_rank`` (1 = best) and ``passed_gate``.
+    columns, ``fa_score``, ``fa_rank`` (1 = best) and ``passed_gate``. With
+    ``short_keep > 0`` the gate is two-sided: the bottom ``short_keep``
+    eligible names gain ``passed_short_gate`` / ``short_rank`` (1 = worst
+    fundamentals), and ``stance`` labels each kept row ``"long"``/``"short"``.
+    Eligibility (metric coverage, positive revenue) is identical on both
+    sides — bad data must not masquerade as bad fundamentals.
     """
     df = universe.merge(fundamentals, on="ticker", how="left")
     df["fcf_yield"] = df["free_cashflow"] / df["market_cap"]
@@ -50,6 +59,11 @@ def score_fundamentals(
 
     df["fa_rank"] = df["fa_score"].where(eligible).rank(ascending=False, method="first")
     df["passed_gate"] = eligible & (df["fa_rank"] <= keep)
+    df["short_rank"] = df["fa_score"].where(eligible).rank(ascending=True, method="first")
+    df["passed_short_gate"] = eligible & (df["short_rank"] <= short_keep) & ~df["passed_gate"]
+    df["stance"] = pd.Series(pd.NA, index=df.index, dtype="string")
+    df.loc[df["passed_gate"], "stance"] = "long"
+    df.loc[df["passed_short_gate"], "stance"] = "short"
     return df.sort_values("fa_rank").reset_index(drop=True)
 
 
