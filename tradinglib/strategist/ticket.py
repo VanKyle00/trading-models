@@ -9,6 +9,7 @@ built structure is ``recommended``: the first in the final order that sized to
 at least one unit, else the first overall (carrying its ``unsized`` warning).
 The ticket never asserts expected profitability (C5): quotes are indicative
 marks, PoP is the market's own number, and the OOS evidence rides along.
+build_hypothesis_ticket is the chat path: same core, user-confirmed levels, no tournament evidence.
 """
 
 from __future__ import annotations
@@ -39,8 +40,7 @@ _ORDER = {
 }
 
 
-def _preference(style: str, stance: str, iv_ratio: float | None) -> list[str]:
-    premium_first = style == "mean_reversion"
+def _preference(premium_first: bool, stance: str, iv_ratio: float | None) -> list[str]:
     if iv_ratio is not None:
         if iv_ratio > IV_SELL_PREMIUM:
             premium_first = True
@@ -67,6 +67,58 @@ def _spans_earnings(s: Structure, next_earnings: pd.Timestamp | None) -> bool:
     return any(pd.Timestamp(leg["expiration"]) >= ne for leg in s.legs)
 
 
+def _assemble(
+    *,
+    stance: str,
+    levels: Levels,
+    bars: pd.DataFrame,
+    chain: pd.DataFrame,
+    premium_first: bool,
+    use_iv_override: bool,
+    next_earnings: pd.Timestamp | None,
+    earnings_warning: bool,
+    account_size: float,
+    risk_per_trade_pct: float,
+) -> tuple[list[Structure], list[str], float | None, pd.Timestamp, bool]:
+    """Shared core: build -> order -> demote -> size -> recommend.
+
+    Returns ``(structures, warnings, iv_ratio, asof, has_chain)``. ``iv_ratio``
+    is always computed for framing; ``use_iv_override=False`` keeps it out of
+    the ordering decision (a pinned chat preference).
+    """
+    has_chain = len(chain) > 0
+    spot = float(chain["spot"].iloc[0]) if has_chain else float(bars["close"].iloc[-1])
+    asof = (
+        pd.Timestamp(chain["date"].iloc[0]) if has_chain else _naive(pd.Timestamp(bars.index[-1]))
+    )
+
+    structures = build_structures(chain, levels, stance, spot=spot, asof=asof)
+    warnings = [INDICATIVE_WARNING]
+    if len(structures) == 1:  # every option structure failed the gate (or no chain)
+        warnings.append("options_illiquid: no option structure passed the liquidity gate")
+
+    rv = float(realized_vol(bars["close"]).iloc[-1])
+    chain_iv = atm_iv(chain, spot=spot, asof=asof) if has_chain else None
+    iv_ratio = float(chain_iv / rv) if chain_iv is not None and np.isfinite(rv) and rv > 0 else None
+
+    order = _preference(premium_first, stance, iv_ratio if use_iv_override else None)
+    structures.sort(key=lambda s: order.index(s.kind))
+    if earnings_warning:
+        kept = [s for s in structures if not _spans_earnings(s, next_earnings)]
+        demoted = [s for s in structures if _spans_earnings(s, next_earnings)]
+        for s in demoted:
+            s.warnings.append("undefined risk across earnings; demoted below defined-risk spreads")
+        structures = kept + demoted
+        when = f" ({_naive(next_earnings):%Y-%m-%d})" if next_earnings is not None else ""
+        warnings.append(f"earnings inside the warn window{when}")
+
+    for s in structures:
+        size_structure(s, account_size=account_size, risk_per_trade_pct=risk_per_trade_pct)
+    recommended = next((s for s in structures if s.quantity), structures[0])
+    recommended.recommended = True
+    return structures, warnings, iv_ratio, asof, has_chain
+
+
 def build_ticket(
     *,
     ticker: str,
@@ -84,37 +136,18 @@ def build_ticket(
     """One report-ready trade ticket for a tournament winner. Pure; no I/O."""
     sdef = STRATEGIES[winner["strategy"]]
     levels = Levels(**winner["levels"])
-    has_chain = len(chain) > 0
-    spot = float(chain["spot"].iloc[0]) if has_chain else float(bars["close"].iloc[-1])
-    asof = (
-        pd.Timestamp(chain["date"].iloc[0]) if has_chain else _naive(pd.Timestamp(bars.index[-1]))
+    structures, warnings, iv_ratio, asof, has_chain = _assemble(
+        stance=stance,
+        levels=levels,
+        bars=bars,
+        chain=chain,
+        premium_first=sdef.style == "mean_reversion",
+        use_iv_override=True,
+        next_earnings=next_earnings,
+        earnings_warning=earnings_warning,
+        account_size=account_size,
+        risk_per_trade_pct=risk_per_trade_pct,
     )
-
-    structures = build_structures(chain, levels, stance, spot=spot, asof=asof)
-    warnings = [INDICATIVE_WARNING]
-    if len(structures) == 1:  # every option structure failed the gate (or no chain)
-        warnings.append("options_illiquid: no option structure passed the liquidity gate")
-
-    rv = float(realized_vol(bars["close"]).iloc[-1])
-    chain_iv = atm_iv(chain, spot=spot, asof=asof) if has_chain else None
-    iv_ratio = float(chain_iv / rv) if chain_iv is not None and np.isfinite(rv) and rv > 0 else None
-
-    order = _preference(sdef.style, stance, iv_ratio)
-    structures.sort(key=lambda s: order.index(s.kind))
-    if earnings_warning:
-        kept = [s for s in structures if not _spans_earnings(s, next_earnings)]
-        demoted = [s for s in structures if _spans_earnings(s, next_earnings)]
-        for s in demoted:
-            s.warnings.append("undefined risk across earnings; demoted below defined-risk spreads")
-        structures = kept + demoted
-        when = f" ({_naive(next_earnings):%Y-%m-%d})" if next_earnings is not None else ""
-        warnings.append(f"earnings inside the warn window{when}")
-
-    for s in structures:
-        size_structure(s, account_size=account_size, risk_per_trade_pct=risk_per_trade_pct)
-    recommended = next((s for s in structures if s.quantity), structures[0])
-    recommended.recommended = True
-
     return {
         "ticker": ticker,
         "stance": stance,
@@ -131,6 +164,53 @@ def build_ticket(
             "fa_rank": fa["rank"] if fa else None,
             "fa_score": fa["fa_score"] if fa else None,
         },
+        "quotes_asof": asof.strftime("%Y-%m-%d") if has_chain else None,
+        "iv_ratio": iv_ratio,
+        "next_earnings": (
+            _naive(next_earnings).strftime("%Y-%m-%d") if next_earnings is not None else None
+        ),
+        "account_size": account_size,
+        "risk_per_trade_pct": risk_per_trade_pct,
+        "structures": [s.as_dict() for s in structures],
+        "warnings": warnings,
+    }
+
+
+def build_hypothesis_ticket(
+    *,
+    ticker: str,
+    stance: str,
+    levels: dict,
+    bars: pd.DataFrame,
+    chain: pd.DataFrame,
+    preference: str = "auto",
+    next_earnings: pd.Timestamp | None = None,
+    earnings_warning: bool = False,
+    account_size: float = 100_000.0,
+    risk_per_trade_pct: float = 0.01,
+) -> dict:
+    """A chat-built ticket: user hypothesis + confirmed levels, no tournament
+    evidence. ``preference`` pins the ordering ("directional" | "premium") or
+    lets the IV/RV tilt decide ("auto", directional base). Pure; no I/O."""
+    if preference not in ("auto", "directional", "premium"):
+        raise ValueError(f"preference must be auto|directional|premium, got {preference!r}")
+    structures, warnings, iv_ratio, asof, has_chain = _assemble(
+        stance=stance,
+        levels=Levels(**levels),
+        bars=bars,
+        chain=chain,
+        premium_first=preference == "premium",
+        use_iv_override=preference == "auto",
+        next_earnings=next_earnings,
+        earnings_warning=earnings_warning,
+        account_size=account_size,
+        risk_per_trade_pct=risk_per_trade_pct,
+    )
+    return {
+        "source": "chat",
+        "ticker": ticker,
+        "stance": stance,
+        "levels": dict(levels),
         "quotes_asof": asof.strftime("%Y-%m-%d") if has_chain else None,
         "iv_ratio": iv_ratio,
         "next_earnings": (
