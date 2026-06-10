@@ -16,7 +16,14 @@ def _result(asof: str) -> dict:
     return {
         "asof": asof,
         "config": {"fa_keep": 40, "top": 15},
-        "funnel": {"universe": 503, "fa_shortlist": 40, "with_setups": 2},
+        "funnel": {
+            "universe": 503,
+            "fa_shortlist": 40,
+            "with_setups": 2,
+            "tournament_candidates": 4,
+            "tournament_survivors": 1,
+            "tickets": 1,
+        },
         "candidates": [
             {
                 "ticker": "AAPL",
@@ -77,6 +84,76 @@ def _result(asof: str) -> dict:
             },
         ],
         "errors": [{"ticker": "BAD", "stage": "bars", "error": "no data"}],
+        "tickets": {
+            "long": [
+                {
+                    "ticker": "AAPL",
+                    "stance": "long",
+                    "strategy": "sma_cross",
+                    "style": "trend",
+                    "params": {"fast": 10, "slow": 50},
+                    "levels": {
+                        "entry": 210.0,
+                        "entry_type": "market",
+                        "stop": 195.0,
+                        "target": 240.0,
+                        "condition": "enter while SMA(10) holds above SMA(50)",
+                    },
+                    "evidence": {
+                        "deflated_sharpe": 0.93,
+                        "sharpe": 1.1,
+                        "n_trades": 18,
+                        "n_windows": 6,
+                        "winner_changed": True,
+                        "fa_rank": 1,
+                        "fa_score": 0.9,
+                    },
+                    "quotes_asof": "2026-06-10",
+                    "iv_ratio": 1.05,
+                    "next_earnings": None,
+                    "account_size": 100000.0,
+                    "risk_per_trade_pct": 0.01,
+                    "structures": [
+                        {
+                            "kind": "stock",
+                            "label": "buy shares; stop 195.00",
+                            "unit": "share",
+                            "legs": [],
+                            "premium": None,
+                            "max_loss": 15.0,
+                            "max_gain": None,
+                            "breakeven": 210.0,
+                            "pop_market_implied": None,
+                            "rr": 2.0,
+                            "premium_yield": None,
+                            "warnings": [],
+                            "recommended": True,
+                            "quantity": 66,
+                            "loss_at_stop": None,
+                        },
+                        {
+                            "kind": "long_call",
+                            "label": "buy 1x 215C 2026-08-21",
+                            "unit": "contract",
+                            "legs": [],
+                            "premium": 9.4,
+                            "max_loss": 9.4,
+                            "max_gain": None,
+                            "breakeven": 224.4,
+                            "pop_market_implied": 0.38,
+                            "rr": None,
+                            "premium_yield": None,
+                            "warnings": [],
+                            "recommended": False,
+                            "quantity": None,
+                            "loss_at_stop": None,
+                        },
+                    ],
+                    "warnings": ["indicative quotes: last/close marks"],
+                }
+            ],
+            "short": [],
+        },
     }
 
 
@@ -141,6 +218,38 @@ def test_scans_page_empty_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
     assert resp.status_code == 200
     assert "no scans yet" in resp.text.lower()
+
+
+def test_scans_page_renders_tickets(scan_dir: Path) -> None:
+    client = TestClient(create_app())
+    html = client.get("/scans").text
+
+    assert "Trade tickets" in html
+    assert "sma_cross" in html
+    assert "buy shares; stop 195.00" in html  # recommended structure
+    assert "UNSIZED" in html  # null quantity is surfaced, not hidden
+    assert "winner changed" in html
+    assert "indicative" in html.lower()
+    assert "Tournament" in html  # funnel metrics extended
+
+
+def test_scans_page_without_ticket_keys_still_renders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reports written before sub-project C have no tickets/tournament keys."""
+    monkeypatch.setattr(scans_module, "processed_dir", lambda source: tmp_path / source)
+    legacy = _result("2026-06-01")
+    del legacy["tickets"]
+    legacy["funnel"] = {"universe": 503, "fa_shortlist": 40, "with_setups": 2}
+    out = tmp_path / "scans" / "2026-06-01"
+    out.mkdir(parents=True)
+    (out / "report.json").write_text(json.dumps(legacy), encoding="utf-8")
+
+    client = TestClient(create_app())
+    resp = client.get("/scans")
+
+    assert resp.status_code == 200
+    assert "Trade tickets" not in resp.text
 
 
 def test_index_links_to_scans(scan_dir: Path) -> None:
