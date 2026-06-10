@@ -18,7 +18,13 @@ def _uptrend_bars(n: int = 600) -> pd.DataFrame:
     close = 100.0 * 1.01 ** np.arange(n)
     idx = pd.date_range("2022-01-03", periods=n, freq="B", tz="UTC")
     return pd.DataFrame(
-        {"open": close, "high": close * 1.01, "low": close * 0.99, "close": close},
+        {
+            "open": close,
+            "high": close * 1.01,
+            "low": close * 0.99,
+            "close": close,
+            "volume": np.full(n, 1_000_000.0),
+        },
         index=idx,
     )
 
@@ -108,7 +114,7 @@ def test_run_tournament_real_registry_structural() -> None:
     bars = _uptrend_bars(700)
     result = run_tournament(bars, "long", config=TournamentConfig(initial_train=300, test_size=63))
     assert {v.key for v in result.verdicts} == set(STRATEGIES)
-    assert result.n_trials == 18
+    assert result.n_trials == 21  # keep in sync with the registry
     survivors = {v.key for v in result.verdicts if v.survived}
     if result.winner is None:
         assert not survivors
