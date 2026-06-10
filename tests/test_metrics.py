@@ -74,3 +74,48 @@ def test_n_trials_two_deflates_below_psr() -> None:
     returns = pd.Series(rng.normal(0.001, 0.01, size=250))
     metrics = compute_metrics(returns, _equity(returns), n_trials=2)
     assert metrics["deflated_sharpe"] < metrics["probabilistic_sharpe"]
+
+
+# --- golden values: pin the formulas, not just their properties ------------
+
+
+def test_sharpe_and_sortino_golden_values() -> None:
+    # mean = 0.01; ddof=0 variance = 2.5e-4 -> sharpe = sqrt(252 * 0.4) = sqrt(100.8)
+    # downside (clip upper 0) = [0, 0, -0.01, 0]; ddof=0 std = sqrt(1.875e-5)
+    #   -> sortino = sqrt(252 * (0.01^2 / 1.875e-5)) = sqrt(1344)
+    returns = pd.Series([0.02, 0.0, -0.01, 0.03])
+    metrics = compute_metrics(returns, _equity(returns))
+    assert metrics["sharpe"] == pytest.approx(np.sqrt(100.8), rel=1e-9)
+    assert metrics["sortino"] == pytest.approx(np.sqrt(1344.0), rel=1e-9)
+    assert metrics["n_bars"] == 4
+
+
+def test_annualized_return_compounds_geometrically() -> None:
+    # growth = 1.02 * 1.00 * 0.99 * 1.03; annualized over 4 bars at 252/yr
+    returns = pd.Series([0.02, 0.0, -0.01, 0.03])
+    metrics = compute_metrics(returns, _equity(returns))
+    expected = (1.02 * 1.00 * 0.99 * 1.03) ** (252 / 4) - 1.0
+    assert metrics["annualized_return"] == pytest.approx(expected, rel=1e-9)
+
+
+def test_hit_rate_counts_only_active_bars() -> None:
+    # zero-return (flat) bars are excluded: 2 wins / 3 nonzero bars
+    returns = pd.Series([0.01, 0.0, -0.02, 0.03])
+    metrics = compute_metrics(returns, _equity(returns))
+    assert metrics["hit_rate"] == pytest.approx(2.0 / 3.0, rel=1e-9)
+
+
+def test_max_drawdown_peak_to_trough() -> None:
+    # peak 120 -> trough 80: max drawdown = 80/120 - 1 = -1/3
+    equity = pd.Series([100.0, 120.0, 90.0, 110.0, 80.0])
+    returns = equity.pct_change().fillna(0.0)
+    metrics = compute_metrics(returns, equity)
+    assert metrics["max_drawdown"] == pytest.approx(-1.0 / 3.0, rel=1e-9)
+
+
+def test_max_drawdown_counts_loss_from_first_bar() -> None:
+    # a curve that never exceeds its starting value still reports its drawdown
+    equity = pd.Series([90.0, 80.0, 95.0])
+    returns = equity.pct_change().fillna(0.0)
+    metrics = compute_metrics(returns, equity)
+    assert metrics["max_drawdown"] == pytest.approx(80.0 / 90.0 - 1.0, rel=1e-9)
