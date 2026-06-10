@@ -217,6 +217,22 @@ def run_scan(
                     # latest session; a NaN bar poisons ATR-based winner levels
                     t_bars = load_daily(ticker, start=t_start)
                     t_bars = t_bars.dropna(subset=["open", "high", "low", "close"])
+                    flags = pd.Series(False, index=t_bars.index)
+                    try:
+                        earnings = get_earnings_dates([ticker], refresh=config.refresh)
+                        dts = pd.DatetimeIndex(earnings["earnings_datetime"])
+                        if dts.tz is None:
+                            dts = dts.tz_localize("UTC")
+                        if t_bars.index.tz is None:
+                            dts = dts.tz_convert("UTC").tz_localize(None)
+                        pos = t_bars.index.searchsorted(dts)
+                        pos = pos[pos < len(t_bars)]
+                        flags.iloc[pos] = True
+                    except Exception as exc:
+                        errors.append(
+                            {"ticker": ticker, "stage": "tournament", "error": f"earnings: {exc}"}
+                        )
+                    t_bars = t_bars.assign(earnings=flags)
                     tr = run_tournament(t_bars, stance)
                 except Exception as exc:
                     errors.append({"ticker": ticker, "stage": "tournament", "error": str(exc)})
