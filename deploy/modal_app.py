@@ -180,13 +180,18 @@ def fastapi_app():
     timeout=3600,  # ~1000 .info fetches (threaded+cached) + ~160 EDGAR companyfacts + ~15 LLM briefs; live smoke pending
 )
 def scheduled_swing_scan() -> None:
+    from datetime import UTC, datetime
+
     from tradinglib.assistant.provider import ClaudeProvider
     from tradinglib.data.paths import processed_dir
     from tradinglib.scanner.config import ScanConfig
     from tradinglib.scanner.pipeline import run_scan
-    from tradinglib.scanner.report import write_report
+    from tradinglib.scanner.report import load_latest_report, write_report
 
-    result = run_scan(ScanConfig(), ClaudeProvider())
-    json_path, _ = write_report(result, processed_dir("scans") / result["asof"])
+    base = processed_dir("scans")
+    # without last night's report every winner_changed stays null forever
+    previous = load_latest_report(base, before=datetime.now(UTC).strftime("%Y-%m-%d"))
+    result = run_scan(ScanConfig(), ClaudeProvider(), previous_report=previous)
+    json_path, _ = write_report(result, base / result["asof"])
     data_volume.commit()  # persist before the container scales down
     print(f"swing scan {result['asof']}: {result['funnel']} -> {json_path}")
