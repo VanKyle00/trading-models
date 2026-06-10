@@ -109,6 +109,58 @@ A `Dockerfile` (+ `render.yaml` blueprint) is also included for container hosts
 like Render, Railway, or Fly. The chat degrades gracefully without the API key.
 Full steps and the persistent-cache notes are in [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
+## Nightly swing scanner
+
+**▶ [Open the scans page →](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/scans)**
+— every weekday after the US close (22:00 UTC) a Modal cron sweeps the full
+S&P 500 for swing setups on the 2-week-to-6-month horizon and publishes a
+ranked watchlist to the workbench's `/scans` page: funnel stats up top, then
+one card per candidate with the detected setup, trigger/stop levels, and a
+grounded LLM brief.
+
+[![A nightly scan report: the S&P 500 funnel (universe 503 → 40 past the FA gate → 4 setups forming) and the top-ranked candidate cards with trigger/stop levels and grounded LLM briefs](docs/assets/scans.png)](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/scans)
+
+The funnel (`tradinglib/scanner/`) narrows ~503 names to a handful in four
+stages — the first two are the **fundamental (FA) gate**:
+
+1. **FA gate, pass 1 — snapshot percentiles.** Six metrics — revenue growth,
+   earnings growth, operating margin, debt-to-equity, free-cash-flow yield,
+   and forward P/E — are scored as *cross-sectional percentiles* across the
+   universe. Forward P/E is percentiled within its GICS sector (so a bank's
+   multiple is never judged against a software company's), and the scoring is
+   direction-aware: lower debt and a cheaper multiple score higher. A ticker's
+   `fa_score` is the mean of the percentiles it actually has, with two hard
+   filters: at least 4 of the 6 metrics present, and positive
+   trailing-twelve-month revenue. The top 80 by `fa_score` advance.
+2. **FA gate, pass 2 — EDGAR trend blend.** For each pass-1 survivor the
+   scanner pulls quarterly XBRL companyfacts from SEC EDGAR and computes
+   revenue YoY growth, revenue acceleration, and EPS change YoY. Those are
+   percentiled among the survivors and blended as
+   `0.7 · fa_score + 0.3 · edgar_score`; the re-ranked top 40 pass the gate.
+   Tickers EDGAR has no data for keep their unblended score rather than being
+   penalized for missing facts.
+3. **Setup detection.** Three daily-bar detectors look for setups *forming
+   now*: `base_breakout` (tight consolidation near the 52-week high on
+   drying-up volume), `ma_pullback` (orderly pullback to a rising 50-day MA
+   inside an uptrend), and `pead` (post-earnings-announcement drift after a
+   big up-gap on volume). Each emits a 0–1 score plus concrete trigger and
+   stop levels.
+4. **LLM document briefs + ranking.** Every finalist gets a bounded doc pack —
+   the latest 8-K excerpt, the 10-Q/10-K MD&A opening, recent headlines, its
+   FA metrics and the detected setup — and one LLM call returns strict JSON
+   (thesis, catalysts, risks, red flags, stance, 0–10 qualitative score).
+   Final rank is `0.35·FA + 0.45·setup + 0.20·qualitative`; an `avoid` stance
+   or any red flag pins the name to the bottom of the list with the reason
+   shown — never silently dropped. Candidates reporting earnings within 14
+   days carry a warning chip.
+
+Run it yourself (`--limit` for a quick smoke run, `--skip-llm` to stop after
+setup detection):
+
+```bash
+uv run python scripts/swing_scan.py --limit 25 --skip-llm
+```
+
 ## Current models
 
 | Model | Family | Window | Assets | OOS Sharpe | Max DD | Status |
