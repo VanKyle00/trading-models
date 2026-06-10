@@ -141,3 +141,89 @@ def test_long_option_not_offered_without_directional_expiry(make_chain) -> None:
 
     chain = make_chain(mids={("call", 38, 100.0): 2.0})  # income window only
     assert long_option(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long") is None
+
+
+def test_cash_secured_put_strike_at_or_below_stop(make_chain) -> None:
+    from tradinglib.strategist.structures import cash_secured_put
+
+    s = cash_secured_put(make_chain(mids=LONG_MIDS), LONG_LEVELS, spot=100.0, asof=ASOF)
+
+    assert s is not None and s.kind == "csp"
+    assert s.legs[0]["strike"] == 95.0 and s.legs[0]["action"] == "sell"
+    assert s.premium == pytest.approx(-2.8)  # credit received
+    assert s.max_loss == pytest.approx(92.2)  # strike - credit, stock to zero
+    assert s.max_gain == pytest.approx(2.8)
+    assert s.breakeven == pytest.approx(92.2)
+    assert s.premium_yield == pytest.approx(2.8 / 95.0)
+    # scenario P/L with the stock AT the ticket stop (96): put expires OTM -> keep credit
+    assert s.loss_at_stop == pytest.approx(-2.8)
+    assert any("assignment" in w for w in s.warnings)
+
+
+def test_bull_put_spread_credit_rule(make_chain) -> None:
+    from tradinglib.strategist.structures import credit_spread
+
+    s = credit_spread(make_chain(mids=LONG_MIDS), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+
+    assert s is not None and s.kind == "bull_put_spread"
+    assert [(leg["action"], leg["strike"]) for leg in s.legs] == [("sell", 95.0), ("buy", 90.0)]
+    assert s.premium == pytest.approx(-1.8)
+    assert s.max_loss == pytest.approx(3.2)  # width 5 - credit 1.8
+    assert s.max_gain == pytest.approx(1.8)
+    assert s.breakeven == pytest.approx(93.2)
+    assert s.premium_yield == pytest.approx(1.8 / 5.0)
+    assert s.rr == pytest.approx(1.8 / 3.2)
+
+
+def test_bull_put_spread_rejected_when_credit_below_third_of_width(make_chain) -> None:
+    from tradinglib.strategist.structures import credit_spread
+
+    mids = {**LONG_MIDS, ("put", 38, 95.0): 2.0, ("put", 38, 90.0): 1.0}  # credit 1.0 < 5/3
+    s = credit_spread(make_chain(mids=mids), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+
+    assert s is None
+
+
+def test_bear_call_spread_short_strike_above_invalidation(make_chain) -> None:
+    from tradinglib.strategist.structures import credit_spread
+
+    s = credit_spread(
+        make_chain(mids=SHORT_MIDS), SHORT_LEVELS, spot=100.0, asof=ASOF, stance="short"
+    )
+
+    assert s is not None and s.kind == "bear_call_spread"
+    assert [(leg["action"], leg["strike"]) for leg in s.legs] == [("sell", 105.0), ("buy", 110.0)]
+    assert s.premium == pytest.approx(-1.7)
+    assert s.max_loss == pytest.approx(3.3)
+    assert s.breakeven == pytest.approx(106.7)
+    expected_pop = pop_market_implied(
+        spot=100.0, level=106.7, vol=0.30, t_years=38 / 365, profit_above=False
+    )
+    assert s.pop_market_implied == pytest.approx(expected_pop)
+
+
+def test_build_structures_long_offers_everything_that_passes(make_chain) -> None:
+    out = build_structures(
+        make_chain(mids=LONG_MIDS), LONG_LEVELS, "long", spot=100.0, asof=ASOF
+    )
+    assert [s.kind for s in out] == ["stock", "long_call", "csp", "bull_put_spread"]
+
+
+def test_build_structures_short_never_builds_naked_calls(make_chain) -> None:
+    out = build_structures(
+        make_chain(mids=SHORT_MIDS), SHORT_LEVELS, "short", spot=100.0, asof=ASOF
+    )
+    kinds = [s.kind for s in out]
+    assert kinds == ["stock_short", "long_put", "bear_call_spread"]
+    # naked short calls are never offered, by construction: no builder emits one
+    assert not any(
+        leg["action"] == "sell" and leg["right"] == "call" and len(s.legs) == 1
+        for s in out
+        for leg in s.legs
+    )
+
+
+def test_build_structures_empty_chain_is_stock_only(make_chain) -> None:
+    empty = make_chain(mids={("call", 38, 100.0): 1.0}).iloc[0:0]
+    out = build_structures(empty, LONG_LEVELS, "long", spot=100.0, asof=ASOF)
+    assert [s.kind for s in out] == ["stock"]
