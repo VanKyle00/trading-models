@@ -151,6 +151,9 @@
         <div class="m-label">① Find tickers</div>
         <div class="stage-counts">{{ day.funnel.universe | default('?') }} universe →
           {{ day.funnel.fa_shortlist | default('?') }} L{% if day.funnel.fa_shortlist_short is defined %} / {{ day.funnel.fa_shortlist_short }} S{% endif %} past FA gate</div>
+        {% if day.fdr %}
+          <div class="stage-counts">{{ day.fdr.family }} tested · {{ day.funnel.fdr_passed | default('?') }} passed nightly FDR · {{ day.n_watch }} watchlist</div>
+        {% endif %}
       </a>
       <div class="rail-arrow"></div>
       <a class="stage" href="#find-strategy">
@@ -250,6 +253,24 @@
       {% endif %}
     {% else %}
       <p class="placeholder">not run on this date</p>
+    {% endif %}
+
+    {% if day.n_watch > 0 %}
+    <h2 class="sec-head" id="watchlist">Watchlist — below tournament bar, tracked forward</h2>
+      {% for stance in ("long", "short") %}
+        {% for w in day.watchlist[stance] %}
+          <div class="setup" style="margin-bottom:8px;">
+            <b>{{ w.ticker }}</b>
+            <span class="chip {{ 'favorable' if stance == 'long' else 'flag' }}" style="margin-left:6px;">{{ stance }}</span>
+            <span class="chip" style="margin-left:4px;">{{ w.strategy }}</span>
+            {% if w.tier_reason %}<span class="evidence" style="margin-left:8px;">{{ w.tier_reason }}</span>{% endif %}
+            {% if w.deflated_sharpe is not none %}<span class="evidence" style="margin-left:8px;">DSR {{ '%.2f' | format(w.deflated_sharpe) }}</span>{% endif %}
+            {% if w.levels %}
+              <span class="levels" style="margin-left:8px;">entry {{ '%.2f' | format(w.levels.entry) }} · stop {{ '%.2f' | format(w.levels.stop) }}{% if w.levels.target is defined %} · target {{ '%.2f' | format(w.levels.target) }}{% endif %}</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endfor %}
     {% endif %}
 
     <h2 class="sec-head" id="create-trade">③ Create trade — tickets &amp; performance since issue</h2>

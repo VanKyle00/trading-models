@@ -165,6 +165,7 @@ def test_catalog_summarizes_funnels(tmp_path: Path, monkeypatch: pytest.MonkeyPa
             "candidates": 80,
             "survivors": 1,
             "tickets": 1,
+            "watchlist": None,
         }
     ]
 
@@ -475,3 +476,223 @@ def test_topbars_link_to_tournaments(tournaments_dir: Path) -> None:
     client = TestClient(create_app())
     assert 'href="/tournaments"' in client.get("/").text
     assert 'href="/tournaments"' in client.get("/scans").text
+
+
+# ---------------------------------------------------------------------------
+# Tier-aware /tournaments tests (C4)
+# ---------------------------------------------------------------------------
+
+
+def _ledger_with_tiers(date: str) -> dict:
+    """Ledger with by_tier block and tier fields on records."""
+    ticket_rec = {**_ledger_record(date), "tier": "ticket"}
+    watch_rec = {
+        "date": date,
+        "ticker": "WLVL",
+        "stance": "long",
+        "strategy": "sma_cross",
+        "tier": "watch",
+        "tier_reason": "below DS threshold",
+        "levels": {"entry": 50.0, "stop": 45.0, "target": 60.0},
+        "status": "open",
+        "entry_date": "2026-06-09",
+        "entry_fill": 50.0,
+        "exit_date": None,
+        "exit_fill": None,
+        "r": -0.3,
+        "pct_move": -0.02,
+        "sessions_held": 1,
+        "ambiguous_bar": False,
+        "closes": [["2026-06-09", 49.5], ["2026-06-10", 49.0]],
+    }
+    return {
+        "built_asof": "2026-06-10",
+        "stats": {
+            "issued": 2,
+            "waiting": 0,
+            "expired": 0,
+            "open": 2,
+            "stopped": 0,
+            "target": 0,
+            "errors": 0,
+            "hit_rate": None,
+            "total_r": 0.3,
+            "avg_r": 0.15,
+            "max_drawdown_r": 0.5,
+            "by_tier": {
+                "ticket": {
+                    "issued": 1,
+                    "waiting": 0,
+                    "expired": 0,
+                    "open": 1,
+                    "stopped": 0,
+                    "target": 0,
+                    "errors": 0,
+                    "hit_rate": None,
+                    "total_r": 0.6,
+                    "avg_r": 0.6,
+                    "max_drawdown_r": None,
+                },
+                "watch": {
+                    "issued": 1,
+                    "waiting": 0,
+                    "expired": 0,
+                    "open": 1,
+                    "stopped": 0,
+                    "target": 0,
+                    "errors": 0,
+                    "hit_rate": None,
+                    "total_r": -0.3,
+                    "avg_r": -0.3,
+                    "max_drawdown_r": None,
+                },
+            },
+        },
+        "tickets": [ticket_rec, watch_rec],
+    }
+
+
+def _report_with_watchlist_and_fdr(asof: str) -> dict:
+    """Report with watchlist and fdr keys for day-page tests."""
+    base = _report(asof)
+    base["watchlist"] = {
+        "long": [
+            {
+                "ticker": "WLVL",
+                "stance": "long",
+                "strategy": "sma_cross",
+                "tier": "watch",
+                "tier_reason": "below DS threshold",
+                "deflated_sharpe": 0.75,
+                "levels": {"entry": 50.0, "stop": 45.0, "target": 60.0},
+            }
+        ],
+        "short": [],
+    }
+    base["fdr"] = {"alpha": 0.05, "threshold": 0.9, "family": 18}
+    base["funnel"]["fdr_passed"] = 3
+    base["funnel"]["watchlist"] = 1
+    return base
+
+
+@pytest.fixture
+def tiered_tournaments_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Fixture with a tiered ledger and a report that includes watchlist+fdr."""
+    monkeypatch.setattr(scans_module, "processed_dir", lambda source: tmp_path / source)
+    monkeypatch.setattr(tournaments_module, "processed_dir", lambda source: tmp_path / source)
+    base = tmp_path / "scans"
+    (base / "2026-06-08").mkdir(parents=True)
+    (base / "2026-06-08" / "report.json").write_text(
+        json.dumps(_report_with_watchlist_and_fdr("2026-06-08")), encoding="utf-8"
+    )
+    (base / "ledger.json").write_text(
+        json.dumps(_ledger_with_tiers("2026-06-08")), encoding="utf-8"
+    )
+    return base
+
+
+def test_index_by_tier_strips_render(tiered_tournaments_dir: Path) -> None:
+    """When by_tier is present, both tier strips render with their labels and stats."""
+    html = TestClient(create_app()).get("/tournaments").text
+    assert "Tickets" in html
+    assert "Watchlist" in html
+    # max_drawdown_r value from the combined stats
+    assert "0.50" in html
+
+
+def test_index_by_tier_badge_in_rows(tiered_tournaments_dir: Path) -> None:
+    """Ledger table rows show tier badges for both ticket and watch rows."""
+    html = TestClient(create_app()).get("/tournaments").text
+    # tier badge for each row (chip with tier value)
+    assert "ticket" in html
+    assert "watch" in html
+
+
+def test_index_old_ledger_no_tier_strips(tournaments_dir: Path) -> None:
+    """OLD ledger (no by_tier): page renders 200, no per-tier strips, existing assertions pass."""
+    html = TestClient(create_app()).get("/tournaments").text
+    assert "Total R" in html
+    assert "+0.60" in html
+    # no per-tier strip headers for OLD ledger
+    assert "Tickets" not in html or "Watchlist" not in html
+
+
+def test_index_old_ledger_no_crash(tournaments_dir: Path) -> None:
+    """OLD ledger renders 200 without by_tier."""
+    resp = TestClient(create_app()).get("/tournaments")
+    assert resp.status_code == 200
+
+
+def test_day_watchlist_section_renders(tiered_tournaments_dir: Path) -> None:
+    """Watchlist section appears with ticker, tier_reason, deflated_sharpe."""
+    html = TestClient(create_app()).get("/tournaments/2026-06-08").text
+    assert "Watchlist" in html
+    assert "WLVL" in html
+    assert "below DS threshold" in html
+    assert "0.75" in html
+
+
+def test_day_fdr_story_line_renders(tiered_tournaments_dir: Path) -> None:
+    """FDR story line shows family, passed, watchlist counts."""
+    html = TestClient(create_app()).get("/tournaments/2026-06-08").text
+    # family=18, fdr_passed=3, watchlist=1
+    assert "18" in html
+    assert "3" in html
+    assert "1" in html
+
+
+def test_day_old_scan_no_watchlist_renders_200(tournaments_dir: Path) -> None:
+    """OLD scan (no fdr/watchlist keys): page renders 200 unchanged."""
+    resp = TestClient(create_app()).get("/tournaments/2026-06-08")
+    assert resp.status_code == 200
+    # watchlist section should not appear
+    assert "Watchlist" not in resp.text
+
+
+def test_day_view_watchlist_and_fdr_keys() -> None:
+    """day_view returns watchlist and fdr keys from scan; defaults when absent."""
+    scan_with = {
+        "asof": "2026-06-08",
+        "funnel": {"universe": 100, "fdr_passed": 3, "watchlist": 1},
+        "watchlist": {"long": [{"ticker": "WW"}], "short": []},
+        "fdr": {"alpha": 0.05, "threshold": 0.9, "family": 18},
+    }
+    day = tournaments_module.day_view(scan_with, None)
+    assert day["watchlist"] == {"long": [{"ticker": "WW"}], "short": []}
+    assert day["fdr"] == {"alpha": 0.05, "threshold": 0.9, "family": 18}
+    assert day["n_watch"] == 1
+
+    scan_without = {"asof": "2026-06-07", "funnel": {"universe": 50}}
+    day2 = tournaments_module.day_view(scan_without, None)
+    assert day2["watchlist"] == {"long": [], "short": []}
+    assert day2["fdr"] is None
+    assert day2["n_watch"] == 0
+
+
+def test_catalog_row_has_watchlist_key() -> None:
+    """catalog rows gain 'watchlist' key from funnel; None when absent."""
+    scan = {
+        "asof": "2026-06-08",
+        "funnel": {
+            "universe": 1003,
+            "fa_shortlist": 2,
+            "fa_shortlist_short": 2,
+            "tournament_candidates": 4,
+            "tournament_survivors": 1,
+            "tickets": 1,
+            "watchlist": 2,
+        },
+    }
+
+    def _mock_load(date: str) -> dict | None:
+        return scan if date == "2026-06-08" else None
+
+    # catalog calls load_scan bound in tournaments module namespace
+    orig = tournaments_module.load_scan
+    tournaments_module.load_scan = _mock_load  # type: ignore[attr-defined]
+    try:
+        rows = tournaments_module.catalog(["2026-06-08"])
+    finally:
+        tournaments_module.load_scan = orig  # type: ignore[attr-defined]
+
+    assert rows[0]["watchlist"] == 2

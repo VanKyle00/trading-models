@@ -55,7 +55,7 @@
     .wrap { max-width: 980px; margin: 0 auto; padding: 22px 18px 60px; }
     .placeholder { color: var(--muted); }
 
-    .funnel { display: grid; grid-template-columns: repeat(4, 1fr);
+    .funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
               border: 1px solid var(--line-strong); margin-bottom: 22px; }
     .funnel .metric { padding: 12px 14px; border-right: 1px solid var(--line); }
     .funnel .metric:last-child { border-right: 0; }
@@ -76,6 +76,11 @@
     .ledger .tkr { font-weight: 700; }
     .ledger .up { color: var(--up); }
     .ledger .down { color: var(--down); }
+
+    .tier-strip { border: 1px solid var(--line); padding: 10px 14px; margin-bottom: 10px; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+    .tier-strip-label { font-family: "Martian Mono", monospace; font-size: 9px; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); min-width: 72px; }
+    .tier-strip-metrics { display: flex; gap: 20px; flex-wrap: wrap; font-size: 12px; }
+    .tier-strip-metrics .m-label { display: block; }
 
     .chip { font-size: 8.5px; padding: 3px 8px; border: 1px solid var(--line); color: var(--muted); }
     .chip.favorable { color: var(--up); border-color: var(--up); }
@@ -113,16 +118,42 @@
           <div class="m-value">{{ '%.0f%%' | format(stats.hit_rate * 100) if stats.hit_rate is not none else '—' }}</div></div>
         <div class="metric"><div class="m-label">Total R</div>
           <div class="m-value {{ 'up' if stats.total_r > 0 else 'down' if stats.total_r < 0 else '' }}">{{ '%+.2f' | format(stats.total_r) }}</div></div>
+        {% if stats.max_drawdown_r is defined and stats.max_drawdown_r is not none %}
+        <div class="metric"><div class="m-label">Max DD (R)</div>
+          <div class="m-value down">{{ '%.2f' | format(stats.max_drawdown_r) }}</div></div>
+        {% endif %}
       </div>
+
+      {% if stats.by_tier is defined and stats.by_tier %}
+        {% macro tier_strip(label, ts) %}
+          <div class="tier-strip">
+            <div class="tier-strip-label">{{ label }}</div>
+            <div class="tier-strip-metrics">
+              <span><span class="m-label">Issued</span> {{ ts.issued }}</span>
+              <span><span class="m-label">Open</span> {{ ts.open }}</span>
+              <span><span class="m-label">Hit rate</span> {{ '%.0f%%' | format(ts.hit_rate * 100) if ts.hit_rate is not none else '—' }}</span>
+              <span><span class="m-label">Total R</span>
+                <span class="{{ 'up' if ts.total_r > 0 else 'down' if ts.total_r < 0 else '' }}">{{ '%+.2f' | format(ts.total_r) if ts.total_r is not none else '—' }}</span></span>
+              <span><span class="m-label">Avg R</span>
+                <span class="{{ 'up' if ts.avg_r > 0 else 'down' if ts.avg_r < 0 else '' }}">{{ '%+.2f' | format(ts.avg_r) if ts.avg_r is not none else '—' }}</span></span>
+              <span><span class="m-label">Max DD</span>
+                <span class="{{ 'down' if ts.max_drawdown_r is not none and ts.max_drawdown_r > 0 else '' }}">{{ '%.2f' | format(ts.max_drawdown_r) if ts.max_drawdown_r is not none else '—' }}</span></span>
+            </div>
+          </div>
+        {% endmacro %}
+        {{ tier_strip("Tickets", stats.by_tier.ticket) }}
+        {{ tier_strip("Watchlist", stats.by_tier.watch) }}
+      {% endif %}
 
       <h2 class="sec-head">Forward track record — every ticket since issue</h2>
       <table class="ledger">
-        <tr><th>issued</th><th>ticker</th><th>stance</th><th>strategy</th><th>status</th>
+        <tr><th>issued</th><th>ticker</th><th>tier</th><th>stance</th><th>strategy</th><th>status</th>
             <th>R</th><th>move</th><th>held</th><th>path vs levels</th></tr>
         {% for r in rows %}
         <tr>
           <td><a href="/tournaments/{{ r.date }}">{{ r.date }}</a></td>
           <td class="tkr">{{ r.ticker }}</td>
+          <td><span class="chip">{{ r.tier }}</span></td>
           <td><span class="chip {{ 'favorable' if r.stance == 'long' else 'flag' }}">{{ r.stance }}</span></td>
           <td>{{ r.strategy }}</td>
           <td><span class="chip st-{{ r.status }}"{% if r.error %} title="{{ r.error }}"{% endif %}>{{ r.status }}</span>

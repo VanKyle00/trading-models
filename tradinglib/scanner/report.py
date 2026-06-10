@@ -214,6 +214,15 @@ def render_markdown(result: dict) -> str:
                 lines.append("")
             lines.extend(_ticket_sections(entries))
 
+    watchlist = result.get("watchlist") or {}
+    wl_rows = [r for stance in ("long", "short") for r in watchlist.get(stance) or []]
+    if wl_rows:
+        lines.append("## Watchlist")
+        lines.append("")
+        for r in wl_rows:
+            lines.append(f"- {r['ticker']} ({r['stance']}) · {r['strategy']} · {r['tier_reason']}")
+        lines.append("")
+
     errors = result.get("errors", [])
     if errors:
         lines.append("## Errors")

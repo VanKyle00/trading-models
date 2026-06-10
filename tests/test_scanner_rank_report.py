@@ -272,3 +272,28 @@ def test_load_latest_report_swallows_corrupt_json(tmp_path: Path) -> None:
     (d / "report.json").write_text('{"asof": "2026-06-08"')  # truncated partial write
 
     assert load_latest_report(tmp_path, before="2026-06-09") is None
+
+
+def test_render_markdown_watchlist_section(tmp_path: Path) -> None:
+    result = _ticket_result()
+    result["watchlist"] = {
+        "long": [
+            {
+                "ticker": "DEMOTED",
+                "stance": "long",
+                "strategy": "sma_cross",
+                "tier": "watch",
+                "tier_reason": "failed nightly FDR",
+                "deflated_sharpe": 0.92,
+                "levels": {"entry": 50.0, "entry_type": "stop", "stop": 47.0, "target": 56.0},
+            }
+        ],
+        "short": [],
+    }
+    _, md_path = write_report(result, tmp_path)
+    md = md_path.read_text(encoding="utf-8")
+
+    assert "## Watchlist" in md
+    assert "DEMOTED" in md
+    assert "failed nightly FDR" in md
+    assert "sma_cross" in md

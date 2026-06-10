@@ -31,6 +31,8 @@ def _normalized(rec: dict) -> dict:
         "ambiguous_bar": False,
         "closes": [],
         "error": None,
+        "tier": "ticket",
+        "tier_reason": None,
         **rec,
     }
 
@@ -97,6 +99,7 @@ def catalog(dates: list[str]) -> list[dict]:
                 "candidates": funnel.get("tournament_candidates"),
                 "survivors": funnel.get("tournament_survivors"),
                 "tickets": funnel.get("tickets"),
+                "watchlist": funnel.get("watchlist"),
             }
         )
     return rows
@@ -124,6 +127,9 @@ def day_view(scan: dict, ledger: dict | None) -> dict:
             rows.append({**t, "outcome": outcome})
         tickets[stance] = rows
 
+    watchlist = scan.get("watchlist") or {"long": [], "short": []}
+    n_watch = len(watchlist.get("long") or []) + len(watchlist.get("short") or [])
+
     return {
         "scan": scan,
         "funnel": scan.get("funnel", {}),
@@ -133,4 +139,7 @@ def day_view(scan: dict, ledger: dict | None) -> dict:
         "n_survivor_tickers": sum(1 for e in entries if e.get("winner")),
         "tickets": tickets,
         "has_tickets": bool(tickets["long"] or tickets["short"]),
+        "watchlist": watchlist,
+        "n_watch": n_watch,
+        "fdr": scan.get("fdr"),
     }

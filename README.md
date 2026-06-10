@@ -187,6 +187,14 @@ strategy registry plus the repo's standalone models are documented at
 Quotes are indicative last/close marks: this is decision support that accrues
 a forward paper-trading record, not an auto-trader.
 
+Nightly output is two-tier: **tickets** clear the hard survival bar (DSR ≥ 0.90,
+≥ 12 OOS trades, stable parameters) *and* a Benjamini-Hochberg FDR pass across
+every ticker-stance run that night (α = 0.10); **watchlist** entries are labeled
+demotions — survivors that cleared the hard bar but failed the nightly FDR —
+with the demotion reason recorded alongside the candidate. The forward ledger
+tracks both tiers identically, so the tiering itself is validated by out-of-sample
+performance rather than assumed.
+
 That forward record is kept honest on the
 [`/tournaments`](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/tournaments)
 page: each night's pipeline story (universe → FA gate → tournament verdicts →
