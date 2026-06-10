@@ -63,6 +63,17 @@ override with `ASSISTANT_MODEL` (e.g. `claude-sonnet-4-6`). The assistant is a
 bounded agent: it can only list models, read a model's spec, and run backtests —
 no code execution — with per-session token/run caps and per-IP rate limiting.
 
+The console doubles as an **options planner**: state a directional hypothesis
+("I'm bullish on RIVN") and the assistant walks through a guided dialogue —
+proposes ATR-based entry/stop/target levels for you to confirm or adjust, asks
+for account size and risk per trade, then prices structures against the live
+option chain (stock, long option, debit spread, cash-secured put, credit
+spread) and presents one sized, liquidity-gated recommendation with its max
+loss/gain, breakeven, and market-implied PoP. Every number comes from the
+strategist pipeline, never the model; the conversation is held client-side and
+nothing is persisted. Option structures come with a prefilled OptionStrat
+profit-calculator link so you can inspect the payoff diagram in one click.
+
 ### Our own trained model
 
 The assistant is built on an `LLMProvider` protocol (`tradinglib/assistant/`),
