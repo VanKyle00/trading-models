@@ -458,11 +458,12 @@
         var re = /https?:\/\/[^\s)\]]+/g, last = 0, m;
         while ((m = re.exec(text))) {
           el.appendChild(document.createTextNode(text.slice(last, m.index)));
+          var url = m[0].replace(/[.,]+$/, "");
           var a = document.createElement("a");
-          a.href = m[0]; a.textContent = m[0];
+          a.href = url; a.textContent = url;
           a.target = "_blank"; a.rel = "noopener";
           el.appendChild(a);
-          last = m.index + m[0].length;
+          last = m.index + url.length;
         }
         el.appendChild(document.createTextNode(text.slice(last)));
       }
