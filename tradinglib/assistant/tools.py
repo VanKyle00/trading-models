@@ -90,7 +90,7 @@ TOOL_SPECS: list[dict[str, Any]] = [
         "description": (
             "Build a sized options trade ticket from user-confirmed levels using live "
             "option-chain quotes. Returns ranked structures (stock, long option, debit "
-            "spread, cash-secured put, credit spread) with exactly one recommended, plus "
+            "spread, cash-secured put for longs, credit spread) with exactly one recommended, plus "
             "warnings and a prefilled profit-calculator link per option structure. Only "
             "call after the user confirmed levels, account size, and risk per trade."
         ),

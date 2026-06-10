@@ -182,3 +182,71 @@ def test_build_options_ticket_loader_failure_is_error_not_crash(monkeypatch):
     )
     assert is_error is True
     assert "RIVN" in out
+
+
+def test_build_options_ticket_rejects_bad_short_geometry():
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "RIVN",
+            "stance": "short",
+            "entry": 100.0,
+            "stop": 96.0,  # stop below entry on a short
+            "target": 108.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+        },
+    )
+    assert is_error is True
+    assert "target < entry < stop" in out
+
+
+def test_build_options_ticket_happy_path_serializes(make_chain, monkeypatch):
+    import numpy as np
+    import pandas as pd
+
+    import tradinglib.assistant.planner as planner
+    from tradinglib.options.surface import realized_vol
+
+    close = 100.0 + np.sin(np.arange(300) / 5.0)
+    idx = pd.date_range("2025-06-01", periods=300, freq="B")
+    bars = pd.DataFrame(
+        {"open": close, "high": close * 1.01, "low": close * 0.99, "close": close, "volume": 1e6},
+        index=idx,
+    )
+    mids = {
+        ("call", 75, 95.0): 8.0,
+        ("call", 75, 100.0): 5.5,
+        ("call", 75, 105.0): 3.6,
+        ("call", 75, 110.0): 2.4,
+        ("put", 38, 85.0): 0.6,
+        ("put", 38, 90.0): 1.0,
+        ("put", 38, 95.0): 2.8,
+    }
+    rv = float(realized_vol(bars["close"]).iloc[-1])
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    monkeypatch.setattr(planner, "fetch_chain", lambda t: make_chain(mids=mids, iv=rv))
+    monkeypatch.setattr(
+        planner,
+        "get_earnings_dates",
+        lambda *a, **k: pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([], tz="UTC")}),
+    )
+
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "test",
+            "stance": "long",
+            "entry": 100.0,
+            "stop": 96.0,
+            "target": 108.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+            "hypothesis": "bullish on TEST",
+        },
+    )
+
+    assert is_error is False
+    ticket = json.loads(out)  # the whole point: the ticket survives json round-trip
+    assert ticket["source"] == "chat" and ticket["ticker"] == "TEST"
+    assert sum(s["recommended"] for s in ticket["structures"]) == 1
