@@ -17,6 +17,7 @@ _SPARK_W, _SPARK_H, _SPARK_PAD = 160, 40, 2
 
 
 def load_ledger() -> dict | None:
+    """The forward ledger for the scans source, or None when absent/corrupt."""
     return _ledger.load_ledger(processed_dir(SOURCE))
 
 
@@ -80,7 +81,7 @@ def ledger_rows(ledger: dict | None) -> list[dict]:
 
 
 def catalog(dates: list[str]) -> list[dict]:
-    """One funnel-summary row per scan date, newest first."""
+    """One funnel-summary row per scan date, in the given date order."""
     rows = []
     for date in dates:
         scan = load_scan(date)

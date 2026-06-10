@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" data-theme="bone">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trading Models — Tournament {{ day.scan.asof }}</title>
+
+  <!-- set theme before first paint to avoid a flash -->
+  <script>
+    (function () {
+      try { document.documentElement.setAttribute("data-theme", localStorage.getItem("tm-theme") || "bone"); }
+      catch (e) { document.documentElement.setAttribute("data-theme", "bone"); }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Martian+Mono:wght@500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    :root[data-theme="bone"] {
+      --bg:#e9e4d6; --panel:#ded8c7; --inset:#efe9db;
+      --ink:#1c1b16; --muted:#6f6a5c; --line:#c7bfa9; --line-strong:#1c1b16;
+      --up:#1f7a3d; --down:#b3261e; --accent:#c8852f; --accent-ink:#1c1b16;
+    }
+    :root[data-theme="night"] {
+      --bg:#121110; --panel:#1a1815; --inset:#171511;
+      --ink:#e8e2d4; --muted:#8a8478; --line:#34302a; --line-strong:#4a463e;
+      --up:#3fbf6b; --down:#e5534b; --accent:#d39a4f; --accent-ink:#121110;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+      font-size: 13px; line-height: 1.5;
+      transition: background .18s ease, color .18s ease;
+    }
+    .label, .brand, .m-label, .chip, .crumb { font-family: "Martian Mono", "JetBrains Mono", monospace;
+      text-transform: uppercase; letter-spacing: .12em; }
+
+    .topbar { display: flex; align-items: center; gap: 14px;
+              padding: 11px 18px; border-bottom: 1px solid var(--line-strong); }
+    .brand { font-size: 14px; font-weight: 600; letter-spacing: .18em; }
+    .brand a { color: inherit; text-decoration: none; }
+    .crumb { font-size: 10px; color: var(--muted); letter-spacing: .18em; }
+    .crumb a { color: inherit; text-decoration: none; }
+    .spacer { flex: 1; }
+    .toggle { display: flex; border: 1px solid var(--line-strong); }
+    .toggle button { font-family: "Martian Mono", monospace; font-size: 9px; letter-spacing: .14em;
+      background: transparent; color: var(--muted); border: 0; padding: 6px 11px;
+      cursor: pointer; text-transform: uppercase; }
+    .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+    .wrap { max-width: 980px; margin: 0 auto; padding: 22px 18px 60px; }
+    .placeholder { color: var(--muted); }
+
+    .date-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
+    .date-nav a { font-family: "Martian Mono", monospace; font-size: 10px; letter-spacing: .12em;
+      color: var(--muted); text-decoration: none; border: 1px solid var(--line); padding: 5px 9px; }
+    .date-nav a.active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+
+    .rail { display: flex; align-items: stretch; border: 1px solid var(--line-strong);
+            margin-bottom: 26px; }
+    .rail .stage { flex: 1; padding: 12px 14px; color: inherit; text-decoration: none; }
+    .rail .stage:hover { background: var(--inset); }
+    .rail .stage-counts { font-size: 12px; margin-top: 4px; }
+    .rail-arrow { display: flex; align-items: center; padding: 0 8px;
+                  color: var(--accent); font-size: 17px; }
+    .rail-arrow::before { content: "→"; }
+    @media (max-width: 720px) {
+      .rail { flex-direction: column; }
+      .rail-arrow { padding: 2px 14px; }
+      .rail-arrow::before { content: "↓"; }
+    }
+    .m-label { font-size: 8.5px; color: var(--muted); margin-bottom: 5px; }
+
+    .sec-head { font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+                color: var(--muted); margin: 26px 0 10px; }
+
+    .slates { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 720px) { .slates { grid-template-columns: 1fr; } }
+
+    .structs { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 12px; }
+    .structs th, .structs td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+    .structs th { font-family: "Martian Mono", monospace; font-size: 8.5px;
+                  text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+    .structs tr.rec td { background: var(--inset); font-weight: 700; }
+
+    .card { border: 1px solid var(--line-strong); background: var(--panel); margin-bottom: 16px; }
+    .card-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px;
+                 border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .card-head .tkr { font-size: 17px; font-weight: 700; }
+    .card-head .nm { color: var(--muted); }
+    .card-body { padding: 12px 14px; }
+    .chip { font-size: 8.5px; padding: 3px 8px; border: 1px solid var(--line); color: var(--muted); }
+    .chip.favorable { color: var(--up); border-color: var(--up); }
+    .chip.flag { color: var(--down); border-color: var(--down); }
+    .chip.warn { color: var(--accent); border-color: var(--accent); }
+    .chip.st-open { color: var(--accent); border-color: var(--accent); }
+    .chip.st-target { color: var(--up); border-color: var(--up); }
+    .chip.st-stopped { color: var(--down); border-color: var(--down); }
+    .chip.st-error { color: var(--down); border-color: var(--down); border-style: dashed; }
+
+    .setup { background: var(--inset); border-left: 2px solid var(--accent);
+             padding: 8px 11px; margin: 8px 0; font-size: 12px; }
+    .setup b { text-transform: uppercase; letter-spacing: .08em; }
+    .levels { color: var(--muted); }
+    .evidence { color: var(--muted); font-size: 11px; word-break: break-word; }
+    .scores { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+    .ticket-note { color: var(--muted); font-size: 11px; margin: 0 0 14px; }
+
+    .discipline { border: 1px solid var(--up); background: var(--inset);
+                  padding: 12px 14px; margin-bottom: 16px; }
+
+    details.eliminated { margin-bottom: 16px; }
+    details.eliminated > summary { cursor: pointer; color: var(--muted); font-size: 11px;
+      font-family: "Martian Mono", monospace; text-transform: uppercase; letter-spacing: .12em; }
+
+    .outcome { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+               background: var(--inset); padding: 8px 11px; margin-top: 8px; }
+
+    .spark { display: block; }
+    .spark .sl-price { stroke: var(--ink); stroke-width: 1.5; }
+    .spark .sl-entry { stroke: var(--accent); stroke-width: 1; }
+    .spark .sl-stop { stroke: var(--down); stroke-width: 1; stroke-dasharray: 3 2; }
+    .spark .sl-target { stroke: var(--up); stroke-width: 1; stroke-dasharray: 3 2; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><a href="/">TRADING&nbsp;MODELS</a></div>
+    <div class="crumb"><a href="/tournaments">/ tournaments</a></div>
+    <div class="crumb">/ {{ day.scan.asof }}</div>
+    <div class="spacer"></div>
+    <div class="toggle" role="group" aria-label="theme">
+      <button type="button" data-theme-set="bone">Bone</button>
+      <button type="button" data-theme-set="night">Night</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="date-nav">
+      {% for d in dates %}
+        <a href="/tournaments/{{ d }}" class="{{ 'active' if d == day.scan.asof else '' }}">{{ d }}</a>
+      {% endfor %}
+    </div>
+
+    <div class="rail">
+      <a class="stage" href="#find-tickers">
+        <div class="m-label">① Find tickers</div>
+        <div class="stage-counts">{{ day.funnel.universe | default('?') }} universe →
+          {{ day.funnel.fa_shortlist | default('?') }} L{% if day.funnel.fa_shortlist_short is defined %} / {{ day.funnel.fa_shortlist_short }} S{% endif %} past FA gate</div>
+      </a>
+      <div class="rail-arrow"></div>
+      <a class="stage" href="#find-strategy">
+        <div class="m-label">② Find strategy</div>
+        <div class="stage-counts">{{ day.funnel.tournament_candidates | default('not run') }} candidates →
+          {{ day.funnel.tournament_survivors | default('—') }} survivors</div>
+      </a>
+      <div class="rail-arrow"></div>
+      <a class="stage" href="#create-trade">
+        <div class="m-label">③ Create trade</div>
+        <div class="stage-counts">{{ day.funnel.tickets | default('—') }} tickets</div>
+      </a>
+    </div>
+
+    <h2 class="sec-head" id="find-tickers">① Find tickers — FA slates</h2>
+    {% if day.fa_candidates %}
+      <div class="slates">
+        {% for stance, title in (("long", "Long slate — top FA"), ("short", "Short slate — bottom FA")) %}
+          <div>
+            <div class="m-label">{{ title }}</div>
+            <table class="structs">
+              <tr><th>#</th><th>ticker</th><th>sector</th><th>FA</th></tr>
+              {% for row in day.fa_candidates[stance] %}
+                <tr><td>{{ row.rank }}</td><td>{{ row.ticker }}</td>
+                    <td>{{ row.sector }}</td><td>{{ '%.2f' | format(row.fa_score) }}</td></tr>
+              {% endfor %}
+            </table>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="placeholder">not run on this date</p>
+    {% endif %}
+
+    <h2 class="sec-head" id="find-strategy">② Find strategy — walk-forward tournament</h2>
+    {% if day.has_tournament %}
+      {% if day.n_survivor_tickers == 0 %}
+        <div class="discipline">
+          <b>0 survivors — the bar held.</b> Every strategy/ticker pair failed the
+          out-of-sample survival criteria (deflated-Sharpe probability ≥ 0.90 corrected
+          for the whole menu tried, ≥ 12 trades, stable parameters). No trades is the
+          designed outcome most nights, not a failure. The verdicts below are the
+          evidence of work.
+        </div>
+      {% endif %}
+
+      {% set survivors = day.tournament | selectattr('winner') | list %}
+      {% set eliminated = day.tournament | rejectattr('winner') | list %}
+
+      {% macro verdict_card(e) %}
+        <div class="card">
+          <div class="card-head">
+            <span class="tkr">{{ e.ticker }}</span>
+            <span class="chip {{ 'favorable' if e.stance == 'long' else 'flag' }}">{{ e.stance }}</span>
+            {% if e.winner %}
+              <span class="chip favorable">winner: {{ e.winner.strategy }}</span>
+              {% if e.winner_changed %}<span class="chip warn">winner changed</span>{% endif %}
+            {% else %}
+              <span class="chip">no survivor</span>
+            {% endif %}
+            <span class="nm">{{ e.n_trials }} parameter sets tried</span>
+          </div>
+          <div class="card-body">
+            <table class="structs">
+              <tr><th>strategy</th><th>DSR</th><th>Sharpe</th><th>trades</th><th>windows</th>
+                  <th>param drift</th><th>verdict</th></tr>
+              {% for v in e.verdicts %}
+                <tr class="{{ 'rec' if e.winner and v.strategy == e.winner.strategy else '' }}">
+                  <td>{{ v.strategy }}</td>
+                  <td>{{ '%.3f' | format(v.deflated_sharpe) }}</td>
+                  <td>{{ '%.2f' | format(v.sharpe) }}</td>
+                  <td>{{ v.n_trades }}</td>
+                  <td>{{ v.n_windows }}</td>
+                  <td>{{ '%.2f' | format(v.max_param_change_rate) }}</td>
+                  <td>{% if v.survived %}survived{% else %}{{ v.reasons | join('; ') }}{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </table>
+            {% if e.winner %}
+              <div class="setup">
+                <b>entry {{ '%.2f' | format(e.winner.levels.entry) }}</b> ({{ e.winner.levels.entry_type }})
+                <span class="levels">· stop {{ '%.2f' | format(e.winner.levels.stop) }}
+                · target {{ '%.2f' | format(e.winner.levels.target) }}</span>
+                <div class="evidence">{{ e.winner.levels.condition }}</div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endmacro %}
+
+      {% for e in survivors %}{{ verdict_card(e) }}{% endfor %}
+      {% if eliminated %}
+        <details class="eliminated" {{ 'open' if not survivors else '' }}>
+          <summary>{{ eliminated | length }} ticker(s) with no survivor — show verdicts</summary>
+          {% for e in eliminated %}{{ verdict_card(e) }}{% endfor %}
+        </details>
+      {% endif %}
+    {% else %}
+      <p class="placeholder">not run on this date</p>
+    {% endif %}
+
+    <h2 class="sec-head" id="create-trade">③ Create trade — tickets &amp; performance since issue</h2>
+    {% if day.has_tickets %}
+      <p class="ticket-note">Indicative last/close marks — re-check at the open, use limit orders.
+        Performance below paper-trades the levels on daily bars from the night of issue.</p>
+      {% for stance in ("long", "short") %}
+        {% for t in day.tickets[stance] %}
+          <div class="card">
+            <div class="card-head">
+              <span class="tkr">{{ t.ticker }}</span>
+              <span class="chip {{ 'favorable' if stance == 'long' else 'flag' }}">{{ stance }}</span>
+              <span class="nm">{{ t.strategy }} · {{ t.style | replace("_", " ") }}</span>
+              {% if t.evidence.winner_changed %}<span class="chip warn">winner changed</span>{% endif %}
+            </div>
+            <div class="card-body">
+              <div class="setup">
+                <b>entry {{ '%.2f' | format(t.levels.entry) }}</b> ({{ t.levels.entry_type }})
+                <span class="levels">· stop {{ '%.2f' | format(t.levels.stop) }}
+                · target {{ '%.2f' | format(t.levels.target) }}</span>
+                <div class="evidence">{{ t.levels.condition }}</div>
+              </div>
+              <div class="scores">
+                DSR {{ '%.3f' | format(t.evidence.deflated_sharpe) }}
+                · Sharpe {{ '%.2f' | format(t.evidence.sharpe) }}
+                · {{ t.evidence.n_trades }} trades / {{ t.evidence.n_windows }} windows
+                {% if t.iv_ratio is not none %} · IV/RV {{ '%.2f' | format(t.iv_ratio) }}{% endif %}
+              </div>
+              <table class="structs">
+                <tr><th>structure</th><th>size</th><th>max loss</th><th>max gain</th><th>breakeven</th><th>PoP</th><th>R:R</th></tr>
+                {% for s in t.structures %}
+                <tr class="{{ 'rec' if s.recommended else '' }}">
+                  <td>{{ s.label }}</td>
+                  <td>{% if s.quantity %}{{ s.quantity }} {{ s.unit }}{{ 's' if s.quantity != 1 }}{% else %}UNSIZED{% endif %}</td>
+                  <td>{{ '%.2f' | format(s.max_loss) if s.max_loss is not none else '-' }}</td>
+                  <td>{{ '%.2f' | format(s.max_gain) if s.max_gain is not none else 'uncapped' }}</td>
+                  <td>{{ '%.2f' | format(s.breakeven) if s.breakeven is not none else '-' }}</td>
+                  <td>{{ '%.0f%%' | format(s.pop_market_implied * 100) if s.pop_market_implied is not none else '-' }}</td>
+                  <td>{{ '%.2f' | format(s.rr) if s.rr is not none else '-' }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% if t.outcome %}
+                <div class="outcome">
+                  <span class="chip st-{{ t.outcome.status }}">{{ t.outcome.status }}</span>
+                  {% if t.outcome.r is not none %}
+                    <span class="{{ 'up' if t.outcome.r > 0 else 'down' if t.outcome.r < 0 else '' }}">
+                      {{ '%+.2f' | format(t.outcome.r) }}R</span>
+                    <span>{{ '%+.1f%%' | format(t.outcome.pct_move * 100) }}</span>
+                  {% endif %}
+                  {% if t.outcome.sessions_held %}<span class="evidence">{{ t.outcome.sessions_held }} session(s)</span>{% endif %}
+                  {% if t.outcome.ambiguous_bar %}<span class="chip flag">ambiguous bar — counted as stopped</span>{% endif %}
+                  {{ t.outcome.spark | safe }}
+                </div>
+              {% else %}
+                <div class="evidence">no evaluation yet — the ledger updates after the next nightly scan</div>
+              {% endif %}
+              {% for w in t.warnings %}<div class="evidence">⚠ {{ w }}</div>{% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      {% endfor %}
+    {% else %}
+      <p class="placeholder">no tickets on this date</p>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      const buttons = document.querySelectorAll("[data-theme-set]");
+      function apply(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        try { localStorage.setItem("tm-theme", theme); } catch (e) {}
+        buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themeSet === theme)));
+      }
+      buttons.forEach(b => b.addEventListener("click", () => apply(b.dataset.themeSet)));
+      apply(document.documentElement.getAttribute("data-theme") || "bone");
+    })();
+  </script>
+</body>
+</html>
