@@ -210,7 +210,10 @@ def run_scan(
                 if ticker in bars_failed:
                     continue
                 try:
+                    # yfinance can append a price-less row (volume only) for the
+                    # latest session; a NaN bar poisons ATR-based winner levels
                     t_bars = load_daily(ticker, start=t_start)
+                    t_bars = t_bars.dropna(subset=["open", "high", "low", "close"])
                     tr = run_tournament(t_bars, stance)
                 except Exception as exc:
                     errors.append({"ticker": ticker, "stage": "tournament", "error": str(exc)})

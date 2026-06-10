@@ -388,3 +388,30 @@ def test_run_scan_tournament_loads_longer_history(patched_pipeline, monkeypatch)
     asof = patched_pipeline._now()
     expected = (asof - pd.Timedelta(days=1200)).strftime("%Y-%m-%d")
     assert expected in starts  # tournament bars span ~3y+, not the 450d watchlist window
+
+
+def test_run_scan_tournament_drops_nan_ohlc_rows(patched_pipeline, monkeypatch) -> None:
+    # yfinance sometimes appends a price-less row (volume only, OHLC all NaN)
+    # for the most recent session; one such row inside the last ATR window
+    # poisons the winner's levels and cost a real survivor in the live smoke.
+    captured: list[pd.DataFrame] = []
+
+    def capturing(bars, stance, registry=None, config=None):
+        captured.append(bars)
+        return _fake_tournament_result(stance)
+
+    monkeypatch.setattr(patched_pipeline, "run_tournament", capturing)
+
+    original = patched_pipeline.load_daily
+
+    def with_nan_tail(symbol, start=None, end=None, *, refresh=False):
+        bars = original(symbol, start=start, end=end, refresh=refresh).copy()
+        bars.iloc[-1, bars.columns.get_indexer(["open", "high", "low", "close"])] = float("nan")
+        return bars
+
+    monkeypatch.setattr(patched_pipeline, "load_daily", with_nan_tail)
+    patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
+
+    assert captured
+    for bars in captured:
+        assert not bars[["open", "high", "low", "close"]].isna().any().any()
