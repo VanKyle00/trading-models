@@ -203,9 +203,7 @@ def test_bear_call_spread_short_strike_above_invalidation(make_chain) -> None:
 
 
 def test_build_structures_long_offers_everything_that_passes(make_chain) -> None:
-    out = build_structures(
-        make_chain(mids=LONG_MIDS), LONG_LEVELS, "long", spot=100.0, asof=ASOF
-    )
+    out = build_structures(make_chain(mids=LONG_MIDS), LONG_LEVELS, "long", spot=100.0, asof=ASOF)
     assert [s.kind for s in out] == ["stock", "long_call", "csp", "bull_put_spread"]
 
 
