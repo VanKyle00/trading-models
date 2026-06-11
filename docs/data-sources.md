@@ -131,6 +131,19 @@ Paid / keyed sources are documented as upgrades.
 - **Notes**: The user tags feed the mechanical bull/bear ratio on the
   `/sentiment` page — free ground truth, no LLM involved.
 
+### Bluesky — cashtag post search
+
+- **What**: Top posts mentioning `$<TICKER>` over the last week
+  (`[ticker, created, text, handle, likes, reposts, url]`), engagement-ranked.
+- **Cost**: Free.
+- **Setup**: None — no API key required.
+- **Loader**: [`tradinglib.loaders.social.bluesky`](../tradinglib/loaders/social/bluesky.py)
+- **Notes**: Keyless search on `api.bsky.app` (verified 2026-06-11; the
+  deliberately-public AppView host gates search, so this endpoint may close
+  someday — failures degrade the viral tier gracefully, and an authenticated
+  app-password session is the documented upgrade path). Tier-3 source for the
+  `/sentiment` page alongside r/wallstreetbets and Stocktwits.
+
 ## Planned / not yet wired in
 
 ### Polygon.io — higher-quality equities
