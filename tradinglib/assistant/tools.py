@@ -99,6 +99,8 @@ TOOL_SPECS: list[dict[str, Any]] = [
             "neutral. Exactly one structure is recommended; every structure carries "
             "warnings and a prefilled profit-calculator link. Only call after the "
             "user confirmed levels, account size, and risk per trade."
+            " Each structure carries a stable 'key'; rebuild with structure_key to "
+            "pin a different candidate and recompute its plan."
         ),
         "input_schema": {
             "type": "object",
@@ -120,6 +122,14 @@ TOOL_SPECS: list[dict[str, Any]] = [
                     "type": "string",
                     "enum": ["auto", "directional", "premium"],
                     "description": "Structure tilt; 'auto' lets the IV/RV ratio decide.",
+                },
+                "structure_key": {
+                    "type": "string",
+                    "description": (
+                        "Pin the recommendation (and exit plan) to one candidate from the "
+                        "most recent build_options_ticket result — pass that structure's "
+                        "'key'. Omit on first build."
+                    ),
                 },
                 "hypothesis": {"type": "string", "description": "The user's one-line thesis."},
             },
@@ -264,6 +274,7 @@ def _build_options_ticket(args: dict[str, Any]) -> tuple[str, bool]:
         if stance == "short" and not (target < entry < stop):
             return _err("short geometry requires target < entry < stop")
         levels = {"entry": entry, "entry_type": entry_type, "stop": stop, "target": target}
+    structure_key = str(args["structure_key"]) if args.get("structure_key") else None
     try:
         ticket = planner.hypothesis_ticket(
             ticker=ticker,
@@ -273,8 +284,13 @@ def _build_options_ticket(args: dict[str, Any]) -> tuple[str, bool]:
             risk_per_trade_pct=risk,
             preference=preference,
             hypothesis=str(args.get("hypothesis", "")),
+            structure_key=structure_key,
         )
         return _ok(ticket)
+    except (
+        ValueError
+    ) as exc:  # validation: bad structure_key / level geometry — retrying won't help
+        return _err(f"could not build a ticket for {ticker}: {exc}")
     except Exception as exc:
         return _err(
             f"could not build a ticket for {ticker}: {exc} — if this was a data fetch "

@@ -376,3 +376,184 @@ def test_build_neutral_structures_empty_chain_is_empty(make_chain) -> None:
 
     empty = make_chain(mids={("call", 38, 100.0): 1.0}).iloc[0:0]
     assert build_neutral_structures(empty, _band(), spot=100.0, asof=ASOF) == []
+
+
+def test_structure_theta_week_signs_and_magnitude(make_chain) -> None:
+    from tradinglib.options.pricing import bs_greeks
+    from tradinglib.strategist.structures import (
+        credit_spread,
+        long_option,
+        structure_theta_week,
+    )
+
+    chain = make_chain(mids=LONG_MIDS)
+    lc = long_option(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+    assert lc is not None and lc.kind == "long_call"
+    # single bought leg: K95 call, 75 DTE, iv 0.30 (conftest default)
+    expected = bs_greeks("call", 100.0, 95.0, 75 / 365, 0.30, 0.0).theta * 7.0 / 365.0
+    assert structure_theta_week(lc, spot=100.0) == pytest.approx(expected)
+    assert structure_theta_week(lc, spot=100.0) < 0  # long premium decays
+
+    cs = credit_spread(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+    assert cs is not None
+    assert structure_theta_week(cs, spot=100.0) > 0  # net short premium collects decay
+
+
+def test_structure_theta_week_none_without_legs() -> None:
+    from tradinglib.strategist.structures import structure_theta_week
+
+    s = stock_plan(LONG_LEVELS, "long")
+    assert structure_theta_week(s, spot=100.0) is None
+
+
+# With iv=0.30, spot=100, 75 DTE: deltas are 90→0.80, 95→0.67, 100→0.53, 105→0.39, 110→0.26.
+LADDER_MIDS = {**LONG_MIDS, ("call", 75, 90.0): 11.5}
+
+
+def test_long_option_candidates_full_ladder_keys_and_strikes(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    out, notes = long_option_candidates(
+        make_chain(mids=LADDER_MIDS), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long"
+    )
+    by_key = {s.key: s for s in out}
+    assert by_key["long_call_d65"].legs[0]["strike"] == 95.0
+    assert by_key["long_call_d50"].legs[0]["strike"] == 100.0
+    assert by_key["long_call_d80"].legs[0]["strike"] == 90.0
+    assert out[0].key == "long_call_d65"  # anchor leads when no spread builds
+    assert notes == []
+    assert all(s.kind in ("long_call", "call_debit_spread") for s in out)
+
+
+def test_long_option_candidates_dedupes_same_strike(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    # without a 90 strike the d80 pick lands on 95 — same as d65 — and dedupes silently
+    out, notes = long_option_candidates(
+        make_chain(mids=LONG_MIDS), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long"
+    )
+    keys = [s.key for s in out]
+    assert "long_call_d80" not in keys and "long_call_d65" in keys
+    strikes = [s.legs[0]["strike"] for s in out if s.kind == "long_call"]
+    assert len(strikes) == len(set(strikes))
+    assert notes == []  # dedupe is not a liquidity drop
+
+
+def test_long_option_candidates_spread_first_when_it_cuts_cost(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    mids = {**LADDER_MIDS, ("call", 75, 110.0): 3.0}  # saves 3.0/8.0 = 37.5% > 35%
+    out, _ = long_option_candidates(
+        make_chain(mids=mids), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long"
+    )
+    assert out[0].kind == "call_debit_spread"  # family representative stays the spread
+    assert out[0].key == "call_debit_spread"
+    assert [(leg["action"], leg["strike"]) for leg in out[0].legs] == [
+        ("buy", 95.0),
+        ("sell", 110.0),
+    ]
+    assert "long_call_d65" in [s.key for s in out]  # plain anchor still a row
+
+
+def test_long_option_candidates_empty_without_expiry(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    chain = make_chain(mids={("call", 38, 100.0): 2.0})  # income window only
+    out, notes = long_option_candidates(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+    assert out == [] and notes == []
+
+
+def test_build_chat_structures_includes_income_rows_and_keys(make_chain) -> None:
+    from tradinglib.strategist.structures import build_chat_structures
+
+    out, notes = build_chat_structures(
+        make_chain(mids=LADDER_MIDS), LONG_LEVELS, "long", spot=100.0, asof=ASOF
+    )
+    keys = [s.key for s in out]
+    assert "csp" in keys and "bull_put_spread" in keys
+    assert "stock" not in [s.kind for s in out]
+    assert notes == []  # every ladder delta is liquid in this fixture
+
+
+# Wide-condor fixture: regular shorts 90P/110C (credit (2.6-1.2)+(2.0-1.1)=2.3 >= 5/3),
+# wide shorts one strike further at 85P/115C, wings 80P/120C
+# (credit (1.2-0.3)+(1.1-0.2)=1.8 >= 5/3). Mids monotone in strike on both sides.
+WIDE_MIDS = {
+    ("put", 38, 80.0): 0.3,
+    ("put", 38, 85.0): 1.2,
+    ("put", 38, 90.0): 2.6,
+    ("put", 38, 95.0): 2.8,
+    ("put", 38, 100.0): 3.4,
+    ("call", 38, 100.0): 3.5,
+    ("call", 38, 105.0): 2.4,
+    ("call", 38, 110.0): 2.0,
+    ("call", 38, 115.0): 1.1,
+    ("call", 38, 120.0): 0.2,
+}
+
+
+def test_iron_condor_widen_moves_both_shorts_one_strike_out(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    s = iron_condor(make_chain(mids=WIDE_MIDS), _band(), spot=100.0, asof=ASOF, widen=True)
+
+    assert s is not None and s.kind == "iron_condor" and s.key == "condor_wide"
+    assert [(leg["action"], leg["right"], leg["strike"]) for leg in s.legs] == [
+        ("buy", "put", 80.0),
+        ("sell", "put", 85.0),
+        ("sell", "call", 115.0),
+        ("buy", "call", 120.0),
+    ]
+    assert s.premium == pytest.approx(-1.8)
+    assert s.max_loss == pytest.approx(3.2)  # widest wing 5 - credit 1.8
+    assert s.breakevens == pytest.approx([83.2, 116.8])
+    assert "wide" in s.label
+
+
+def test_iron_condor_widen_none_without_further_short_strike(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    # no put below the regular 90 short: the widen step itself has nowhere to go
+    mids = {k: v for k, v in NEUTRAL_MIDS.items() if k != ("put", 38, 85.0)}
+    assert iron_condor(make_chain(mids=mids), _band(), spot=100.0, asof=ASOF, widen=True) is None
+
+
+def test_iron_condor_widen_none_without_wing_beyond_wide_shorts(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    # NEUTRAL_MIDS: widened shorts land on 85P/115C but no strikes remain for the wings
+    assert (
+        iron_condor(make_chain(mids=NEUTRAL_MIDS), _band(), spot=100.0, asof=ASOF, widen=True)
+        is None
+    )
+
+
+def test_build_neutral_structures_three_candidates(make_chain) -> None:
+    from tradinglib.strategist.structures import build_neutral_structures
+
+    out = build_neutral_structures(make_chain(mids=WIDE_MIDS), _band(), spot=100.0, asof=ASOF)
+    assert [s.key for s in out] == ["condor", "condor_wide", "butterfly"]
+
+
+def test_long_option_candidates_single_note_when_expiry_illiquid(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    # expiry listed in the 60-90 window but every quote fails the OI gate
+    chain = make_chain(mids=LONG_MIDS, open_interest=50.0)
+    out, notes = long_option_candidates(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+
+    assert out == []
+    assert notes == ["no liquid call quotes in the 60-90 DTE window; long-option ladder dropped"]
+
+
+def test_build_chat_structures_short_stance_mirrors(make_chain) -> None:
+    from tradinglib.strategist.structures import build_chat_structures
+
+    out, notes = build_chat_structures(
+        make_chain(mids=SHORT_MIDS), SHORT_LEVELS, "short", spot=100.0, asof=ASOF
+    )
+    keys = [s.key for s in out]
+    assert "csp" not in keys  # CSP is long-stance only
+    assert "bear_call_spread" in keys
+    assert any(k.startswith("long_put_d") for k in keys)
+    assert notes == []
