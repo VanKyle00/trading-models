@@ -109,11 +109,14 @@ def _evidence(score: dict, kept: list[dict]) -> list[Evidence]:
     for i in score["evidence_indices"]:
         if i < len(kept):
             item = kept[i]
+            url = str(item.get("url", ""))
+            if not url.startswith(("http://", "https://")):
+                url = ""  # scheme allowlist: open-web feeds could carry javascript: links
             out.append(
                 Evidence(
                     title=str(item["title"])[:160],
                     source=str(item["source"]),
-                    url=str(item.get("url", "")),
+                    url=url,
                     age_days=packs.age_days(item.get("published")),
                 )
             )

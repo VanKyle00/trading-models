@@ -11,6 +11,7 @@ Run locally with::
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,8 @@ from webapp import tournaments as _tournaments
 from webapp.charts import build_all
 from webapp.events import events_for_assets
 from webapp.forms import request_from_payload
+
+logger = logging.getLogger(__name__)
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _CHAT_LIMITER = RateLimiter(max_per_window=30)
@@ -269,8 +272,9 @@ def create_app() -> FastAPI:
             return JSONResponse({"error": "invalid ticker"}, status_code=400)
         try:
             return JSONResponse(_sentiment.get_report(ticker, refresh=refresh))
-        except Exception as exc:  # engine degrades internally; this is the last resort
-            return JSONResponse({"error": str(exc)}, status_code=500)
+        except Exception:  # engine degrades internally; reaching here is unexpected
+            logger.exception("sentiment lookup failed for %s", ticker)
+            return JSONResponse({"error": "sentiment lookup failed"}, status_code=500)
 
     @app.get("/tournaments", response_class=HTMLResponse)
     def tournaments_index(request: Request) -> HTMLResponse:

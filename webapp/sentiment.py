@@ -12,6 +12,8 @@ def valid_ticker(ticker: str) -> bool:
 
 
 def get_report(ticker: str, *, refresh: bool = False) -> dict:
-    from tradinglib.sentiment.report import run_sentiment  # lazy: keeps webapp import light
+    from tradinglib.sentiment.report import (
+        run_sentiment,
+    )  # lazy: keeps pytrends/feedparser out of the webapp import path
 
     return run_sentiment(ticker, refresh=refresh).to_dict()

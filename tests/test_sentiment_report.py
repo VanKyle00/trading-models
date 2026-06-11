@@ -236,6 +236,16 @@ def test_trends_failure_does_not_degrade_viral(
     assert rep.status == "ok"
 
 
+def test_evidence_url_scheme_allowlist() -> None:
+    kept = [
+        {"title": "bad", "source": "GN", "url": "javascript:alert(1)", "published": None},
+        {"title": "good", "source": "GN", "url": "https://ok.example/x", "published": None},
+    ]
+    score = {"evidence_indices": [0, 1]}
+    ev = report_mod._evidence(score, kept)
+    assert ev[0].url == "" and ev[1].url == "https://ok.example/x"
+
+
 def test_partial_llm_failure_mixed_statuses(stubbed: Path) -> None:
     class _PartialStub(_TierStub):
         def complete(self, system, conversation, tools):

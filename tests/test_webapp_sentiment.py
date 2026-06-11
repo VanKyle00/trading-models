@@ -43,3 +43,23 @@ def test_sentiment_api_engine_failure_500(monkeypatch: pytest.MonkeyPatch) -> No
     resp = TestClient(create_app()).get("/api/v1/sentiment/NVDA")
     assert resp.status_code == 500
     assert "error" in resp.json()
+
+
+def test_sentiment_api_default_refresh_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
+    def _fake(ticker: str, *, refresh: bool = False) -> dict:
+        captured["refresh"] = refresh
+        return {"ticker": ticker.upper(), "status": "ok", "tiers": []}
+
+    monkeypatch.setattr("webapp.sentiment.get_report", _fake)
+    resp = TestClient(create_app()).get("/api/v1/sentiment/nvda")
+    assert resp.status_code == 200
+    assert captured["refresh"] is False
+
+
+def test_valid_ticker_accepts_dotted_and_dashed() -> None:
+    from webapp import sentiment
+
+    assert sentiment.valid_ticker("BRK.B") and sentiment.valid_ticker("BF-B")
+    assert not sentiment.valid_ticker("") and not sentiment.valid_ticker("WAY/TOO/LONG!!")
