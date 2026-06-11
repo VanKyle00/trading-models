@@ -24,8 +24,9 @@ many requests and SSE streams, and persists the market-data cache in a Volume.
 uv sync --extra deploy                      # installs the modal CLI
 uv run modal token new                      # authenticate this machine (one-time)
 
-# Create the secret holding your Anthropic key (one-time):
-uv run modal secret create trading-models-secrets ANTHROPIC_API_KEY=sk-ant-...
+# Create the secret holding your API keys (one-time):
+uv run modal secret create trading-models-secrets ANTHROPIC_API_KEY=sk-ant-... \
+  REDDIT_CLIENT_ID=... REDDIT_CLIENT_SECRET=...
 
 # Deploy (re-run any time to ship changes):
 uv run modal deploy deploy/modal_app.py
@@ -54,6 +55,9 @@ Modal prints the public URL on success; the app is at `/`. Notes:
    `trading-models-workbench` web service.
 4. Under the service's **Environment**, set the secret:
    - `ANTHROPIC_API_KEY` = your Anthropic key.
+   - `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` = Reddit script-app credentials
+     (optional — the /sentiment page's Reddit sources degrade gracefully without
+     them; create the app at reddit.com/prefs/apps).
    - (Optional) `ASSISTANT_MODEL` is preset to `claude-haiku-4-5`; override to
      `claude-sonnet-4-6` for stronger answers at higher cost.
 5. **Apply** / **Create**. The first build takes a few minutes (it compiles the

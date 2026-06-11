@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>"NVDA stock" - Google News</title>
+    <item>
+      <title>Nvidia rallies on record data-center revenue</title>
+      <link>https://news.example.com/nvda-rally</link>
+      <pubDate>Wed, 10 Jun 2026 14:00:00 GMT</pubDate>
+      <source url="https://reuters.com">Reuters</source>
+    </item>
+    <item>
+      <title>Analysts split on Nvidia valuation after run-up</title>
+      <link>https://news.example.com/nvda-split</link>
+      <pubDate>Tue, 09 Jun 2026 09:30:00 GMT</pubDate>
+      <source url="https://cnbc.com">CNBC</source>
+    </item>
+  </channel>
+</rss>

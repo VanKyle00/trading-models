@@ -11,6 +11,7 @@ Run locally with::
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -25,10 +26,13 @@ from tradinglib.assistant import provider as _assistant_provider
 from tradinglib.service import RequestError, list_specs, model_spec, run, run_to_dict
 from tradinglib.tournament.strategies import STRATEGIES
 from webapp import scans as _scans
+from webapp import sentiment as _sentiment
 from webapp import tournaments as _tournaments
 from webapp.charts import build_all
 from webapp.events import events_for_assets
 from webapp.forms import request_from_payload
+
+logger = logging.getLogger(__name__)
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _CHAT_LIMITER = RateLimiter(max_per_window=30)
@@ -280,6 +284,20 @@ def create_app() -> FastAPI:
     @app.get("/planner", response_class=HTMLResponse)
     def planner(request: Request) -> HTMLResponse:
         return _TEMPLATES.TemplateResponse(request, "planner.html", {})
+
+    @app.get("/sentiment", response_class=HTMLResponse)
+    def sentiment_page(request: Request) -> HTMLResponse:
+        return _TEMPLATES.TemplateResponse(request, "sentiment.html", {})
+
+    @app.get("/api/v1/sentiment/{ticker}")
+    def sentiment_api(ticker: str, refresh: bool = False) -> JSONResponse:
+        if not _sentiment.valid_ticker(ticker):
+            return JSONResponse({"error": "invalid ticker"}, status_code=400)
+        try:
+            return JSONResponse(_sentiment.get_report(ticker, refresh=refresh))
+        except Exception:  # engine degrades internally; reaching here is unexpected
+            logger.exception("sentiment lookup failed for %s", ticker)
+            return JSONResponse({"error": "sentiment lookup failed"}, status_code=500)
 
     @app.get("/tournaments", response_class=HTMLResponse)
     def tournaments_index(request: Request) -> HTMLResponse:
