@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en" data-theme="bone">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trading Models — Ticker Sentiment</title>
+
+  <!-- set theme before first paint to avoid a flash -->
+  <script>
+    (function () {
+      try { document.documentElement.setAttribute("data-theme", localStorage.getItem("tm-theme") || "bone"); }
+      catch (e) { document.documentElement.setAttribute("data-theme", "bone"); }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Martian+Mono:wght@500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    :root[data-theme="bone"] {
+      --bg:#e9e4d6; --panel:#ded8c7; --inset:#efe9db;
+      --ink:#1c1b16; --muted:#6f6a5c; --line:#c7bfa9; --line-strong:#1c1b16;
+      --up:#1f7a3d; --down:#b3261e; --accent:#c8852f; --accent-ink:#1c1b16;
+    }
+    :root[data-theme="night"] {
+      --bg:#121110; --panel:#1a1815; --inset:#171511;
+      --ink:#e8e2d4; --muted:#8a8478; --line:#34302a; --line-strong:#4a463e;
+      --up:#3fbf6b; --down:#e5534b; --accent:#d39a4f; --accent-ink:#121110;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+      font-size: 13px; line-height: 1.5;
+      transition: background .18s ease, color .18s ease;
+    }
+    .label, .brand, .m-label, .chip, .crumb { font-family: "Martian Mono", "JetBrains Mono", monospace;
+      text-transform: uppercase; letter-spacing: .12em; }
+
+    .topbar { display: flex; align-items: center; gap: 14px;
+              padding: 11px 18px; border-bottom: 1px solid var(--line-strong); }
+    .brand { font-size: 14px; font-weight: 600; letter-spacing: .18em; }
+    .brand a { color: inherit; text-decoration: none; }
+    .crumb { font-size: 10px; color: var(--muted); letter-spacing: .18em; }
+    .spacer { flex: 1; }
+    .toggle { display: flex; border: 1px solid var(--line-strong); }
+    .toggle button { font-family: "Martian Mono", monospace; font-size: 9px; letter-spacing: .14em;
+      background: transparent; color: var(--muted); border: 0; padding: 6px 11px;
+      cursor: pointer; text-transform: uppercase; }
+    .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+    .wrap { max-width: 980px; margin: 0 auto; padding: 22px 18px 60px; }
+    .placeholder { color: var(--muted); }
+
+    .lookup { display: flex; gap: 8px; margin: 0 0 18px; }
+    .lookup input { font: inherit; text-transform: uppercase; background: var(--inset);
+      color: var(--ink); border: 1px solid var(--line-strong); padding: 8px 10px; width: 140px; }
+    .lookup button { font-family: "Martian Mono", monospace; font-size: 10px; letter-spacing: .12em;
+      text-transform: uppercase; background: var(--ink); color: var(--bg);
+      border: 1px solid var(--line-strong); padding: 8px 14px; cursor: pointer; }
+    .lookup button.secondary { background: transparent; color: var(--muted); }
+    .lookup button:disabled { opacity: .5; cursor: wait; }
+
+    .overall { display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+      border: 1px solid var(--line-strong); padding: 12px 14px; margin-bottom: 18px; }
+    .overall .m-label { font-size: 8.5px; color: var(--muted); }
+    .overall .m-value { font-size: 22px; font-weight: 700; }
+    .divergence { border: 1px solid var(--accent); color: var(--accent-ink);
+      background: var(--accent); padding: 6px 10px; font-size: 11px; }
+
+    .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @media (max-width: 860px) { .tiers { grid-template-columns: 1fr; } }
+    .card { border: 1px solid var(--line-strong); background: var(--panel); padding: 12px 14px; }
+    .card h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+    .badge { display: inline-block; font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+      padding: 3px 8px; border: 1px solid var(--line-strong); margin-left: 8px; }
+    .badge.bullish { color: var(--up); border-color: var(--up); }
+    .badge.bearish { color: var(--down); border-color: var(--down); }
+    .badge.mixed { color: var(--accent); border-color: var(--accent); }
+    .badge.neutral, .badge.na { color: var(--muted); }
+
+    .dial { position: relative; height: 8px; background: var(--inset);
+      border: 1px solid var(--line); margin: 10px 0 4px; }
+    .dial .tick { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px;
+      background: var(--muted); }
+    .dial .marker { position: absolute; top: -4px; width: 9px; height: 14px;
+      transform: translateX(-50%); background: var(--muted); }
+    .dial .marker.pos { background: var(--up); }
+    .dial .marker.neg { background: var(--down); }
+    .dial-scale { display: flex; justify-content: space-between; font-size: 9px;
+      color: var(--muted); margin-bottom: 8px; }
+
+    .metrics { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .chip { font-size: 8.5px; color: var(--muted); border: 1px solid var(--line);
+      padding: 3px 7px; }
+    .chip b { color: var(--ink); }
+
+    .summary { margin: 8px 0; }
+    .themes { color: var(--muted); font-size: 11px; margin: 6px 0; }
+    .evidence { margin: 8px 0 0; padding: 0; list-style: none; font-size: 11px; }
+    .evidence li { margin: 4px 0; }
+    .evidence a { color: inherit; }
+    .src-note { font-size: 9.5px; color: var(--muted); border-top: 1px solid var(--line);
+      margin-top: 10px; padding-top: 6px; }
+    .error { color: var(--down); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><a href="/">TRADING MODELS</a></div>
+    <div class="crumb">/ sentiment</div>
+    <div class="crumb"><a href="/scans" style="color: inherit; text-decoration: none;">/ swing scans</a></div>
+    <div class="crumb"><a href="/tournaments" style="color: inherit; text-decoration: none;">/ tournaments</a></div>
+    <div class="crumb"><a href="/planner" style="color: inherit; text-decoration: none;">/ options planner</a></div>
+    <div class="spacer"></div>
+    <div class="toggle" role="group" aria-label="theme">
+      <button type="button" data-theme-set="bone">Bone</button>
+      <button type="button" data-theme-set="night">Night</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <form class="lookup" id="lookupForm">
+      <input id="ticker" placeholder="TICKER" maxlength="10" autocomplete="off" autofocus />
+      <button type="submit" id="readBtn">Read sentiment</button>
+      <button type="button" id="refreshBtn" class="secondary" title="Bypass today's cache and refetch every source">Re-fetch</button>
+    </form>
+
+    <p class="placeholder" id="status">Three-tier read — official media vs serious forums vs viral retail.
+      First lookup of the day fetches live sources and takes ~10–20s.</p>
+
+    <div id="out" style="display: none;">
+      <div class="overall">
+        <div>
+          <div class="m-label">Overall bias</div>
+          <div class="m-value" id="overallBias">—</div>
+        </div>
+        <div>
+          <div class="m-label">As of</div>
+          <div id="asOf" style="font-size: 11px;">—</div>
+        </div>
+        <div class="divergence" id="divergence" style="display: none;"></div>
+      </div>
+      <div class="tiers" id="tierGrid"></div>
+    </div>
+  </div>
+
+  <script>
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+      (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+    const fmtScore = (v) => (v === null || v === undefined) ? "—" : (v > 0 ? "+" : "") + v.toFixed(2);
+    const TIER_NAMES = {official: "Official media", forums: "Serious forums", viral: "Viral / retail"};
+
+    function dial(score) {
+      if (score === null || score === undefined) return "";
+      const pct = ((score + 1) / 2) * 100;
+      const cls = score > 0.05 ? "pos" : (score < -0.05 ? "neg" : "");
+      return `<div class="dial"><div class="tick"></div><div class="marker ${cls}" style="left: ${pct}%"></div></div>
+        <div class="dial-scale"><span>-1 bearish</span><span>0</span><span>+1 bullish</span></div>`;
+    }
+
+    function metricChips(metrics) {
+      return Object.entries(metrics || {}).map(([k, v]) =>
+        `<span class="chip">${esc(k.replaceAll("_", " "))}: <b>${v === null ? "n/a" : esc(v)}</b></span>`
+      ).join("");
+    }
+
+    function evidenceList(evidence) {
+      if (!evidence || !evidence.length) return "";
+      const rows = evidence.map((e) => {
+        const age = e.age_days === null || e.age_days === undefined ? "" : `, ${e.age_days}d`;
+        const body = `${esc(e.title)} <span class="placeholder">(${esc(e.source)}${age})</span>`;
+        return `<li>${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${body}</a>` : body}</li>`;
+      });
+      return `<ul class="evidence">${rows.join("")}</ul>`;
+    }
+
+    function tierCard(t) {
+      const stance = t.stance || (t.status === "no_data" ? "na" : "neutral");
+      const conf = t.confidence === null || t.confidence === undefined ? "" :
+        `<span class="chip">confidence: <b>${t.confidence.toFixed(2)}</b></span>`;
+      const note = Object.entries(t.source_status || {}).map(([k, v]) =>
+        `${esc(k)}: ${esc(v)}`).join(" · ");
+      const body = t.status === "no_data"
+        ? `<p class="placeholder">No recent items found.</p>`
+        : `${dial(t.score)}
+           <div class="metrics">${metricChips(t.metrics)}${conf}</div>
+           <p class="summary">${esc(t.summary)}</p>
+           ${t.key_themes && t.key_themes.length ? `<div class="themes">themes: ${esc(t.key_themes.join(" · "))}</div>` : ""}
+           ${evidenceList(t.evidence)}`;
+      return `<div class="card">
+        <h3>${esc(t.label)} <span class="badge ${esc(stance)}">${esc(t.status === "no_data" ? "no data" : (t.stance || "unscored"))}</span>
+          ${t.score !== null && t.score !== undefined ? `<span style="float:right">${fmtScore(t.score)}</span>` : ""}</h3>
+        ${body}
+        <div class="src-note">${note}${t.status === "degraded" ? ' · <span class="error">degraded</span>' : ""}</div>
+      </div>`;
+    }
+
+    function render(report) {
+      document.getElementById("overallBias").textContent = fmtScore(report.overall_bias);
+      document.getElementById("asOf").textContent = report.as_of || "—";
+      const div = document.getElementById("divergence");
+      if (report.divergence) {
+        div.style.display = "";
+        div.textContent = `divergence: ${TIER_NAMES[report.divergence.pair[0]] || report.divergence.pair[0]} vs ` +
+          `${TIER_NAMES[report.divergence.pair[1]] || report.divergence.pair[1]} — gap ${report.divergence.gap.toFixed(2)}`;
+      } else {
+        div.style.display = "none";
+      }
+      document.getElementById("tierGrid").innerHTML = (report.tiers || []).map(tierCard).join("");
+      document.getElementById("out").style.display = "";
+    }
+
+    async function lookup(refresh) {
+      const ticker = document.getElementById("ticker").value.trim().toUpperCase();
+      const status = document.getElementById("status");
+      if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) {
+        status.textContent = "Enter a ticker (e.g. NVDA).";
+        return;
+      }
+      const buttons = [document.getElementById("readBtn"), document.getElementById("refreshBtn")];
+      buttons.forEach((b) => (b.disabled = true));
+      status.textContent = refresh
+        ? `Re-fetching every source for ${ticker}… (~10–20s)`
+        : `Reading ${ticker}… first lookup of the day fetches live sources (~10–20s).`;
+      try {
+        const resp = await fetch(`/api/v1/sentiment/${ticker}${refresh ? "?refresh=1" : ""}`);
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+        render(data);
+        status.textContent = data.status === "no_data"
+          ? `Nothing found for ${ticker} in any tier — no fake neutral here.`
+          : `${ticker} — report status: ${data.status}.`;
+      } catch (err) {
+        status.innerHTML = `<span class="error">Lookup failed: ${esc(err.message)}</span>`;
+      } finally {
+        buttons.forEach((b) => (b.disabled = false));
+      }
+    }
+
+    document.getElementById("lookupForm").addEventListener("submit", (e) => { e.preventDefault(); lookup(false); });
+    document.getElementById("refreshBtn").addEventListener("click", () => lookup(true));
+
+    (function () {
+      const buttons = document.querySelectorAll("[data-theme-set]");
+      function apply(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        try { localStorage.setItem("tm-theme", theme); } catch (e) {}
+        buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themeSet === theme)));
+      }
+      buttons.forEach(b => b.addEventListener("click", () => apply(b.dataset.themeSet)));
+      apply(document.documentElement.getAttribute("data-theme") || "bone");
+    })();
+  </script>
+</body>
+</html>

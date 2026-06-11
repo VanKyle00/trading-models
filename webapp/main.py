@@ -24,6 +24,7 @@ from tradinglib.assistant import provider as _assistant_provider
 from tradinglib.service import RequestError, list_specs, model_spec, run, run_to_dict
 from tradinglib.tournament.strategies import STRATEGIES
 from webapp import scans as _scans
+from webapp import sentiment as _sentiment
 from webapp import tournaments as _tournaments
 from webapp.charts import build_all
 from webapp.events import events_for_assets
@@ -257,6 +258,19 @@ def create_app() -> FastAPI:
     @app.get("/planner", response_class=HTMLResponse)
     def planner(request: Request) -> HTMLResponse:
         return _TEMPLATES.TemplateResponse(request, "planner.html", {})
+
+    @app.get("/sentiment", response_class=HTMLResponse)
+    def sentiment_page(request: Request) -> HTMLResponse:
+        return _TEMPLATES.TemplateResponse(request, "sentiment.html", {})
+
+    @app.get("/api/v1/sentiment/{ticker}")
+    def sentiment_api(ticker: str, refresh: bool = False) -> JSONResponse:
+        if not _sentiment.valid_ticker(ticker):
+            return JSONResponse({"error": "invalid ticker"}, status_code=400)
+        try:
+            return JSONResponse(_sentiment.get_report(ticker, refresh=refresh))
+        except Exception as exc:  # engine degrades internally; this is the last resort
+            return JSONResponse({"error": str(exc)}, status_code=500)
 
     @app.get("/tournaments", response_class=HTMLResponse)
     def tournaments_index(request: Request) -> HTMLResponse:
