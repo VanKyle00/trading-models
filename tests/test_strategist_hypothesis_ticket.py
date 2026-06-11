@@ -198,3 +198,53 @@ def test_neutral_ticket_all_illiquid_raises(make_chain) -> None:
             bars=_bars(),
             chain=empty,
         )
+
+
+def test_chat_ticket_has_candidate_ladder_with_keys(make_chain) -> None:
+    ticket = _ticket(make_chain)
+
+    keys = [s["key"] for s in ticket["structures"]]
+    assert all(keys), "every chat structure carries a stable key"
+    assert len(keys) == len(set(keys))
+    assert sum(1 for k in keys if k.startswith("long_call_d")) >= 2  # the ladder
+    assert all(s["quantity"] is not None for s in ticket["structures"])  # all sized
+
+
+def test_chat_ticket_recommended_has_reason_and_theta(make_chain) -> None:
+    ticket = _ticket(make_chain)
+
+    rec = next(s for s in ticket["structures"] if s["recommended"])
+    assert rec["reason"]  # deterministic explanation, e.g. preference/tilt text
+    others = [s for s in ticket["structures"] if not s["recommended"]]
+    assert all(s["reason"] is None for s in others)
+    assert all(s["theta_week"] is not None for s in ticket["structures"])
+
+
+def test_chat_ticket_plan_present_and_for_recommended(make_chain) -> None:
+    ticket = _ticket(make_chain)
+
+    plan = ticket["plan"]
+    assert plan is not None
+    assert len(plan["price_rules"]) == 2
+    assert plan["profit_take"] is not None and plan["loss_cut"] is not None
+    assert plan["est_by"]
+    rec = next(s for s in ticket["structures"] if s["recommended"])
+    assert plan["theta_week"] == rec["theta_week"]
+
+
+def test_structure_key_pins_recommendation_and_recomputes_plan(make_chain) -> None:
+    base = _ticket(make_chain)
+    pin = next(s["key"] for s in base["structures"] if not s["recommended"])
+
+    pinned = _ticket(make_chain, structure_key=pin)
+
+    rec = next(s for s in pinned["structures"] if s["recommended"])
+    assert rec["key"] == pin
+    assert rec["reason"] == "pinned by user request"
+    assert sum(s["recommended"] for s in pinned["structures"]) == 1
+    assert pinned["plan"]["theta_week"] == rec["theta_week"]
+
+
+def test_unknown_structure_key_lists_valid_keys(make_chain) -> None:
+    with pytest.raises(ValueError, match="valid keys"):
+        _ticket(make_chain, structure_key="nope")
