@@ -472,6 +472,7 @@ def test_build_chat_structures_includes_income_rows_and_keys(make_chain) -> None
     keys = [s.key for s in out]
     assert "csp" in keys and "bull_put_spread" in keys
     assert "stock" not in [s.kind for s in out]
+    assert notes == []  # every ladder delta is liquid in this fixture
 
 
 # Wide-condor fixture: regular shorts 90P/110C (credit (2.6-1.2)+(2.0-1.1)=2.3 >= 5/3),
