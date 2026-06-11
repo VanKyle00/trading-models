@@ -151,7 +151,55 @@ def test_viral_items_nan_sentiment_not_rendered() -> None:
             "url": ["https://st/1", "https://st/2"],
         }
     )
-    items = packs.viral_items(wsb, st)
+    items = packs.viral_items(wsb, st, _empty_bluesky())
     texts = [it["text"] for it in items]
     assert "tagged msg [user-tagged Bullish]" in texts
     assert "untagged msg" in texts  # no "[user-tagged nan]"
+
+
+def _empty_bluesky() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "ticker": [],
+            "created": [],
+            "text": [],
+            "handle": [],
+            "likes": [],
+            "reposts": [],
+            "url": [],
+        }
+    )
+
+
+def test_viral_items_includes_bluesky_posts() -> None:
+    empty_reddit = pd.DataFrame(
+        {
+            "ticker": [],
+            "subreddit": [],
+            "created": [],
+            "title": [],
+            "text": [],
+            "score": [],
+            "num_comments": [],
+            "url": [],
+        }
+    )
+    empty_st = pd.DataFrame(
+        {"ticker": [], "created": [], "body": [], "sentiment": [], "username": [], "url": []}
+    )
+    bsky = pd.DataFrame(
+        {
+            "ticker": ["NVDA"],
+            "created": pd.to_datetime(["2026-06-10"], utc=True),
+            "text": ["$NVDA to the sky 🚀"],
+            "handle": ["bull.bsky.social"],
+            "likes": [412],
+            "reposts": [88],
+            "url": ["https://bsky.app/profile/bull.bsky.social/post/1"],
+        }
+    )
+    items = packs.viral_items(empty_reddit, empty_st, bsky)
+    assert len(items) == 1
+    assert items[0]["source"] == "Bluesky @bull.bsky.social (+412, 88r)"
+    assert items[0]["text"] == "$NVDA to the sky 🚀"
+    assert items[0]["url"] == "https://bsky.app/profile/bull.bsky.social/post/1"

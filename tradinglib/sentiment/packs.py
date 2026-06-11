@@ -103,8 +103,10 @@ def forum_items(seeking_alpha: pd.DataFrame, reddit_posts: pd.DataFrame) -> list
     return _dedupe(items)
 
 
-def viral_items(wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame) -> list[dict]:
-    """Tier-3 items: r/wallstreetbets posts + Stocktwits messages."""
+def viral_items(
+    wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame, bluesky: pd.DataFrame
+) -> list[dict]:
+    """Tier-3 items: r/wallstreetbets posts + Stocktwits messages + Bluesky posts."""
     items: list[dict] = [_reddit_item(r) for r in wsb_posts.itertuples()]
     for r in stocktwits.itertuples():
         # NaN-safe: a non-normalized frame can carry float NaN, which is truthy
@@ -114,6 +116,17 @@ def viral_items(wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame) -> list[dict]
                 "source": "Stocktwits",
                 "title": str(r.body)[:80],
                 "text": f"{r.body}{tag}",
+                "url": r.url,
+                "published": r.created,
+            }
+        )
+    for r in bluesky.itertuples():
+        text = _str(r.text)
+        items.append(
+            {
+                "source": f"Bluesky @{_str(r.handle)} (+{int(r.likes)}, {int(r.reposts)}r)",
+                "title": text[:80],
+                "text": text,
                 "url": r.url,
                 "published": r.created,
             }

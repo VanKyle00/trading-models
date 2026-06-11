@@ -25,7 +25,7 @@ _RAW_SUMMARY_MAX_CHARS = 600
 _TIER_DESC = {
     TIER_OFFICIAL: "Tier-1 financial news headlines",
     TIER_FORUMS: "serious investor forums (Seeking Alpha article titles, finance subreddits)",
-    TIER_VIRAL: "viral retail chatter (r/wallstreetbets posts, Stocktwits messages)",
+    TIER_VIRAL: "viral retail chatter (r/wallstreetbets posts, Stocktwits messages, Bluesky posts)",
 }
 
 SCORE_SYSTEM_PROMPT = (
@@ -128,7 +128,10 @@ def trends_spike(interest: pd.Series | None) -> float | None:
 
 
 def viral_metrics(
-    wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame, interest: pd.Series | None
+    wsb_posts: pd.DataFrame,
+    stocktwits: pd.DataFrame,
+    bluesky: pd.DataFrame,
+    interest: pd.Series | None,
 ) -> dict:
     bulls = int(stocktwits["sentiment"].eq("Bullish").sum()) if len(stocktwits) else 0
     bears = int(stocktwits["sentiment"].eq("Bearish").sum()) if len(stocktwits) else 0
@@ -138,5 +141,6 @@ def viral_metrics(
         "st_bullish": bulls,
         "st_bearish": bears,
         "st_bull_bear_ratio": round(bulls / bears, 2) if bears > 0 else None,
+        "bsky_mentions": len(bluesky),
         "trends_spike": trends_spike(interest),
     }

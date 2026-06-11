@@ -114,6 +114,23 @@ def _st() -> pd.DataFrame:
     )
 
 
+def _bsky() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "ticker": ["NVDA"] * 2,
+            "created": pd.to_datetime(["2026-06-10", "2026-06-09"], utc=True),
+            "text": ["$NVDA to the sky 🚀", "fading $NVDA here"],
+            "handle": ["bull.bsky.social", "bear.bsky.social"],
+            "likes": [412, 95],
+            "reposts": [88, 12],
+            "url": [
+                "https://bsky.app/profile/bull.bsky.social/post/1",
+                "https://bsky.app/profile/bear.bsky.social/post/2",
+            ],
+        }
+    )
+
+
 def _trends() -> pd.Series:
     idx = pd.date_range(end=pd.Timestamp.now("UTC"), periods=97, freq="D")
     return pd.Series([10.0] * 90 + [20.0] * 7, index=idx)
@@ -130,6 +147,7 @@ def stubbed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "get_reddit_posts",
         lambda t, subs, **kw: _reddit("wallstreetbets" if "wallstreetbets" in subs else "stocks"),
     )
+    monkeypatch.setattr(report_mod, "get_bluesky_posts", lambda t, **kw: _bsky())
     monkeypatch.setattr(report_mod, "get_stocktwits", lambda t, **kw: _st())
     monkeypatch.setattr(report_mod, "load_interest", lambda q, **kw: _trends())
     return tmp_path
@@ -143,6 +161,8 @@ def test_full_report(stubbed: Path) -> None:
     by_tier = {t.tier: t for t in rep.tiers}
     assert by_tier["official"].score == 0.8 and by_tier["official"].status == "ok"
     assert by_tier["viral"].metrics["st_bull_bear_ratio"] == 1.0
+    assert by_tier["viral"].metrics["bsky_mentions"] == 2
+    assert by_tier["viral"].source_status["bluesky"] == "ok"
     assert rep.overall_bias == round((0.8 + 0.2 - 0.4) / 3, 3)
     assert rep.divergence == {"pair": ["official", "viral"], "gap": 1.2}
     assert by_tier["official"].evidence[0].source in ("Reuters", "CNBC")
@@ -178,6 +198,19 @@ def test_source_error_degrades_tier(stubbed: Path, monkeypatch: pytest.MonkeyPat
     assert rep.status == "partial"
 
 
+def test_bluesky_error_degrades_viral(stubbed: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(t, **kw):
+        raise RuntimeError("bsky gated")
+
+    monkeypatch.setattr(report_mod, "get_bluesky_posts", _boom)
+    rep = report_mod.run_sentiment("NVDA", provider=_TierStub(_PROVIDER_PAYLOADS))
+    viral = next(t for t in rep.tiers if t.tier == "viral")
+    assert viral.status == "degraded"  # bluesky is pack content, unlike trends
+    assert viral.source_status["bluesky"].startswith("error")
+    assert viral.metrics["bsky_mentions"] == 0
+    assert rep.status == "partial"
+
+
 def test_all_sources_empty_is_no_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     empty = pd.DataFrame()
     monkeypatch.setattr(report_mod, "processed_dir", lambda source: tmp_path / source)
@@ -185,6 +218,7 @@ def test_all_sources_empty_is_no_data(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(report_mod, "get_google_news", lambda t, **kw: empty)
     monkeypatch.setattr(report_mod, "get_seeking_alpha", lambda t, **kw: empty)
     monkeypatch.setattr(report_mod, "get_reddit_posts", lambda t, subs, **kw: empty)
+    monkeypatch.setattr(report_mod, "get_bluesky_posts", lambda t, **kw: empty)
     monkeypatch.setattr(report_mod, "get_stocktwits", lambda t, **kw: empty)
     monkeypatch.setattr(report_mod, "load_interest", lambda q, **kw: pd.Series(dtype=float))
 
