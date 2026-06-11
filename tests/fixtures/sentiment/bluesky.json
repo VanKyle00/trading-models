@@ -1,0 +1,34 @@
+{
+  "posts": [
+    {
+      "uri": "at://did:plc:abc123/app.bsky.feed.post/3kabc111",
+      "author": {"handle": "chipbull.bsky.social"},
+      "likeCount": 412,
+      "repostCount": 88,
+      "record": {
+        "text": "$NVDA datacenter demand is unreal 🚀📈 loading more calls",
+        "createdAt": "2026-06-10T14:30:00.000Z"
+      }
+    },
+    {
+      "uri": "at://did:plc:def456/app.bsky.feed.post/3kdef222",
+      "author": {"handle": "quietbear.bsky.social"},
+      "likeCount": 95,
+      "repostCount": 12,
+      "record": {
+        "text": "Everyone euphoric on $NVDA again — fading this 🐻",
+        "createdAt": "2026-06-09T11:05:00.000Z"
+      }
+    },
+    {
+      "uri": "at://did:plc:ghi789/app.bsky.feed.post/3kghi333",
+      "author": {},
+      "likeCount": 3,
+      "repostCount": 0,
+      "record": {
+        "text": "$NVDA chart looking spicy",
+        "createdAt": "2026-06-08T09:00:00.000Z"
+      }
+    }
+  ]
+}
