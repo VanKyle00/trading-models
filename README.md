@@ -239,7 +239,7 @@ page leads with the spread between them.
 | --- | --- | --- |
 | **1 · Official media** | yfinance headlines + Google News RSS | headline count |
 | **2 · Serious forums** | Seeking Alpha per-ticker RSS + r/stocks, r/investing, r/ValueInvesting, r/SecurityAnalysis | post count, mean upvotes/comments |
-| **3 · Viral retail** | r/wallstreetbets + Stocktwits (user-tagged bull/bear) + Google Trends | bull/bear ratio, WSB mentions, search-spike ratio (7d vs ~90d) |
+| **3 · Viral retail** | r/wallstreetbets + Stocktwits (user-tagged bull/bear) + Bluesky cashtag search + Google Trends | bull/bear ratio, WSB + Bluesky mentions, search-spike ratio (7d vs ~90d) |
 
 - **The divergence callout is the point.** Overall bias is just the mean of
   the available tier scores; the interesting output is the banner that fires
@@ -252,7 +252,7 @@ page leads with the spread between them.
   actually exists.
 - **Free sources only, honest degradation.** X (~$200/mo) and TikTok (no
   usable API) are deliberately excluded — the viral tier is proxied by WSB +
-  Stocktwits + Trends. Sources fail independently: a Cloudflare mood at
+  Stocktwits + Bluesky + Trends. Sources fail independently: a Cloudflare mood at
   Seeking Alpha or a missing Reddit key degrades that tier (status shown on
   the card), never the lookup, and an all-empty result renders "no data" —
   never a fake neutral. Reddit is the one keyed source (free script app via

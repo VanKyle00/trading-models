@@ -27,6 +27,7 @@ from tradinglib.loaders.forums.seeking_alpha import get_seeking_alpha
 from tradinglib.loaders.news.google_news import get_google_news
 from tradinglib.loaders.news.yfinance import get_news
 from tradinglib.loaders.sentiment.google_trends import load_interest
+from tradinglib.loaders.social.bluesky import get_bluesky_posts
 from tradinglib.loaders.social.stocktwits import get_stocktwits
 from tradinglib.sentiment import packs, scoring
 from tradinglib.sentiment.types import (
@@ -68,6 +69,7 @@ def _fetch_sources(ticker: str, *, refresh: bool) -> tuple[dict[str, Any], dict[
         "wsb": lambda: get_reddit_posts(ticker, VIRAL_SUBREDDITS, limit=20, refresh=refresh).head(
             20
         ),
+        "bluesky": lambda: get_bluesky_posts(ticker, max_items=25, refresh=refresh),
         "stocktwits": lambda: get_stocktwits(ticker, max_items=30, refresh=refresh),
         "google_trends": lambda: _trends_series(ticker, refresh=refresh),
     }
@@ -165,9 +167,16 @@ def run_sentiment(
         ),
         (
             TIER_VIRAL,
-            packs.viral_items(_frame(data, "wsb"), _frame(data, "stocktwits")),
-            scoring.viral_metrics(_frame(data, "wsb"), _frame(data, "stocktwits"), trends),
-            {k: status[k] for k in ("wsb", "stocktwits", "google_trends")},
+            packs.viral_items(
+                _frame(data, "wsb"), _frame(data, "stocktwits"), _frame(data, "bluesky")
+            ),
+            scoring.viral_metrics(
+                _frame(data, "wsb"),
+                _frame(data, "stocktwits"),
+                _frame(data, "bluesky"),
+                trends,
+            ),
+            {k: status[k] for k in ("wsb", "stocktwits", "bluesky", "google_trends")},
         ),
     ]
 

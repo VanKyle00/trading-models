@@ -9,6 +9,7 @@ back to real rows (the model never emits URLs, so links can't be hallucinated).
 from __future__ import annotations
 
 import re
+from itertools import zip_longest
 from typing import Any
 
 import pandas as pd
@@ -103,13 +104,17 @@ def forum_items(seeking_alpha: pd.DataFrame, reddit_posts: pd.DataFrame) -> list
     return _dedupe(items)
 
 
-def viral_items(wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame) -> list[dict]:
-    """Tier-3 items: r/wallstreetbets posts + Stocktwits messages."""
-    items: list[dict] = [_reddit_item(r) for r in wsb_posts.itertuples()]
+def viral_items(
+    wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame, bluesky: pd.DataFrame
+) -> list[dict]:
+    """Tier-3 items: r/wallstreetbets + Stocktwits + Bluesky, round-robin
+    interleaved so the bounded pack can't crowd any single source out."""
+    wsb = [_reddit_item(r) for r in wsb_posts.itertuples()]
+    st: list[dict] = []
     for r in stocktwits.itertuples():
         # NaN-safe: a non-normalized frame can carry float NaN, which is truthy
         tag = f" [user-tagged {_str(r.sentiment)}]" if _str(r.sentiment) else ""
-        items.append(
+        st.append(
             {
                 "source": "Stocktwits",
                 "title": str(r.body)[:80],
@@ -118,7 +123,23 @@ def viral_items(wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame) -> list[dict]
                 "published": r.created,
             }
         )
-    return _dedupe(items)
+    bsky: list[dict] = []
+    for r in bluesky.itertuples():
+        text = _str(r.text)
+        bsky.append(
+            {
+                "source": f"Bluesky @{_str(r.handle)} (+{int(r.likes)}, {int(r.reposts)}r)",
+                "title": text[:80],
+                "text": text,
+                "url": r.url,
+                "published": r.created,
+            }
+        )
+    # Round-robin so build_pack's char budget trims all sources evenly. Dedupe
+    # stays cross-source on purpose: the same message amplified on two networks
+    # is one signal, not two (first-seen wins).
+    interleaved = [item for trio in zip_longest(wsb, st, bsky) for item in trio if item is not None]
+    return _dedupe(interleaved)
 
 
 def build_pack(

@@ -104,18 +104,21 @@ def test_viral_metrics_ratio_and_spike() -> None:
     wsb = pd.DataFrame({"title": ["a"]})
     idx = pd.date_range(end=pd.Timestamp.now("UTC"), periods=97, freq="D")
     interest = pd.Series([10.0] * 90 + [30.0] * 7, index=idx)
-    m = scoring.viral_metrics(wsb, st, interest)
+    bsky = pd.DataFrame({"text": ["a", "b", "c"]})
+    m = scoring.viral_metrics(wsb, st, bsky, interest)
     assert m["wsb_mentions"] == 1 and m["st_messages"] == 4
     assert m["st_bullish"] == 2 and m["st_bearish"] == 1
     assert m["st_bull_bear_ratio"] == 2.0
     assert m["trends_spike"] is not None and m["trends_spike"] > 2.0
+    assert m["bsky_mentions"] == 3
 
 
 def test_viral_metrics_guards() -> None:
     st = pd.DataFrame({"sentiment": ["Bullish"]})
-    m = scoring.viral_metrics(pd.DataFrame(), st, None)
+    m = scoring.viral_metrics(pd.DataFrame(), st, pd.DataFrame(), None)
     assert m["st_bull_bear_ratio"] is None  # no bears -> undefined, not inf
     assert m["trends_spike"] is None
+    assert m["bsky_mentions"] == 0
 
 
 def test_trends_spike_zero_baseline_is_none() -> None:
