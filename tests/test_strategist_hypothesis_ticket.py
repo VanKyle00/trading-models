@@ -136,3 +136,65 @@ def test_chat_ticket_all_illiquid_raises(make_chain) -> None:
             bars=_bars(),
             chain=empty,
         )
+
+
+NEUTRAL_LEVELS = {"lower": 92.0, "upper": 108.0, "condition": "user: TEST range-bound"}
+
+NEUTRAL_MIDS = {
+    ("put", 38, 85.0): 0.6,
+    ("put", 38, 90.0): 1.6,
+    ("put", 38, 95.0): 2.8,
+    ("put", 38, 100.0): 3.4,
+    ("call", 38, 100.0): 3.5,
+    ("call", 38, 105.0): 2.4,
+    ("call", 38, 110.0): 1.5,
+    ("call", 38, 115.0): 0.5,
+}
+
+
+def _neutral_ticket(make_chain, **kwargs) -> dict:
+    return build_hypothesis_ticket(
+        ticker="TEST",
+        stance="neutral",
+        levels=dict(NEUTRAL_LEVELS),
+        bars=_bars(),
+        chain=make_chain(mids=NEUTRAL_MIDS),
+        **kwargs,
+    )
+
+
+def test_neutral_ticket_recommends_condor_first(make_chain) -> None:
+    ticket = _neutral_ticket(make_chain)
+
+    assert ticket["stance"] == "neutral"
+    assert ticket["levels"] == NEUTRAL_LEVELS
+    assert [s["kind"] for s in ticket["structures"]] == ["iron_condor", "iron_butterfly"]
+    rec = next(s for s in ticket["structures"] if s["recommended"])
+    assert rec["kind"] == "iron_condor"
+    assert rec["quantity"] == 3  # 100k * 1% // ($3.00 max loss x 100)
+    assert ticket["iv_ratio"] is not None  # framing still reported
+    assert any("indicative" in w for w in ticket["warnings"])
+
+
+def test_neutral_ticket_spanning_earnings_warns_per_structure(make_chain) -> None:
+    ticket = _neutral_ticket(
+        make_chain,
+        earnings_warning=True,
+        next_earnings=pd.Timestamp("2026-06-20", tz="UTC"),  # before the 38-DTE expiry
+    )
+
+    assert all(any("earnings" in w for w in s["warnings"]) for s in ticket["structures"])
+    assert any("earnings" in w for w in ticket["warnings"])
+
+
+def test_neutral_ticket_all_illiquid_raises(make_chain) -> None:
+    empty = make_chain(mids={("call", 38, 100.0): 1.0}).iloc[0:0]
+
+    with pytest.raises(ValueError, match="liquidity gate"):
+        build_hypothesis_ticket(
+            ticker="TEST",
+            stance="neutral",
+            levels=dict(NEUTRAL_LEVELS),
+            bars=_bars(),
+            chain=empty,
+        )
