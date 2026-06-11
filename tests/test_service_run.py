@@ -4,6 +4,7 @@ from datetime import date
 
 import pandas as pd
 import pytest
+from pytrends.exceptions import ResponseError
 
 from tradinglib.service import BacktestRequest, BacktestRun, list_specs, run, run_to_dict
 
@@ -98,7 +99,9 @@ def test_every_model_runs_and_serializes(spec):
     req = BacktestRequest(model_id=spec.id, start=start, end=end)  # symbol=None → default
     try:
         result = run_to_dict(run(req))
-    except (FileNotFoundError, ConnectionError, OSError) as exc:
+    except (FileNotFoundError, ConnectionError, OSError, ResponseError) as exc:
+        # ResponseError: Google Trends 429s CI-runner IPs (no local cache there);
+        # rate limiting is "data unavailable in this environment", not a model bug.
         pytest.skip(f"{spec.family}: data unavailable in this environment ({exc})")
     assert set(result) >= BASELINE_KEYS
     json.dumps(result)
