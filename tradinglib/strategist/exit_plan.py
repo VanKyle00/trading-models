@@ -76,6 +76,7 @@ def build_exit_plan(
     premium = s.premium
     mult = SHARES_PER_CONTRACT * (s.quantity or 1)
     dte = int(s.legs[0]["dte"])
+    # every builder emits single-expiration structures; legs share one expiry
     expiration = pd.Timestamp(s.legs[0]["expiration"])
     half_left = dte - dte // 2
     est_by = (expiration - pd.Timedelta(days=half_left)).strftime("%Y-%m-%d")
@@ -105,6 +106,8 @@ def build_exit_plan(
             rule(f"underlying reaches the stop {levels.stop:g}", "close", levels.stop),
         ]
 
+    profit_take: PlanRule | None = None
+    loss_cut: PlanRule | None = None
     time_rules: list[PlanRule] = []
     if credit is not None:
         profit_take = PlanRule(
@@ -130,10 +133,11 @@ def build_exit_plan(
             time_rules.append(
                 PlanRule(trigger=f"{CREDIT_MANAGE_DTE} DTE ({when})", action="close or roll")
             )
-    else:
+    elif premium > 0:
         profit_take = PlanRule(
             trigger=(
-                f"structure marks at >= ${DEBIT_TP_MULT * premium:.2f}/sh (+100% of the debit) "
+                f"structure marks at >= ${DEBIT_TP_MULT * premium:.2f}/sh "
+                f"(+{DEBIT_TP_MULT - 1:.0%} of the debit) "
                 "— or the target trigger, whichever hits first"
             ),
             action="take profit",
@@ -141,7 +145,7 @@ def build_exit_plan(
             est_pnl_pct=1.0,
         )
         loss_cut = PlanRule(
-            trigger=f"structure marks at <= ${DEBIT_CUT_FRAC * premium:.2f}/sh (-50% of the debit)",
+            trigger=f"structure marks at <= ${DEBIT_CUT_FRAC * premium:.2f}/sh (-{DEBIT_CUT_FRAC:.0%} of the debit)",
             action="close",
             est_pnl=round(-DEBIT_CUT_FRAC * premium * mult, 0),
             est_pnl_pct=-DEBIT_CUT_FRAC,
@@ -162,7 +166,7 @@ def build_exit_plan(
             if next_earnings.tzinfo
             else next_earnings
         )
-        if ne <= expiration:
+        if ne.normalize() <= expiration:
             notes.append(
                 f"earnings {ne:%Y-%m-%d} before expiry — decide beforehand: close or accept the gap"
             )

@@ -109,6 +109,16 @@ def test_21_dte_rule_omitted_inside_21_dte() -> None:
     assert plan is not None and plan.time_rules == []
 
 
+def _condor_value(spot: float) -> float:
+    t = 19 / 365
+    return (
+        bs_price("put", spot, 85.0, t, 0.30, 0.0)
+        - bs_price("put", spot, 90.0, t, 0.30, 0.0)
+        - bs_price("call", spot, 110.0, t, 0.30, 0.0)
+        + bs_price("call", spot, 115.0, t, 0.30, 0.0)
+    )
+
+
 def test_neutral_band_rules_close_at_both_edges() -> None:
     legs = [
         _leg("buy", "put", 85.0, dte=38, mid=0.6),
@@ -123,7 +133,34 @@ def test_neutral_band_rules_close_at_both_edges() -> None:
     lo, hi = plan.price_rules
     assert "92" in lo.trigger and lo.action == "close"
     assert "108" in hi.trigger and hi.action == "close"
-    assert lo.est_pnl is not None and hi.est_pnl is not None
+    v_floor, v_ceil = _condor_value(92.0), _condor_value(108.0)
+    assert v_floor < 0  # net short: closing the condor costs money (sign anchor)
+    assert lo.est_value == pytest.approx(round(v_floor, 2))
+    assert lo.est_pnl == pytest.approx(round((v_floor + 2.0) * 100, 0))
+    assert lo.est_pnl_pct == pytest.approx(round((v_floor + 2.0) / 2.0, 2))
+    assert hi.est_value == pytest.approx(round(v_ceil, 2))
+    assert hi.est_pnl == pytest.approx(round((v_ceil + 2.0) * 100, 0))
+
+
+def test_earnings_note_on_expiry_day_intraday_timestamp() -> None:
+    s = _structure(
+        legs=[_leg("buy", "call", 95.0, mid=8.0)], premium=8.0, max_gain=None, quantity=1
+    )
+    expiry_day_am = pd.Timestamp(
+        (ASOF + pd.Timedelta(days=75)).strftime("%Y-%m-%d") + " 11:00", tz="UTC"
+    )
+    plan = build_exit_plan(s, LONG_LEVELS, next_earnings=expiry_day_am)
+    assert plan is not None and len(plan.notes) == 1
+
+
+def test_zero_premium_skips_threshold_and_time_rules() -> None:
+    s = _structure(
+        legs=[_leg("buy", "call", 95.0, mid=0.0)], premium=0.0, max_gain=None, quantity=1
+    )
+    plan = build_exit_plan(s, LONG_LEVELS)
+    assert plan is not None
+    assert plan.profit_take is None and plan.loss_cut is None and plan.time_rules == []
+    assert all(r.est_pnl_pct is None for r in plan.price_rules)
 
 
 def test_earnings_note_only_when_before_expiry() -> None:
