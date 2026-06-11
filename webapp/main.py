@@ -11,6 +11,7 @@ Run locally with::
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -215,7 +216,7 @@ def _planner_settings(raw: Any) -> str | None:
         risk = float(raw["risk_per_trade_pct"])
     except (KeyError, TypeError, ValueError):
         return None
-    if account <= 0 or not 0 < risk <= 0.2:
+    if not math.isfinite(account) or account <= 0 or not 0 < risk <= 0.2:
         return None
     return (
         f"Planner sizing (set on the page): account size ${account:,.0f}; "

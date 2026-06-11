@@ -231,6 +231,8 @@ def test_chat_malformed_settings_ignored_not_400(monkeypatch):
         {"account_size": -5, "risk_per_trade_pct": 0.01},
         {"account_size": 100000, "risk_per_trade_pct": 0.5},
         {"account_size": "lots"},
+        {"account_size": "inf", "risk_per_trade_pct": 0.02},
+        {"account_size": "nan", "risk_per_trade_pct": 0.02},
         None,
     ):
         stub = _stub_chat_provider(monkeypatch)
