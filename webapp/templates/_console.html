@@ -83,6 +83,22 @@
   .tc-link { display: inline-block; margin-top: 8px; font-size: 11px; color: var(--accent);
              border: 1px solid var(--accent); padding: 3px 10px; text-decoration: none; }
   .tc-warn { margin-top: 6px; color: var(--down); font-size: 11px; }
+  .tc-events { margin-top: 6px; color: var(--muted); font-size: 10.5px; }
+  .tc-chart { display: block; width: 100%; max-width: 536px; margin-top: 8px;
+              background: var(--inset); border: 1px solid var(--line); }
+  .tc-chart .tc-price { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+  .tc-chart line.lvl-target { stroke: var(--up); stroke-dasharray: 5 3; }
+  .tc-chart line.lvl-stop { stroke: var(--down); stroke-dasharray: 5 3; }
+  .tc-chart line.lvl-entry { stroke: var(--accent); stroke-dasharray: 5 3; }
+  .tc-chart line.lvl-band { stroke: var(--accent); stroke-dasharray: 5 3; }
+  .tc-chart line.lvl-sr { stroke: var(--muted); stroke-dasharray: 2 3; }
+  .tc-chart rect.lvl-band-fill { fill: var(--accent); fill-opacity: .07; }
+  .tc-chart text { font-family: "Martian Mono", "JetBrains Mono", monospace; font-size: 8px; }
+  .tc-chart text.lvl-target { fill: var(--up); }
+  .tc-chart text.lvl-stop { fill: var(--down); }
+  .tc-chart text.lvl-entry { fill: var(--accent); }
+  .tc-chart text.lvl-band { fill: var(--accent); }
+  .tc-chart text.lvl-sr { fill: var(--muted); }
 </style>
 <section class="console" id="console">
   {% if console_resize %}<div class="console-resize" id="console-resize" title="Drag to resize"></div>{% endif %}
@@ -271,6 +287,118 @@
       transcript.appendChild(card);
       transcript.scrollTop = transcript.scrollHeight;
     }
+    // ── levels card: chart + scenario table + events for propose_trade_levels ──
+    var SVG_NS = "http://www.w3.org/2000/svg";
+    function svgEl(tag, attrs) {
+      var el = document.createElementNS(SVG_NS, tag);
+      for (var k in attrs) el.setAttribute(k, attrs[k]);
+      return el;
+    }
+    function levelsChart(p) {
+      var closes = (p.sparkline && p.sparkline.closes) || [];
+      var rec = null, sc = p.scenarios || [], i;
+      for (i = 0; i < sc.length; i++) if (sc[i].recommended) rec = sc[i];
+      if (closes.length < 2 || !rec) return null;
+      var W = 536, H = 150, PADL = 6, PADR = 86, PADY = 10;
+      var lv = rec.levels, lines = [];
+      if (lv.entry != null) {
+        lines.push({ v: lv.target, cls: "lvl-target", label: "target " + tcMoney(lv.target) });
+        lines.push({ v: lv.entry, cls: "lvl-entry", label: "entry " + tcMoney(lv.entry) });
+        lines.push({ v: lv.stop, cls: "lvl-stop", label: "stop " + tcMoney(lv.stop) });
+      } else {
+        lines.push({ v: lv.upper, cls: "lvl-band", label: "upper " + tcMoney(lv.upper) });
+        lines.push({ v: lv.lower, cls: "lvl-band", label: "lower " + tcMoney(lv.lower) });
+      }
+      if (p.context && p.context.high_20d != null)
+        lines.push({ v: p.context.high_20d, cls: "lvl-sr", label: "20d hi " + tcMoney(p.context.high_20d) });
+      if (p.context && p.context.low_20d != null)
+        lines.push({ v: p.context.low_20d, cls: "lvl-sr", label: "20d lo " + tcMoney(p.context.low_20d) });
+
+      var vals = closes.slice();
+      for (i = 0; i < lines.length; i++) vals.push(lines[i].v);
+      var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+      var pad = (hi - lo) * 0.05 || 1; lo -= pad; hi += pad;
+      function X(idx) { return PADL + (W - PADL - PADR) * idx / (closes.length - 1); }
+      function Y(v) { return PADY + (H - 2 * PADY) * (1 - (v - lo) / (hi - lo)); }
+
+      var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, "class": "tc-chart" });
+      if (lv.entry == null)  // neutral: shade the hold band
+        svg.appendChild(svgEl("rect", {
+          x: PADL, width: W - PADL - PADR, "class": "lvl-band-fill",
+          y: Y(lv.upper).toFixed(1), height: Math.max(0, Y(lv.lower) - Y(lv.upper)).toFixed(1)
+        }));
+      for (i = 0; i < lines.length; i++)
+        svg.appendChild(svgEl("line", {
+          x1: PADL, x2: W - PADR, "class": lines[i].cls,
+          y1: Y(lines[i].v).toFixed(1), y2: Y(lines[i].v).toFixed(1)
+        }));
+      var pts = [];
+      for (i = 0; i < closes.length; i++) pts.push(X(i).toFixed(1) + "," + Y(closes[i]).toFixed(1));
+      svg.appendChild(svgEl("polyline", { points: pts.join(" "), "class": "tc-price" }));
+      // right-edge labels, nudged apart when lines sit close together
+      var labels = [];
+      for (i = 0; i < lines.length; i++) labels.push({ y: Y(lines[i].v), l: lines[i] });
+      labels.sort(function (a, b) { return a.y - b.y; });
+      for (i = 1; i < labels.length; i++)
+        if (labels[i].y - labels[i - 1].y < 9) labels[i].y = labels[i - 1].y + 9;
+      for (i = 0; i < labels.length; i++) {
+        var t = svgEl("text", { x: W - PADR + 4, y: Math.min(H - 2, labels[i].y + 3).toFixed(1),
+                                "class": labels[i].l.cls });
+        t.textContent = labels[i].l.label;
+        svg.appendChild(t);
+      }
+      return svg;
+    }
+    function renderScenarioTable(card, scenarios) {
+      if (!scenarios.length) return;
+      var directional = scenarios[0].levels.entry != null;
+      var heads = directional ? ["scenario", "entry", "stop", "target", "note"]
+                              : ["scenario", "lower", "upper", "note"];
+      var tbl = tcEl("table", "tc-cands"), hrow = tcEl("tr"), i;
+      for (i = 0; i < heads.length; i++) hrow.appendChild(tcEl("th", null, heads[i]));
+      tbl.appendChild(hrow);
+      for (i = 0; i < scenarios.length; i++) {
+        var s = scenarios[i], row = tcEl("tr", s.recommended ? "tc-rec" : null);
+        row.appendChild(tcEl("td", null, (s.recommended ? "▸ " : "") + s.key));
+        if (directional) {
+          row.appendChild(tcEl("td", null, tcMoney(s.levels.entry) || ""));
+          row.appendChild(tcEl("td", null, tcMoney(s.levels.stop) || ""));
+          row.appendChild(tcEl("td", null, tcMoney(s.levels.target) || ""));
+        } else {
+          row.appendChild(tcEl("td", null, tcMoney(s.levels.lower) || ""));
+          row.appendChild(tcEl("td", null, tcMoney(s.levels.upper) || ""));
+        }
+        row.appendChild(tcEl("td", null, s.note || ""));
+        tbl.appendChild(row);
+      }
+      card.appendChild(tbl);
+    }
+    function renderLevelsCard(p) {
+      if (!p.scenarios || !p.scenarios.length) return;
+      var card = tcEl("div", "line ticket-card");
+      var head = tcEl("div", "tc-head");
+      head.appendChild(tcEl("span", "tc-tkr", p.ticker));
+      head.appendChild(tcEl("span", "tc-chip " + p.stance, p.stance));
+      if (p.asof) head.appendChild(tcEl("span", "tc-asof", "bars " + p.asof));
+      card.appendChild(head);
+      var chart = levelsChart(p);
+      if (chart) card.appendChild(chart);
+      renderScenarioTable(card, p.scenarios);
+      var ev = p.events || {}, i;
+      var warns = ev.warnings || [];
+      for (i = 0; i < warns.length; i++) card.appendChild(tcEl("div", "tc-warn", "⚠ " + warns[i]));
+      var info = [];  // events known but outside the server's 14d warn window
+      if (ev.next_earnings && ev.next_earnings.days_until > 14)
+        info.push("next earnings " + ev.next_earnings.date +
+                  " (" + ev.next_earnings.session + ", " + ev.next_earnings.days_until + "d)");
+      if (ev.ex_dividend && ev.ex_dividend.days_until > 14)
+        info.push("ex-div " + ev.ex_dividend.date + " (" + ev.ex_dividend.days_until + "d)");
+      if (info.length) card.appendChild(tcEl("div", "tc-events", info.join(" · ")));
+      var notes = ev.notes || [];
+      for (i = 0; i < notes.length; i++) card.appendChild(tcEl("div", "tc-events", notes[i]));
+      transcript.appendChild(card);
+      transcript.scrollTop = transcript.scrollHeight;
+    }
     function currentContext() {
       var el = document.getElementById("run-context");
       if (!el) return null;
@@ -317,6 +445,8 @@
               add("tool", (evt.is_error ? "✗ " : "✓ ") + evt.name);
               if (evt.name === "build_options_ticket" && !evt.is_error && evt.output) {
                 try { renderTicketCard(JSON.parse(evt.output)); } catch (_) {}
+              } else if (evt.name === "propose_trade_levels" && !evt.is_error && evt.output) {
+                try { renderLevelsCard(JSON.parse(evt.output)); } catch (_) {}
               }
             } else if (evt.type === "final") {
               if (interim) { interim.remove(); interim = null; }
