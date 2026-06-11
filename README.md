@@ -222,6 +222,44 @@ setup detection):
 uv run python scripts/swing_scan.py --limit 25 --skip-llm
 ```
 
+## Ticker sentiment
+
+**▶ [Open the sentiment page →](https://van-kyle-00--trading-models-workbench-fastapi-app.modal.run/sentiment)**
+— type a ticker and get the same story from three very different rooms: what
+the press is printing, what investors are arguing on serious forums, and what
+retail is shouting into the feeds. Each tier is scored independently — one
+bounded LLM call per tier (strict JSON, the same grounded pattern as the
+scanner briefs) on top of mechanical metrics computed in plain code — and the
+page leads with the spread between them.
+
+| Tier | Sources | Mechanical metrics (no LLM) |
+| --- | --- | --- |
+| **1 · Official media** | yfinance headlines + Google News RSS | headline count |
+| **2 · Serious forums** | Seeking Alpha per-ticker RSS + r/stocks, r/investing, r/ValueInvesting, r/SecurityAnalysis | post count, mean upvotes/comments |
+| **3 · Viral retail** | r/wallstreetbets + Stocktwits (user-tagged bull/bear) + Google Trends | bull/bear ratio, WSB mentions, search-spike ratio (7d vs ~90d) |
+
+- **The divergence callout is the point.** Overall bias is just the mean of
+  the available tier scores; the interesting output is the banner that fires
+  when two tiers disagree by ≥ 0.6 — viral froth the press hasn't blessed, or
+  official optimism retail isn't buying, is exactly the read no single feed
+  shows you.
+- **Evidence can't be hallucinated.** The LLM cites pack-item *indices*; the
+  server resolves them back to the real headlines and posts (links
+  scheme-allowlisted), so every quote on a tier card is something that
+  actually exists.
+- **Free sources only, honest degradation.** X (~$200/mo) and TikTok (no
+  usable API) are deliberately excluded — the viral tier is proxied by WSB +
+  Stocktwits + Trends. Sources fail independently: a Cloudflare mood at
+  Seeking Alpha or a missing Reddit key degrades that tier (status shown on
+  the card), never the lookup, and an all-empty result renders "no data" —
+  never a fake neutral. Reddit is the one keyed source (free script app via
+  `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET`; see
+  [`docs/data-sources.md`](docs/data-sources.md)).
+- **Cached per (ticker, day).** The first lookup of a day fetches live
+  (~10–20 s); repeats are instant; **Re-fetch** bypasses. Finished reports
+  accrue as JSON under `data/processed/sentiment/reports/` — the forward
+  history a future nightly batch mode will reuse.
+
 ## Current models
 
 | Model | Family | Window | Assets | OOS Sharpe | Max DD | Status |
@@ -283,6 +321,7 @@ auto-generated from each model's `model.md` frontmatter.
 | `tradinglib/backtest/` | Vectorized + event-driven engines, options engine, standardized metrics |
 | `tradinglib/loaders/` | Data loaders, one subpackage per asset class |
 | `tradinglib/assistant/` | Bounded LLM agent loop + provider abstraction (Claude / own Qwen adapter) |
+| `tradinglib/sentiment/` | Three-tier ticker sentiment engine behind the `/sentiment` page (packs → per-tier LLM scoring → divergence) |
 | `tradinglib/training/` | QLoRA fine-tuning glue + pinned hyperparameter config |
 | `tradinglib/dataset/` | Grounded SFT dataset builder from real backtest traces |
 | `data/ingestion/` | Documentation of each data source |
