@@ -36,6 +36,7 @@ def propose_levels(ticker: str, stance: str) -> dict:
         raise ValueError(f"no daily bars for {ticker!r} — is the ticker valid?")
     spot = float(bars["close"].iloc[-1])
     atr14 = float(atr(bars["high"], bars["low"], bars["close"], _ATR_WINDOW).iloc[-1])
+    levels: dict[str, float | str]
     if stance == "neutral":
         levels = {"lower": round(spot - 2 * atr14, 2), "upper": round(spot + 2 * atr14, 2)}
         method = "band = spot -/+ 2x ATR(14); structures sell premium outside the band"

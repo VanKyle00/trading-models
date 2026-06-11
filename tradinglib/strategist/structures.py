@@ -56,7 +56,9 @@ class Structure:
     recommended: bool = False
     quantity: int | None = None
     loss_at_stop: float | None = None  # CSP scenario P/L per share at the ticket stop (+ = loss)
-    breakevens: list[float] | None = None  # two-sided structures: [lower, upper]; breakeven stays None
+    breakevens: list[float] | None = (
+        None  # two-sided structures: [lower, upper]; breakeven stays None
+    )
 
     def as_dict(self) -> dict:
         return asdict(self)
