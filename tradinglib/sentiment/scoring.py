@@ -85,7 +85,7 @@ def unavailable(reason: str) -> dict:
 
 def score_tier(provider: LLMProvider, tier: str, pack: str) -> dict:
     """One provider call -> sanitized tier-scoring dict; never raises."""
-    system = SCORE_SYSTEM_PROMPT.format(tier_desc=_TIER_DESC[tier])
+    system = SCORE_SYSTEM_PROMPT.format(tier_desc=_TIER_DESC.get(tier, tier))
     try:
         turn = provider.complete(system, [UserMsg(pack)], tools=[])
     except Exception as exc:
@@ -130,8 +130,8 @@ def trends_spike(interest: pd.Series | None) -> float | None:
 def viral_metrics(
     wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame, interest: pd.Series | None
 ) -> dict:
-    bulls = int((stocktwits["sentiment"] == "Bullish").sum()) if len(stocktwits) else 0
-    bears = int((stocktwits["sentiment"] == "Bearish").sum()) if len(stocktwits) else 0
+    bulls = int(stocktwits["sentiment"].eq("Bullish").sum()) if len(stocktwits) else 0
+    bears = int(stocktwits["sentiment"].eq("Bearish").sum()) if len(stocktwits) else 0
     return {
         "wsb_mentions": len(wsb_posts),
         "st_messages": len(stocktwits),
