@@ -404,6 +404,14 @@
       if (!el) return null;
       try { return JSON.parse(el.textContent); } catch (_) { return null; }
     }
+    function plannerSettings() {
+      var box = document.getElementById("planner-settings");
+      if (!box) return null;
+      var acct = parseFloat(document.getElementById("ps-account").value);
+      var riskPct = parseFloat(document.getElementById("ps-risk").value);
+      if (!isFinite(acct) || acct <= 0 || !isFinite(riskPct) || riskPct <= 0) return null;
+      return { account_size: acct, risk_per_trade_pct: riskPct / 100 };
+    }
 
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
@@ -422,6 +430,7 @@
             message: msg,
             history: history.slice(-20),
             context: currentContext(),
+            settings: plannerSettings(),
             provider: providerEl ? providerEl.value : "claude"
           })
         });

@@ -100,3 +100,47 @@ def test_load_daily_raises_on_empty_response(
         pytest.raises(ValueError, match="no data"),
     ):
         loader.load_daily("ZZZZ")
+
+
+@pytest.fixture
+def fake_yf_frame_with_nan_tail(fake_yf_frame: pd.DataFrame) -> pd.DataFrame:
+    """yfinance glitch: a trailing row with volume populated but NaN prices."""
+    df = fake_yf_frame.copy()
+    nan_day = pd.Timestamp("2024-01-06")
+    for col in ("Open", "High", "Low", "Close"):
+        df.loc[nan_day, (col, "SPY")] = float("nan")
+    df.loc[nan_day, ("Volume", "SPY")] = 500_000
+    return df
+
+
+def test_load_daily_drops_nan_price_rows(
+    fake_yf_frame_with_nan_tail: pd.DataFrame, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.equities import yfinance as loader
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+
+    with patch.object(loader.yf, "download", return_value=fake_yf_frame_with_nan_tail):
+        df = loader.load_daily("SPY")
+
+    assert len(df) == 5  # the NaN-price tail row is gone
+    assert df.index.max() == pd.Timestamp("2024-01-05", tz="UTC")
+    assert not df[["open", "high", "low", "close"]].isna().any().any()
+
+
+def test_load_daily_filters_nan_rows_from_poisoned_cache(
+    fake_yf_frame_with_nan_tail: pd.DataFrame, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.equities import yfinance as loader
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+
+    # A cache written before the guard existed still contains the bad row.
+    poisoned = loader._canonicalize(fake_yf_frame_with_nan_tail, "SPY")
+    out = tmp_path / "yfinance" / "SPY" / "daily.parquet"
+    out.parent.mkdir(parents=True)
+    poisoned.to_parquet(out)
+
+    df = loader.load_daily("SPY")  # cache hit — no download stub needed
+    assert len(df) == 5
+    assert not df[["open", "high", "low", "close"]].isna().any().any()
