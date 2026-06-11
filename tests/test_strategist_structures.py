@@ -472,3 +472,55 @@ def test_build_chat_structures_includes_income_rows_and_keys(make_chain) -> None
     keys = [s.key for s in out]
     assert "csp" in keys and "bull_put_spread" in keys
     assert "stock" not in [s.kind for s in out]
+
+
+# Wide-condor fixture: regular shorts 90P/110C (credit (2.6-1.2)+(2.0-1.1)=2.3 >= 5/3),
+# wide shorts one strike further at 85P/115C, wings 80P/120C
+# (credit (1.2-0.3)+(1.1-0.2)=1.8 >= 5/3). Mids monotone in strike on both sides.
+WIDE_MIDS = {
+    ("put", 38, 80.0): 0.3,
+    ("put", 38, 85.0): 1.2,
+    ("put", 38, 90.0): 2.6,
+    ("put", 38, 95.0): 2.8,
+    ("put", 38, 100.0): 3.4,
+    ("call", 38, 100.0): 3.5,
+    ("call", 38, 105.0): 2.4,
+    ("call", 38, 110.0): 2.0,
+    ("call", 38, 115.0): 1.1,
+    ("call", 38, 120.0): 0.2,
+}
+
+
+def test_iron_condor_widen_moves_both_shorts_one_strike_out(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    s = iron_condor(make_chain(mids=WIDE_MIDS), _band(), spot=100.0, asof=ASOF, widen=True)
+
+    assert s is not None and s.kind == "iron_condor" and s.key == "condor_wide"
+    assert [(leg["action"], leg["right"], leg["strike"]) for leg in s.legs] == [
+        ("buy", "put", 80.0),
+        ("sell", "put", 85.0),
+        ("sell", "call", 115.0),
+        ("buy", "call", 120.0),
+    ]
+    assert s.premium == pytest.approx(-1.8)
+    assert s.max_loss == pytest.approx(3.2)  # widest wing 5 - credit 1.8
+    assert s.breakevens == pytest.approx([83.2, 116.8])
+    assert "wide" in s.label
+
+
+def test_iron_condor_widen_none_without_further_strike(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    # NEUTRAL_MIDS has no strikes beyond the 85/115 wings for the widened shorts
+    assert (
+        iron_condor(make_chain(mids=NEUTRAL_MIDS), _band(), spot=100.0, asof=ASOF, widen=True)
+        is None
+    )
+
+
+def test_build_neutral_structures_three_candidates(make_chain) -> None:
+    from tradinglib.strategist.structures import build_neutral_structures
+
+    out = build_neutral_structures(make_chain(mids=WIDE_MIDS), _band(), spot=100.0, asof=ASOF)
+    assert [s.key for s in out] == ["condor", "condor_wide", "butterfly"]

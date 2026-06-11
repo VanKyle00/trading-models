@@ -380,12 +380,13 @@ def credit_spread(
 
 
 def iron_condor(
-    chain: pd.DataFrame, band: Band, *, spot: float, asof: pd.Timestamp
+    chain: pd.DataFrame, band: Band, *, spot: float, asof: pd.Timestamp, widen: bool = False
 ) -> Structure | None:
     """30-45 DTE four-leg credit: short put strictly below the band's lower
     edge, short call strictly above its upper edge (the band is the
     invalidation, same semantics as credit_spread's stop), wings ~$5 out,
-    total credit >= 1/3 of the widest wing."""
+    total credit >= 1/3 of the widest wing. When ``widen=True``, both shorts
+    move one strike further out for a wider profit zone at lower credit."""
     exp = pick_expiration(chain, dte_lo=DTE_INCOME[0], dte_hi=DTE_INCOME[1], asof=asof)
     if exp is None:
         return None
@@ -395,6 +396,11 @@ def iron_condor(
     short_call = strictly_above(calls, band.upper)
     if short_put is None or short_call is None:
         return None
+    if widen:  # one further gate-passing strike beyond the band, both sides
+        short_put = strictly_below(puts, short_put.strike)
+        short_call = strictly_above(calls, short_call.strike)
+        if short_put is None or short_call is None:
+            return None
     long_put = nearest_strike(
         [q for q in puts if q.strike < short_put.strike], short_put.strike - SPREAD_WIDTH
     )
@@ -411,9 +417,11 @@ def iron_condor(
     be_hi = short_call.strike + credit
     return Structure(
         kind="iron_condor",
+        key="condor_wide" if widen else "condor",
         label=(
             f"{long_put.strike:g}/{short_put.strike:g}/"
             f"{short_call.strike:g}/{long_call.strike:g} iron condor"
+            + (" (wide)" if widen else "")
         ),
         unit="contract",
         legs=[
@@ -470,6 +478,7 @@ def iron_butterfly(
     be_hi = body + credit
     return Structure(
         kind="iron_butterfly",
+        key="butterfly",
         label=f"{long_put.strike:g}/{body:g}/{long_call.strike:g} iron butterfly",
         unit="contract",
         legs=[
@@ -499,10 +508,12 @@ def iron_butterfly(
 def build_neutral_structures(
     chain: pd.DataFrame, band: Band, *, spot: float, asof: pd.Timestamp
 ) -> list[Structure]:
-    """Defined-risk range structures, condor first (it is recommended when both
-    size). No stock plan — the neutral stance exists only on the chat path."""
+    """Defined-risk range structures: condor at the band first (recommended when it sizes),
+    a wide condor one strike further out, then the butterfly. No stock plan — the neutral
+    stance exists only on the chat path."""
     candidates = [
         iron_condor(chain, band, spot=spot, asof=asof),
+        iron_condor(chain, band, spot=spot, asof=asof, widen=True),
         iron_butterfly(chain, band, spot=spot, asof=asof),
     ]
     return [s for s in candidates if s is not None]
