@@ -209,3 +209,43 @@ def test_provider_construction_failure_degrades(
     for tier in rep.tiers:
         assert tier.status == "degraded" and "unavailable" in tier.summary
         assert tier.metrics  # mechanical metrics still present
+
+
+def test_corrupt_cache_self_heals(stubbed: Path) -> None:
+    provider = _TierStub(_PROVIDER_PAYLOADS)
+    first = report_mod.run_sentiment("NVDA", provider=provider)
+    path = next((stubbed / "sentiment" / "reports" / "NVDA").glob("*.json"))
+    path.write_text("{ truncated garbage", encoding="utf-8")
+    rep = report_mod.run_sentiment("NVDA", provider=provider)  # must refetch, not raise
+    assert rep.status == first.status == "ok"
+    assert len(provider.calls) == 6  # 3 initial + 3 refetch
+
+
+def test_trends_failure_does_not_degrade_viral(
+    stubbed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _boom(q, **kw):
+        raise RuntimeError("429: pytrends mood")
+
+    monkeypatch.setattr(report_mod, "load_interest", _boom)
+    rep = report_mod.run_sentiment("NVDA", provider=_TierStub(_PROVIDER_PAYLOADS))
+    viral = next(t for t in rep.tiers if t.tier == "viral")
+    assert viral.status == "ok"  # wsb + stocktwits content scored fine
+    assert viral.source_status["google_trends"].startswith("error")
+    assert viral.metrics["trends_spike"] is None
+    assert rep.status == "ok"
+
+
+def test_partial_llm_failure_mixed_statuses(stubbed: Path) -> None:
+    class _PartialStub(_TierStub):
+        def complete(self, system, conversation, tools):
+            if "Viral / retail" in conversation[0].text:
+                raise RuntimeError("api hiccup")
+            return super().complete(system, conversation, tools)
+
+    rep = report_mod.run_sentiment("NVDA", provider=_PartialStub(_PROVIDER_PAYLOADS))
+    by_tier = {t.tier: t for t in rep.tiers}
+    assert by_tier["official"].status == "ok" and by_tier["viral"].status == "degraded"
+    assert "unavailable" in by_tier["viral"].summary
+    assert rep.status == "partial"
+    assert rep.overall_bias == round((0.8 + 0.2) / 2, 3)  # mean of the two scored tiers

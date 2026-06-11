@@ -98,7 +98,8 @@ def _tier_status(item_count: int, score: dict, source_status: dict[str, str]) ->
         return "no_data"
     if score["parse_error"] or score["score"] is None:
         return "degraded"
-    if any(v.startswith("error") for v in source_status.values()):
+    # google_trends is a supplementary metric, not pack content — its failures stay visible in source_status but don't degrade the tier (spec: "degrade silently")
+    if any(k != "google_trends" and v.startswith("error") for k, v in source_status.items()):
         return "degraded"
     return "ok"
 
@@ -138,7 +139,10 @@ def run_sentiment(
     snapshot = pd.Timestamp.now("UTC").strftime("%Y-%m-%d")
     out = processed_dir(SOURCE) / _REPORTS / ticker / f"{snapshot}.json"
     if out.exists() and not refresh:
-        return SentimentReport.from_dict(json.loads(out.read_text(encoding="utf-8")))
+        try:
+            return SentimentReport.from_dict(json.loads(out.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, KeyError, TypeError):
+            logger.warning("corrupt sentiment report cache %s; refetching", out)
 
     data, status = _fetch_sources(ticker, refresh=refresh)
     trends = data.get("google_trends")  # Series or None
@@ -225,5 +229,7 @@ def run_sentiment(
         divergence=_divergence(tier_scores),
     )
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+    tmp.replace(out)  # atomic; a crash mid-write can't leave a corrupt cache
     return report
