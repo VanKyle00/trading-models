@@ -4,7 +4,8 @@ Schema (canonical): ``[ticker, created, body, sentiment, username, url]``,
 UTC-aware, newest first, capped at ``max_items``. ``sentiment`` is the
 user-tagged label ("Bullish"/"Bearish") or ``None`` — free ground truth the
 mechanical bull/bear ratio is computed from. Keyless public endpoint
-(~200 req/hr/IP). Unknown symbols 404 → empty. Snapshot-cached to
+(~200 req/hr/IP). Any fetch failure (unknown symbol, rate limit, network) → empty.
+Snapshot-cached to
 ``data/processed/social/stocktwits/<ticker>/<snapshot>.parquet``.
 """
 
@@ -37,6 +38,15 @@ def _empty() -> pd.DataFrame:
     )
 
 
+def _normalize_sentiment(df: pd.DataFrame) -> pd.DataFrame:
+    # Pandas 3 + Arrow backend coerces None -> float NaN (in construction AND on
+    # parquet read). Rebuild as object dtype so None survives; float NaN would be
+    # truthy, breaking `if r.sentiment:` checks in downstream itertuples() loops.
+    values = [None if pd.isna(v) else v for v in df["sentiment"]]
+    df["sentiment"] = pd.Series(values, dtype=object, index=df.index)
+    return df
+
+
 def _row(message: dict) -> dict:
     sentiment = ((message.get("entities") or {}).get("sentiment") or {}).get("basic")
     username = (message.get("user") or {}).get("username", "")
@@ -66,10 +76,7 @@ def _download(ticker: str) -> pd.DataFrame:
     df.insert(0, "ticker", ticker)
     # ms (not ns) so the dtype survives the parquet round-trip and cached == fresh
     df["created"] = pd.to_datetime(df["created"], utc=True).astype("datetime64[ms, UTC]")
-    # Pandas 3 + Arrow inference coerces None → NaN in string columns. Rebuild the
-    # sentiment column from the original Python list so None values are preserved as
-    # Python None (not float NaN) for callers doing `== None` comparisons.
-    df["sentiment"] = pd.Series([r["sentiment"] for r in rows], dtype=object)
+    df = _normalize_sentiment(df)
     return df.sort_values("created", ascending=False).reset_index(drop=True)
 
 
@@ -78,7 +85,7 @@ def get_stocktwits(ticker: str, *, max_items: int = 30, refresh: bool = False) -
     snapshot = pd.Timestamp.now("UTC").strftime("%Y-%m-%d")
     out = processed_dir(SOURCE) / _SUBDIR / ticker / f"{snapshot}.parquet"
     if out.exists() and not refresh:
-        df = pd.read_parquet(out)
+        df = _normalize_sentiment(pd.read_parquet(out))
     else:
         df = _download(ticker)
         out.parent.mkdir(parents=True, exist_ok=True)

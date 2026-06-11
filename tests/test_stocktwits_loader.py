@@ -68,6 +68,8 @@ def test_stocktwits_cached(loader, monkeypatch: pytest.MonkeyPatch) -> None:
         return _Resp(_FIXTURE)
 
     monkeypatch.setattr(loader, "httpx", SimpleNamespace(get=_get))
-    loader.get_stocktwits("NVDA")
-    loader.get_stocktwits("NVDA")
+    first = loader.get_stocktwits("NVDA")
+    second = loader.get_stocktwits("NVDA")
     assert len(calls) == 1
+    assert list(second["sentiment"]) == ["Bullish", "Bearish", None]
+    assert first.equals(second)
