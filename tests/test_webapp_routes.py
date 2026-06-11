@@ -227,3 +227,18 @@ def test_index_has_no_chip_buttons():
     # context (console_chips set) renders actual chip BUTTONS.
     client = TestClient(create_app())
     assert 'class="chat-chip"' not in client.get("/").text
+
+
+def test_planner_settings_strip_renders():
+    client = TestClient(create_app())
+    html = client.get("/planner").text
+    assert 'id="planner-settings"' in html
+    assert 'id="ps-account"' in html and 'id="ps-risk"' in html
+    assert "tm-planner-account" in html  # localStorage persistence wired
+    assert "plannerSettings" in html  # the composer reads the strip
+
+
+def test_index_has_no_settings_strip():
+    # The strip is /planner-only; the index console sends no settings.
+    client = TestClient(create_app())
+    assert 'id="planner-settings"' not in client.get("/").text

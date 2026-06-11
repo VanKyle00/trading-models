@@ -70,6 +70,7 @@ def run_chat(
     budget: Budget,
     context: str | None = None,
     history: Sequence[tuple[str, str]] | None = None,
+    settings: str | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Drive the bounded tool-use loop, yielding SSE event dicts.
 
@@ -82,6 +83,11 @@ def run_chat(
     ``history`` (optional) is the client-replayed transcript — (role, text)
     pairs of prior user messages and final assistant replies. The server holds
     no session state; the browser is the source of truth for the conversation.
+
+    ``settings`` (optional) is the /planner sizing line (account size, risk per
+    trade) the webapp renders from the page's settings strip. When present it
+    is appended to the opening message with an instruction to use it for
+    sizing and never ask.
     """
     opening = user_message
     if context:
@@ -89,6 +95,11 @@ def run_chat(
             "The user is looking at this backtest result on screen:\n"
             f"{context}\n\n"
             f"Their question: {user_message}"
+        )
+    if settings:
+        opening = (
+            f"{opening}\n\n{settings}\n"
+            "Use these for sizing; do not ask the user for account size or risk."
         )
     conversation: list[Message] = _seed(history, opening)
 
