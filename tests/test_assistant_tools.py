@@ -105,6 +105,14 @@ def test_propose_trade_levels_happy_path(monkeypatch):
         index=idx,
     )
     monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    monkeypatch.setattr(
+        planner,
+        "get_earnings_dates",
+        lambda *a, **k: pd.DataFrame(
+            {"earnings_datetime": pd.DatetimeIndex([], tz="UTC"), "session": []}
+        ),
+    )
+    monkeypatch.setattr(planner, "get_next_ex_dividend", lambda t: None)
 
     out, is_error = dispatch("propose_trade_levels", {"ticker": "rivn", "stance": "LONG"})
 
@@ -112,6 +120,10 @@ def test_propose_trade_levels_happy_path(monkeypatch):
     payload = json.loads(out)
     assert payload["ticker"] == "RIVN"
     assert payload["levels"]["stop"] < payload["levels"]["entry"] < payload["levels"]["target"]
+    # the guided payload survives the json round-trip the console card consumes
+    assert sum(s["recommended"] for s in payload["scenarios"]) == 1
+    assert payload["events"]["warnings"] == []
+    assert len(payload["sparkline"]["closes"]) == 60
 
 
 def test_propose_trade_levels_rejects_bad_stance():
@@ -265,12 +277,21 @@ def test_propose_trade_levels_accepts_neutral(monkeypatch):
         index=idx,
     )
     monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    monkeypatch.setattr(
+        planner,
+        "get_earnings_dates",
+        lambda *a, **k: pd.DataFrame(
+            {"earnings_datetime": pd.DatetimeIndex([], tz="UTC"), "session": []}
+        ),
+    )
+    monkeypatch.setattr(planner, "get_next_ex_dividend", lambda t: None)
 
     out, is_error = dispatch("propose_trade_levels", {"ticker": "test", "stance": "NEUTRAL"})
 
     assert is_error is False
     payload = json.loads(out)
     assert payload["levels"]["lower"] < payload["spot"] < payload["levels"]["upper"]
+    assert all("lower" in s["levels"] and "upper" in s["levels"] for s in payload["scenarios"])
 
 
 def test_build_options_ticket_neutral_requires_band():

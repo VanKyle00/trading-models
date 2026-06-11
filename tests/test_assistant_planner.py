@@ -19,9 +19,27 @@ def _bars(n: int = 300) -> pd.DataFrame:
     )
 
 
+def _frame(close: np.ndarray, high: np.ndarray, low: np.ndarray) -> pd.DataFrame:
+    idx = pd.date_range("2025-06-01", periods=len(close), freq="B")
+    return pd.DataFrame(
+        {"open": close, "high": high, "low": low, "close": close, "volume": 1e6}, index=idx
+    )
+
+
+def _no_earnings(*a, **k) -> pd.DataFrame:
+    return pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([], tz="UTC"), "session": []})
+
+
+def _quiet_events(monkeypatch) -> None:
+    """No scheduled events — without the patches propose_levels would fetch live."""
+    monkeypatch.setattr(planner, "get_earnings_dates", _no_earnings)
+    monkeypatch.setattr(planner, "get_next_ex_dividend", lambda t: None)
+
+
 def test_propose_levels_long_uses_atr_stop_and_2r_target(monkeypatch) -> None:
     bars = _bars()
     monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
 
     out = planner.propose_levels("test", "long")
 
@@ -41,6 +59,7 @@ def test_propose_levels_long_uses_atr_stop_and_2r_target(monkeypatch) -> None:
 def test_propose_levels_short_mirrors(monkeypatch) -> None:
     bars = _bars()
     monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
 
     out = planner.propose_levels("TEST", "short")
 
@@ -66,10 +85,6 @@ MIDS = {
 }
 
 LEVELS = {"entry": 100.0, "entry_type": "market", "stop": 96.0, "target": 108.0}
-
-
-def _no_earnings(*a, **k) -> pd.DataFrame:
-    return pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([], tz="UTC")})
 
 
 def test_hypothesis_ticket_end_to_end(make_chain, monkeypatch) -> None:
@@ -160,7 +175,7 @@ def test_hypothesis_ticket_earnings_inside_warn_window_flags(make_chain, monkeyp
     soon = pd.Timestamp.now(tz="UTC") + pd.Timedelta(days=7)
 
     def _earnings(*a, **k) -> pd.DataFrame:
-        return pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([soon])})
+        return pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([soon]), "session": ["amc"]})
 
     monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
     monkeypatch.setattr(planner, "fetch_chain", lambda t: make_chain(mids=MIDS))
@@ -201,6 +216,7 @@ def test_hypothesis_ticket_earnings_failure_is_nonfatal(make_chain, monkeypatch)
 def test_propose_levels_neutral_returns_atr_band(monkeypatch) -> None:
     bars = _bars()
     monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
 
     out = planner.propose_levels("test", "neutral")
 
@@ -246,6 +262,173 @@ def test_hypothesis_ticket_neutral_end_to_end(make_chain, monkeypatch) -> None:
         s["calculator_url"].startswith("https://optionstrat.com/build/custom/TEST/")
         for s in ticket["structures"]
     )
+
+
+# ── guided scenarios, events, sparkline ────────────────────────────────
+
+
+def test_propose_levels_offers_scenarios_one_recommended(monkeypatch) -> None:
+    bars = _bars()
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
+
+    out = planner.propose_levels("TEST", "long")
+
+    keys = [s["key"] for s in out["scenarios"]]
+    assert keys[0] == "balanced" and "tight" in keys
+    assert sum(s["recommended"] for s in out["scenarios"]) == 1
+    assert out["levels"] == out["scenarios"][0]["levels"]  # top-level = recommended
+    balanced = out["scenarios"][0]["levels"]
+    tight = next(s for s in out["scenarios"] if s["key"] == "tight")["levels"]
+    assert balanced["entry"] - tight["stop"] < balanced["entry"] - balanced["stop"]
+    for s in out["scenarios"]:  # every offered scenario has valid long geometry
+        lv = s["levels"]
+        assert lv["stop"] < lv["entry"] < lv["target"]
+
+
+def test_propose_levels_structure_scenario_anchors_on_swing(monkeypatch) -> None:
+    n = 300
+    close = np.full(n, 100.0)
+    high = close + 1.0
+    low = close - 1.0
+    low[-10] = 95.0  # 20d swing low
+    high[-5] = 106.0  # 20d swing high, > 1R away
+    bars = _frame(close, high, low)
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
+
+    out = planner.propose_levels("TEST", "long")
+
+    atr14 = float(atr(bars["high"], bars["low"], bars["close"], 14).iloc[-1])
+    struct = next(s for s in out["scenarios"] if s["key"] == "structure")
+    assert struct["levels"]["stop"] == pytest.approx(95.0 - 0.25 * atr14, abs=0.01)
+    assert struct["levels"]["target"] == pytest.approx(106.0, abs=0.01)
+    assert not struct["recommended"]
+
+
+def test_propose_levels_structure_scenario_gated_out_when_reward_thin(monkeypatch) -> None:
+    # steady uptrend: spot sits at the 20d high, so the swing target offers < 1R
+    n = 300
+    close = np.linspace(80.0, 100.0, n)
+    bars = _frame(close, close + 1.0, close - 1.0)
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
+
+    out = planner.propose_levels("TEST", "long")
+
+    assert all(s["key"] != "structure" for s in out["scenarios"])
+
+
+def test_propose_levels_neutral_offers_range_when_it_brackets(monkeypatch) -> None:
+    n = 300
+    close = 100.0 + 5.0 * np.sin(np.arange(n) / 5.0)  # wide oscillation around spot
+    bars = _frame(close, close + 1.0, close - 1.0)
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
+
+    out = planner.propose_levels("TEST", "neutral")
+
+    keys = [s["key"] for s in out["scenarios"]]
+    assert keys[0] == "balanced" and "wide" in keys and "range" in keys
+    assert sum(s["recommended"] for s in out["scenarios"]) == 1
+    balanced = out["scenarios"][0]["levels"]
+    wide = next(s for s in out["scenarios"] if s["key"] == "wide")["levels"]
+    assert wide["lower"] < balanced["lower"] and wide["upper"] > balanced["upper"]
+    rng = next(s for s in out["scenarios"] if s["key"] == "range")["levels"]
+    assert rng["lower"] == pytest.approx(float(bars["low"].iloc[-20:].min()), abs=0.01)
+    assert rng["upper"] == pytest.approx(float(bars["high"].iloc[-20:].max()), abs=0.01)
+
+
+def test_propose_levels_neutral_range_gated_out_in_trend(monkeypatch) -> None:
+    # uptrend: spot hugs the 20d high — no room above, range scenario withheld
+    n = 300
+    close = np.linspace(80.0, 100.0, n)
+    bars = _frame(close, close + 1.0, close - 1.0)
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
+
+    out = planner.propose_levels("TEST", "neutral")
+
+    assert all(s["key"] != "range" for s in out["scenarios"])
+
+
+def test_propose_levels_events_warn_inside_window(monkeypatch) -> None:
+    bars = _bars()
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    now = pd.Timestamp.now(tz="UTC")
+    soon = now + pd.Timedelta(days=7)
+
+    def _earnings(*a, **k) -> pd.DataFrame:
+        return pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([soon]), "session": ["amc"]})
+
+    monkeypatch.setattr(planner, "get_earnings_dates", _earnings)
+    ex_div = (now + pd.Timedelta(days=5)).tz_localize(None).normalize()
+    monkeypatch.setattr(planner, "get_next_ex_dividend", lambda t: ex_div)
+
+    out = planner.propose_levels("TEST", "long")
+
+    ev = out["events"]
+    assert ev["next_earnings"]["session"] == "amc"
+    assert ev["next_earnings"]["days_until"] == 7
+    assert ev["ex_dividend"]["days_until"] == 5
+    assert len(ev["warnings"]) == 2
+    assert any("earnings" in w for w in ev["warnings"])
+    assert any("ex-dividend" in w for w in ev["warnings"])
+    assert ev["notes"] == []
+
+
+def test_propose_levels_distant_events_are_context_not_warnings(monkeypatch) -> None:
+    bars = _bars()
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    far = pd.Timestamp.now(tz="UTC") + pd.Timedelta(days=45)
+
+    def _earnings(*a, **k) -> pd.DataFrame:
+        return pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([far]), "session": ["bmo"]})
+
+    monkeypatch.setattr(planner, "get_earnings_dates", _earnings)
+    monkeypatch.setattr(planner, "get_next_ex_dividend", lambda t: None)
+
+    out = planner.propose_levels("TEST", "long")
+
+    ev = out["events"]
+    assert ev["next_earnings"]["days_until"] == 45
+    assert ev["ex_dividend"] is None
+    assert ev["warnings"] == []
+
+
+def test_propose_levels_event_failures_are_notes_not_fatal(monkeypatch) -> None:
+    bars = _bars()
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+
+    def _boom(*a, **k):
+        raise ConnectionError("rate limited")
+
+    monkeypatch.setattr(planner, "get_earnings_dates", _boom)
+    monkeypatch.setattr(planner, "get_next_ex_dividend", _boom)
+
+    out = planner.propose_levels("TEST", "long")
+
+    assert out["scenarios"]  # the proposal still stands
+    assert out["events"]["next_earnings"] is None
+    assert out["events"]["ex_dividend"] is None
+    assert len(out["events"]["notes"]) == 2
+
+
+def test_propose_levels_sparkline_and_context(monkeypatch) -> None:
+    bars = _bars()
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    _quiet_events(monkeypatch)
+
+    out = planner.propose_levels("TEST", "long")
+
+    assert len(out["sparkline"]["closes"]) == 60
+    assert out["sparkline"]["closes"][-1] == out["spot"]
+    assert out["sparkline"]["end"] == out["asof"]
+    assert out["sparkline"]["start"] == bars.index[-60].strftime("%Y-%m-%d")
+    assert out["context"]["high_20d"] == pytest.approx(
+        float(bars["high"].iloc[-20:].max()), abs=0.01
+    )
+    assert out["context"]["low_20d"] == pytest.approx(float(bars["low"].iloc[-20:].min()), abs=0.01)
 
 
 def test_hypothesis_ticket_chain_failure_propagates(monkeypatch) -> None:
