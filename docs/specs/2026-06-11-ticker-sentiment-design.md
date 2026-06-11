@@ -65,15 +65,15 @@ webapp/main.py                              MOD  GET /sentiment + GET /api/v1/se
 ```
 
 Existing reused: `loaders/news/yfinance.py`, `loaders/sentiment/google_trends.py`,
-`loaders/equities/yfinance.py` (company name for news queries),
-`assistant/provider.py` (`make_provider()`, same `ASSISTANT_MODEL` default as briefs).
+`assistant/provider.py` (provider injected like briefs; default `ClaudeProvider()`,
+which honors `ASSISTANT_MODEL`, and `StubProvider` in tests).
 
 ## Source details
 
 - **Google News RSS** — `https://news.google.com/rss/search?q=<query>`, keyless.
-  Query is `"<company shortName>" OR <TICKER> stock` when the yfinance fundamentals
-  snapshot provides a name (avoids single-letter-ticker noise, e.g. F), else
-  `<TICKER> stock`. Window: last 14 days, parsed with `feedparser`.
+  Query is `<TICKER> stock when:14d` (the "stock" suffix disambiguates
+  single-letter tickers like F; `when:14d` bounds the window). Parsed with
+  `feedparser`.
 - **Seeking Alpha RSS** — `https://seekingalpha.com/api/sa/combined/<TICKER>.xml`.
   Titles + timestamps only. Most fragile source (Cloudflare moods): polite UA, one
   attempt, on failure tier 2 proceeds on Reddit alone.
@@ -103,8 +103,8 @@ Existing reused: `loaders/news/yfinance.py`, `loaders/sentiment/google_trends.py
 
 ## Scoring (`scoring.py`)
 
-One provider call per non-empty tier (3 max per lookup, `claude-haiku-4-5` via
-`make_provider()` — pennies), demanding strict JSON:
+One provider call per non-empty tier (3 max per lookup; injected provider,
+default `ClaudeProvider()` = `claude-haiku-4-5` — pennies), demanding strict JSON:
 
 ```json
 {
