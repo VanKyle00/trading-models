@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from tradinglib.options.surface import realized_vol
 from tradinglib.strategist import build_hypothesis_ticket
@@ -56,9 +57,12 @@ def _ticket(make_chain, *, preference: str = "auto", iv: float | None = None, **
 def test_auto_preference_neutral_iv_recommends_directional(make_chain) -> None:
     ticket = _ticket(make_chain)
 
+    # at the fixture's low realized vol the 0.65-delta pick is the ATM call and
+    # the short leg at the target cuts cost > 35%, so the directional structure
+    # long_option builds is the 100/110 debit spread
     rec = [s for s in ticket["structures"] if s["recommended"]]
-    assert len(rec) == 1 and rec[0]["kind"] == "stock"
-    assert rec[0]["quantity"] == 250  # 100k * 1% // $4 risk per share
+    assert len(rec) == 1 and rec[0]["kind"] == "call_debit_spread"
+    assert rec[0]["quantity"] == 3  # 100k * 1% // ($3.10 debit x 100)
 
 
 def test_auto_preference_high_iv_tilts_to_premium(make_chain) -> None:
@@ -72,7 +76,7 @@ def test_auto_preference_high_iv_tilts_to_premium(make_chain) -> None:
 def test_pinned_directional_ignores_high_iv(make_chain) -> None:
     ticket = _ticket(make_chain, preference="directional", iv=1.5 * _rv())
 
-    assert ticket["structures"][0]["kind"] == "stock"
+    assert ticket["structures"][0]["kind"] == "call_debit_spread"
     assert ticket["iv_ratio"] is not None  # still reported for framing, just not applied
 
 
@@ -105,12 +109,92 @@ def test_earnings_demotes_undefined_risk(make_chain) -> None:
 
     kinds = [s["kind"] for s in ticket["structures"]]
     assert kinds.index("csp") > kinds.index("bull_put_spread")
-    assert kinds.index("stock") > kinds.index("bull_put_spread")
     assert any("earnings" in w for w in ticket["warnings"])
 
 
 def test_bad_preference_raises(make_chain) -> None:
-    import pytest
-
     with pytest.raises(ValueError, match="preference"):
         _ticket(make_chain, preference="yolo")
+
+
+def test_chat_ticket_never_contains_stock_plan(make_chain) -> None:
+    ticket = _ticket(make_chain)
+
+    kinds = [s["kind"] for s in ticket["structures"]]
+    assert "stock" not in kinds and "stock_short" not in kinds
+    assert all(s["legs"] for s in ticket["structures"])  # every structure is options
+
+
+def test_chat_ticket_all_illiquid_raises(make_chain) -> None:
+    empty = make_chain(mids={("call", 38, 100.0): 1.0}).iloc[0:0]
+
+    with pytest.raises(ValueError, match="liquidity gate"):
+        build_hypothesis_ticket(
+            ticker="TEST",
+            stance="long",
+            levels=dict(LEVELS),
+            bars=_bars(),
+            chain=empty,
+        )
+
+
+NEUTRAL_LEVELS = {"lower": 92.0, "upper": 108.0, "condition": "user: TEST range-bound"}
+
+NEUTRAL_MIDS = {
+    ("put", 38, 85.0): 0.6,
+    ("put", 38, 90.0): 1.6,
+    ("put", 38, 95.0): 2.8,
+    ("put", 38, 100.0): 3.4,
+    ("call", 38, 100.0): 3.5,
+    ("call", 38, 105.0): 2.4,
+    ("call", 38, 110.0): 1.5,
+    ("call", 38, 115.0): 0.5,
+}
+
+
+def _neutral_ticket(make_chain, **kwargs) -> dict:
+    return build_hypothesis_ticket(
+        ticker="TEST",
+        stance="neutral",
+        levels=dict(NEUTRAL_LEVELS),
+        bars=_bars(),
+        chain=make_chain(mids=NEUTRAL_MIDS),
+        **kwargs,
+    )
+
+
+def test_neutral_ticket_recommends_condor_first(make_chain) -> None:
+    ticket = _neutral_ticket(make_chain)
+
+    assert ticket["stance"] == "neutral"
+    assert ticket["levels"] == NEUTRAL_LEVELS
+    assert [s["kind"] for s in ticket["structures"]] == ["iron_condor", "iron_butterfly"]
+    rec = next(s for s in ticket["structures"] if s["recommended"])
+    assert rec["kind"] == "iron_condor"
+    assert rec["quantity"] == 3  # 100k * 1% // ($3.00 max loss x 100)
+    assert ticket["iv_ratio"] is not None  # framing still reported
+    assert any("indicative" in w for w in ticket["warnings"])
+
+
+def test_neutral_ticket_spanning_earnings_warns_per_structure(make_chain) -> None:
+    ticket = _neutral_ticket(
+        make_chain,
+        earnings_warning=True,
+        next_earnings=pd.Timestamp("2026-06-20", tz="UTC"),  # before the 38-DTE expiry
+    )
+
+    assert all(any("earnings" in w for w in s["warnings"]) for s in ticket["structures"])
+    assert any("earnings" in w for w in ticket["warnings"])
+
+
+def test_neutral_ticket_all_illiquid_raises(make_chain) -> None:
+    empty = make_chain(mids={("call", 38, 100.0): 1.0}).iloc[0:0]
+
+    with pytest.raises(ValueError, match="liquidity gate"):
+        build_hypothesis_ticket(
+            ticker="TEST",
+            stance="neutral",
+            levels=dict(NEUTRAL_LEVELS),
+            bars=_bars(),
+            chain=empty,
+        )

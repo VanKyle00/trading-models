@@ -24,8 +24,9 @@ _BARS_LOOKBACK_DAYS = 270  # ~9 calendar months of dailies for ATR(14) + realize
 
 
 def propose_levels(ticker: str, stance: str) -> dict:
-    """Default levels for a hypothesis: entry = last close, stop = 2x ATR(14),
-    target = 2R — the same conventions tournament rules without native exits use."""
+    """Default levels for a hypothesis. Directional: entry = last close,
+    stop = 2x ATR(14), target = 2R — the same conventions tournament rules
+    without native exits use. Neutral: band = spot -/+ 2x ATR(14)."""
     ticker = ticker.upper()
     start = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=_BARS_LOOKBACK_DAYS)).strftime(
         "%Y-%m-%d"
@@ -33,23 +34,30 @@ def propose_levels(ticker: str, stance: str) -> dict:
     bars = load_daily(ticker, start=start, refresh=True)
     if len(bars) == 0:
         raise ValueError(f"no daily bars for {ticker!r} — is the ticker valid?")
-    entry = float(bars["close"].iloc[-1])
-    stop = float(protective_stop(bars, entry, stance))
-    target = float(two_r_target(entry, stop))
+    spot = float(bars["close"].iloc[-1])
     atr14 = float(atr(bars["high"], bars["low"], bars["close"], _ATR_WINDOW).iloc[-1])
-    return {
-        "ticker": ticker,
-        "stance": stance,
-        "levels": {
-            "entry": round(entry, 2),
+    levels: dict[str, float | str]
+    if stance == "neutral":
+        levels = {"lower": round(spot - 2 * atr14, 2), "upper": round(spot + 2 * atr14, 2)}
+        method = "band = spot -/+ 2x ATR(14); structures sell premium outside the band"
+    else:
+        stop = float(protective_stop(bars, spot, stance))
+        target = float(two_r_target(spot, stop))
+        levels = {
+            "entry": round(spot, 2),
             "entry_type": "market",
             "stop": round(stop, 2),
             "target": round(target, 2),
-        },
-        "spot": round(entry, 2),
+        }
+        method = "entry = last close; stop = 2x ATR(14); target = 2R (entry-to-stop distance)"
+    return {
+        "ticker": ticker,
+        "stance": stance,
+        "levels": levels,
+        "spot": round(spot, 2),
         "atr14": round(atr14, 2),
         "asof": bars.index[-1].strftime("%Y-%m-%d"),
-        "method": "entry = last close; stop = 2x ATR(14); target = 2R (entry-to-stop distance)",
+        "method": method,
     }
 
 

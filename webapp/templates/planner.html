@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trading Models — Planner</title>
+  <title>Trading Models — Options Planner</title>
 
   <!-- set theme before first paint to avoid a flash -->
   <script>
@@ -65,7 +65,7 @@
 <body>
   <div class="topbar">
     <div class="brand"><a href="/">TRADING&nbsp;MODELS</a></div>
-    <div class="crumb">/ planner</div>
+    <div class="crumb">/ options planner</div>
     <div class="crumb"><a href="/scans">/ scans</a></div>
     <div class="crumb"><a href="/tournaments">/ tournaments</a></div>
     <div class="crumb"><a href="/models">/ models</a></div>
@@ -78,7 +78,7 @@
 
   <div class="strap">hypothesis → sized, liquidity-gated options ticket — decision support with a human executing, not an auto-trader</div>
 
-  {% set console_empty = "State a directional hypothesis and the assistant walks you to a ticket: it proposes ATR-based levels for you to confirm, asks for sizing, then prices live option structures." %}
+  {% set console_empty = "State a directional or range-bound hypothesis and the assistant walks you to an options ticket: it proposes ATR-based levels or a price band for you to confirm, asks for sizing, then prices live option structures." %}
   {% set console_chips = ["I'm bullish on RIVN", "Bearish on TSLA over the next month", "I think NVDA chops sideways into September"] %}
   {% include "_console.html" %}
 

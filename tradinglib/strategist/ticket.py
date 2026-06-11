@@ -9,7 +9,8 @@ built structure is ``recommended``: the first in the final order that sized to
 at least one unit, else the first overall (carrying its ``unsized`` warning).
 The ticket never asserts expected profitability (C5): quotes are indicative
 marks, PoP is the market's own number, and the OOS evidence rides along.
-build_hypothesis_ticket is the chat path: same core, user-confirmed levels, no tournament evidence.
+build_hypothesis_ticket is the chat path: same core, user-confirmed levels, no
+tournament evidence, and options-only — the stock plan is never offered.
 """
 
 from __future__ import annotations
@@ -20,7 +21,12 @@ import pandas as pd
 from tradinglib.options.surface import realized_vol
 from tradinglib.strategist.quotes import atm_iv
 from tradinglib.strategist.sizing import size_structure
-from tradinglib.strategist.structures import Structure, build_structures
+from tradinglib.strategist.structures import (
+    Band,
+    Structure,
+    build_neutral_structures,
+    build_structures,
+)
 from tradinglib.tournament.levels import Levels
 from tradinglib.tournament.strategies import STRATEGIES
 
@@ -75,6 +81,7 @@ def _assemble(
     chain: pd.DataFrame,
     premium_first: bool,
     use_iv_override: bool,
+    include_stock: bool = True,
     next_earnings: pd.Timestamp | None,
     earnings_warning: bool,
     account_size: float,
@@ -92,9 +99,14 @@ def _assemble(
         pd.Timestamp(chain["date"].iloc[0]) if has_chain else _naive(pd.Timestamp(bars.index[-1]))
     )
 
-    structures = build_structures(chain, levels, stance, spot=spot, asof=asof)
+    structures = build_structures(
+        chain, levels, stance, spot=spot, asof=asof, include_stock=include_stock
+    )
     warnings = [INDICATIVE_WARNING]
-    if len(structures) == 1:  # every option structure failed the gate (or no chain)
+    if not any(s.unit == "contract" for s in structures):
+        # every option structure failed the gate (or no chain)
+        if not include_stock:  # chat path: nothing to fall back on — surface it
+            raise ValueError("no option structure passed the liquidity gate")
         warnings.append("options_illiquid: no option structure passed the liquidity gate")
 
     rv = float(realized_vol(bars["close"]).iloc[-1])
@@ -110,6 +122,49 @@ def _assemble(
             s.warnings.append("undefined risk across earnings; demoted below defined-risk spreads")
         structures = kept + demoted
         when = f" ({_naive(next_earnings):%Y-%m-%d})" if next_earnings is not None else ""
+        warnings.append(f"earnings inside the warn window{when}")
+
+    for s in structures:
+        size_structure(s, account_size=account_size, risk_per_trade_pct=risk_per_trade_pct)
+    recommended = next((s for s in structures if s.quantity), structures[0])
+    recommended.recommended = True
+    return structures, warnings, iv_ratio, asof, has_chain
+
+
+def _assemble_neutral(
+    *,
+    band: Band,
+    bars: pd.DataFrame,
+    chain: pd.DataFrame,
+    next_earnings: pd.Timestamp | None,
+    earnings_warning: bool,
+    account_size: float,
+    risk_per_trade_pct: float,
+) -> tuple[list[Structure], list[str], float | None, pd.Timestamp, bool]:
+    """Neutral core: condor/butterfly only. Both are defined-risk so the
+    earnings demotion doesn't apply — an expiry spanning earnings gets a
+    structure warning instead (a gap can invalidate the range thesis)."""
+    has_chain = len(chain) > 0
+    spot = float(chain["spot"].iloc[0]) if has_chain else float(bars["close"].iloc[-1])
+    asof = (
+        pd.Timestamp(chain["date"].iloc[0]) if has_chain else _naive(pd.Timestamp(bars.index[-1]))
+    )
+
+    structures = build_neutral_structures(chain, band, spot=spot, asof=asof)
+    if not structures:
+        raise ValueError("no option structure passed the liquidity gate")
+    warnings = [INDICATIVE_WARNING]
+
+    rv = float(realized_vol(bars["close"]).iloc[-1])
+    chain_iv = atm_iv(chain, spot=spot, asof=asof) if has_chain else None
+    iv_ratio = float(chain_iv / rv) if chain_iv is not None and np.isfinite(rv) and rv > 0 else None
+
+    if earnings_warning:
+        ne = _naive(next_earnings) if next_earnings is not None else None
+        for s in structures:
+            if ne is None or any(pd.Timestamp(leg["expiration"]) >= ne for leg in s.legs):
+                s.warnings.append("short-vol structure spans earnings; a gap can break the range")
+        when = f" ({ne:%Y-%m-%d})" if ne is not None else ""
         warnings.append(f"earnings inside the warn window{when}")
 
     for s in structures:
@@ -190,22 +245,37 @@ def build_hypothesis_ticket(
     risk_per_trade_pct: float = 0.01,
 ) -> dict:
     """A chat-built ticket: user hypothesis + confirmed levels, no tournament
-    evidence. ``preference`` pins the ordering ("directional" | "premium") or
-    lets the IV/RV tilt decide ("auto", directional base). Pure; no I/O."""
+    evidence, options-only. ``preference`` pins the ordering ("directional" |
+    "premium") or lets the IV/RV tilt decide ("auto") — ignored for the
+    "neutral" stance, whose levels are a {lower, upper, condition} band and
+    whose structures (iron condor, iron butterfly) all sell premium.
+    Pure; no I/O."""
     if preference not in ("auto", "directional", "premium"):
         raise ValueError(f"preference must be auto|directional|premium, got {preference!r}")
-    structures, warnings, iv_ratio, asof, has_chain = _assemble(
-        stance=stance,
-        levels=Levels(**levels),
-        bars=bars,
-        chain=chain,
-        premium_first=preference == "premium",
-        use_iv_override=preference == "auto",
-        next_earnings=next_earnings,
-        earnings_warning=earnings_warning,
-        account_size=account_size,
-        risk_per_trade_pct=risk_per_trade_pct,
-    )
+    if stance == "neutral":
+        structures, warnings, iv_ratio, asof, has_chain = _assemble_neutral(
+            band=Band(**levels),
+            bars=bars,
+            chain=chain,
+            next_earnings=next_earnings,
+            earnings_warning=earnings_warning,
+            account_size=account_size,
+            risk_per_trade_pct=risk_per_trade_pct,
+        )
+    else:
+        structures, warnings, iv_ratio, asof, has_chain = _assemble(
+            stance=stance,
+            levels=Levels(**levels),
+            bars=bars,
+            chain=chain,
+            premium_first=preference == "premium",
+            use_iv_override=preference == "auto",
+            include_stock=False,
+            next_earnings=next_earnings,
+            earnings_warning=earnings_warning,
+            account_size=account_size,
+            risk_per_trade_pct=risk_per_trade_pct,
+        )
     return {
         "source": "chat",
         "ticker": ticker,

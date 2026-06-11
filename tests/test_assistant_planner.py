@@ -94,8 +94,7 @@ def test_hypothesis_ticket_end_to_end(make_chain, monkeypatch) -> None:
     assert ticket["levels"]["condition"] == "bullish on TEST into summer"
     assert ticket["next_earnings"] is None
     assert sum(s["recommended"] for s in ticket["structures"]) == 1
-    stock = next(s for s in ticket["structures"] if s["kind"] == "stock")
-    assert stock["calculator_url"] is None  # no legs, nothing to prefill
+    assert all(s["legs"] for s in ticket["structures"])  # options only, no stock plan
     option = next(s for s in ticket["structures"] if s["legs"])
     assert option["calculator_url"].startswith("https://optionstrat.com/build/custom/TEST/")
 
@@ -197,6 +196,56 @@ def test_hypothesis_ticket_earnings_failure_is_nonfatal(make_chain, monkeypatch)
 
     assert ticket["next_earnings"] is None  # lost the demotion signal, kept the ticket
     assert any("earnings lookup failed" in w for w in ticket["warnings"])
+
+
+def test_propose_levels_neutral_returns_atr_band(monkeypatch) -> None:
+    bars = _bars()
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+
+    out = planner.propose_levels("test", "neutral")
+
+    spot = float(bars["close"].iloc[-1])
+    atr14 = float(atr(bars["high"], bars["low"], bars["close"], 14).iloc[-1])
+    assert out["ticker"] == "TEST" and out["stance"] == "neutral"
+    assert out["levels"]["lower"] == pytest.approx(spot - 2 * atr14, abs=0.01)
+    assert out["levels"]["upper"] == pytest.approx(spot + 2 * atr14, abs=0.01)
+    assert "entry" not in out["levels"]
+    assert "band" in out["method"]
+
+
+NEUTRAL_MIDS = {
+    ("put", 38, 85.0): 0.6,
+    ("put", 38, 90.0): 1.6,
+    ("put", 38, 95.0): 2.8,
+    ("put", 38, 100.0): 3.4,
+    ("call", 38, 100.0): 3.5,
+    ("call", 38, 105.0): 2.4,
+    ("call", 38, 110.0): 1.5,
+    ("call", 38, 115.0): 0.5,
+}
+
+
+def test_hypothesis_ticket_neutral_end_to_end(make_chain, monkeypatch) -> None:
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: _bars())
+    monkeypatch.setattr(planner, "fetch_chain", lambda t: make_chain(mids=NEUTRAL_MIDS))
+    monkeypatch.setattr(planner, "get_earnings_dates", _no_earnings)
+
+    ticket = planner.hypothesis_ticket(
+        ticker="test",
+        stance="neutral",
+        levels={"lower": 92.0, "upper": 108.0},
+        account_size=100_000.0,
+        risk_per_trade_pct=0.01,
+        hypothesis="TEST stays range-bound into expiry",
+    )
+
+    assert ticket["ticker"] == "TEST" and ticket["stance"] == "neutral"
+    assert ticket["levels"]["condition"] == "TEST stays range-bound into expiry"
+    assert [s["kind"] for s in ticket["structures"]] == ["iron_condor", "iron_butterfly"]
+    assert all(
+        s["calculator_url"].startswith("https://optionstrat.com/build/custom/TEST/")
+        for s in ticket["structures"]
+    )
 
 
 def test_hypothesis_ticket_chain_failure_propagates(monkeypatch) -> None:

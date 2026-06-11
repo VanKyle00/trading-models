@@ -250,3 +250,105 @@ def test_build_options_ticket_happy_path_serializes(make_chain, monkeypatch):
     ticket = json.loads(out)  # the whole point: the ticket survives json round-trip
     assert ticket["source"] == "chat" and ticket["ticker"] == "TEST"
     assert sum(s["recommended"] for s in ticket["structures"]) == 1
+
+
+def test_propose_trade_levels_accepts_neutral(monkeypatch):
+    import numpy as np
+    import pandas as pd
+
+    import tradinglib.assistant.planner as planner
+
+    close = 100.0 + np.sin(np.arange(300) / 5.0)
+    idx = pd.date_range("2025-06-01", periods=300, freq="B")
+    bars = pd.DataFrame(
+        {"open": close, "high": close * 1.01, "low": close * 0.99, "close": close, "volume": 1e6},
+        index=idx,
+    )
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+
+    out, is_error = dispatch("propose_trade_levels", {"ticker": "test", "stance": "NEUTRAL"})
+
+    assert is_error is False
+    payload = json.loads(out)
+    assert payload["levels"]["lower"] < payload["spot"] < payload["levels"]["upper"]
+
+
+def test_build_options_ticket_neutral_requires_band():
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "TEST",
+            "stance": "neutral",
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+        },
+    )
+    assert is_error is True
+    assert "lower and upper" in out
+
+
+def test_build_options_ticket_neutral_rejects_inverted_band():
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "TEST",
+            "stance": "neutral",
+            "lower": 110.0,
+            "upper": 90.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+        },
+    )
+    assert is_error is True
+    assert "0 < lower < upper" in out
+
+
+def test_build_options_ticket_neutral_happy_path_serializes(make_chain, monkeypatch):
+    import numpy as np
+    import pandas as pd
+
+    import tradinglib.assistant.planner as planner
+
+    close = 100.0 + np.sin(np.arange(300) / 5.0)
+    idx = pd.date_range("2025-06-01", periods=300, freq="B")
+    bars = pd.DataFrame(
+        {"open": close, "high": close * 1.01, "low": close * 0.99, "close": close, "volume": 1e6},
+        index=idx,
+    )
+    mids = {
+        ("put", 38, 85.0): 0.6,
+        ("put", 38, 90.0): 1.6,
+        ("put", 38, 95.0): 2.8,
+        ("put", 38, 100.0): 3.4,
+        ("call", 38, 100.0): 3.5,
+        ("call", 38, 105.0): 2.4,
+        ("call", 38, 110.0): 1.5,
+        ("call", 38, 115.0): 0.5,
+    }
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: bars)
+    monkeypatch.setattr(planner, "fetch_chain", lambda t: make_chain(mids=mids))
+    monkeypatch.setattr(
+        planner,
+        "get_earnings_dates",
+        lambda *a, **k: pd.DataFrame({"earnings_datetime": pd.DatetimeIndex([], tz="UTC")}),
+    )
+
+    out, is_error = dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "test",
+            "stance": "neutral",
+            "lower": 92.0,
+            "upper": 108.0,
+            "account_size": 100_000.0,
+            "risk_per_trade_pct": 0.01,
+            "hypothesis": "TEST stays range-bound",
+        },
+    )
+
+    assert is_error is False
+    ticket = json.loads(out)
+    assert ticket["stance"] == "neutral"
+    kinds = [s["kind"] for s in ticket["structures"]]
+    assert kinds == ["iron_condor", "iron_butterfly"]
+    assert sum(s["recommended"] for s in ticket["structures"]) == 1
