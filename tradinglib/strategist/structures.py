@@ -347,6 +347,74 @@ def iron_condor(
     )
 
 
+def iron_butterfly(
+    chain: pd.DataFrame, band: Band, *, spot: float, asof: pd.Timestamp
+) -> Structure | None:
+    """30-45 DTE short straddle at the strike nearest spot, long wings at the
+    strikes nearest the band edges. Tighter profit zone than the condor for
+    more credit; breakevens are body +/- credit."""
+    exp = pick_expiration(chain, dte_lo=DTE_INCOME[0], dte_hi=DTE_INCOME[1], asof=asof)
+    if exp is None:
+        return None
+    puts = liquid_quotes(chain, right="put", expiration=exp, spot=spot, asof=asof)
+    calls = liquid_quotes(chain, right="call", expiration=exp, spot=spot, asof=asof)
+    body_call = nearest_strike(calls, spot)
+    if body_call is None:
+        return None
+    body = body_call.strike
+    body_put = next((q for q in puts if q.strike == body), None)
+    if body_put is None:
+        return None
+    long_put = nearest_strike([q for q in puts if q.strike < body], band.lower)
+    long_call = nearest_strike([q for q in calls if q.strike > body], band.upper)
+    if long_put is None or long_call is None:
+        return None
+    credit = body_put.mid + body_call.mid - long_put.mid - long_call.mid
+    width = max(body - long_put.strike, long_call.strike - body)
+    if width <= 0 or credit <= 0 or width - credit <= 0:
+        return None
+    be_lo = body - credit
+    be_hi = body + credit
+    return Structure(
+        kind="iron_butterfly",
+        label=f"{long_put.strike:g}/{body:g}/{long_call.strike:g} iron butterfly",
+        unit="contract",
+        legs=[
+            _leg("buy", long_put),
+            _leg("sell", body_put),
+            _leg("sell", body_call),
+            _leg("buy", long_call),
+        ],
+        premium=-credit,
+        max_loss=width - credit,
+        max_gain=credit,
+        breakeven=None,
+        breakevens=[be_lo, be_hi],
+        pop_market_implied=pop_range_market_implied(
+            spot=spot,
+            lower=be_lo,
+            upper=be_hi,
+            vol_lower=_pop_vol([body_put, long_put], be_lo),
+            vol_upper=_pop_vol([body_call, long_call], be_hi),
+            t_years=years(body_call.dte),
+        ),
+        rr=credit / (width - credit),
+        premium_yield=credit / width,
+    )
+
+
+def build_neutral_structures(
+    chain: pd.DataFrame, band: Band, *, spot: float, asof: pd.Timestamp
+) -> list[Structure]:
+    """Defined-risk range structures, condor first (it is recommended when both
+    size). No stock plan — the neutral stance exists only on the chat path."""
+    candidates = [
+        iron_condor(chain, band, spot=spot, asof=asof),
+        iron_butterfly(chain, band, spot=spot, asof=asof),
+    ]
+    return [s for s in candidates if s is not None]
+
+
 def build_structures(
     chain: pd.DataFrame, levels: Levels, stance: str, *, spot: float, asof: pd.Timestamp
 ) -> list[Structure]:

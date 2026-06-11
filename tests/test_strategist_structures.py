@@ -337,3 +337,42 @@ def test_iron_condor_none_when_no_strike_beyond_band(make_chain) -> None:
 
     mids = {k: v for k, v in NEUTRAL_MIDS.items() if k[2] not in (85.0, 90.0)}  # no put < 92
     assert iron_condor(make_chain(mids=mids), _band(), spot=100.0, asof=ASOF) is None
+
+
+def test_iron_butterfly_body_at_spot_wings_at_band(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_butterfly
+
+    s = iron_butterfly(make_chain(mids=NEUTRAL_MIDS), _band(), spot=100.0, asof=ASOF)
+
+    assert s is not None and s.kind == "iron_butterfly" and s.unit == "contract"
+    assert [(leg["action"], leg["right"], leg["strike"]) for leg in s.legs] == [
+        ("buy", "put", 90.0),
+        ("sell", "put", 100.0),
+        ("sell", "call", 100.0),
+        ("buy", "call", 110.0),
+    ]
+    assert s.premium == pytest.approx(-3.8)  # 3.4 + 3.5 - 1.6 - 1.5
+    assert s.max_loss == pytest.approx(6.2)  # widest wing 10 - credit 3.8
+    assert s.max_gain == pytest.approx(3.8)
+    assert s.breakevens == pytest.approx([96.2, 103.8])  # body 100 -/+ credit
+
+
+def test_iron_butterfly_none_without_matching_put_at_body(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_butterfly
+
+    mids = {k: v for k, v in NEUTRAL_MIDS.items() if k != ("put", 38, 100.0)}
+    assert iron_butterfly(make_chain(mids=mids), _band(), spot=100.0, asof=ASOF) is None
+
+
+def test_build_neutral_structures_condor_first(make_chain) -> None:
+    from tradinglib.strategist.structures import build_neutral_structures
+
+    out = build_neutral_structures(make_chain(mids=NEUTRAL_MIDS), _band(), spot=100.0, asof=ASOF)
+    assert [s.kind for s in out] == ["iron_condor", "iron_butterfly"]
+
+
+def test_build_neutral_structures_empty_chain_is_empty(make_chain) -> None:
+    from tradinglib.strategist.structures import build_neutral_structures
+
+    empty = make_chain(mids={("call", 38, 100.0): 1.0}).iloc[0:0]
+    assert build_neutral_structures(empty, _band(), spot=100.0, asof=ASOF) == []
