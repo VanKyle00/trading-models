@@ -37,14 +37,14 @@ dependencies = [
     "xgboost>=2.0",
     # LLM assistant (provider-swappable; Claude is the default backend)
     "anthropic>=0.69",
+    # Sentiment tool sources (RSS feeds + Reddit) — free/keyless except Reddit OAuth
+    "feedparser>=6.0",
+    "praw>=7.7",
 ]
 
 [project.optional-dependencies]
 # Heavy or follow-up-only deps stay opt-in so the base install
 # (and the Streamlit Cloud deploy) stays lean.
-ingest-extra = [
-    "praw>=7.7",  # historical Reddit posts; current models don't import praw
-]
 ml-extra = [
     "lightgbm>=4.0",
     "statsmodels>=0.14",
