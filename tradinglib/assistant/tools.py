@@ -126,8 +126,9 @@ TOOL_SPECS: list[dict[str, Any]] = [
                 "structure_key": {
                     "type": "string",
                     "description": (
-                        "Pin the recommendation (and exit plan) to one candidate from a "
-                        "prior ticket — pass that structure's 'key'. Omit on first build."
+                        "Pin the recommendation (and exit plan) to one candidate from the "
+                        "most recent build_options_ticket result — pass that structure's "
+                        "'key'. Omit on first build."
                     ),
                 },
                 "hypothesis": {"type": "string", "description": "The user's one-line thesis."},
@@ -286,6 +287,10 @@ def _build_options_ticket(args: dict[str, Any]) -> tuple[str, bool]:
             structure_key=structure_key,
         )
         return _ok(ticket)
+    except (
+        ValueError
+    ) as exc:  # validation: bad structure_key / level geometry — retrying won't help
+        return _err(f"could not build a ticket for {ticker}: {exc}")
     except Exception as exc:
         return _err(
             f"could not build a ticket for {ticker}: {exc} — if this was a data fetch "

@@ -388,3 +388,53 @@ def test_build_options_ticket_passes_structure_key(monkeypatch) -> None:
     )
     assert not is_error
     assert seen["structure_key"] == "long_call_d80"
+
+
+def test_build_options_ticket_validation_error_has_no_retry_hint(monkeypatch) -> None:
+    from tradinglib.assistant import planner, tools
+
+    def fake_ticket(**kwargs):
+        raise ValueError("unknown structure_key 'nope'; valid keys: long_call_d65")
+
+    monkeypatch.setattr(planner, "hypothesis_ticket", fake_ticket)
+    out, is_error = tools.dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "TEST",
+            "stance": "long",
+            "entry": 100.0,
+            "stop": 96.0,
+            "target": 108.0,
+            "account_size": 100_000,
+            "risk_per_trade_pct": 0.01,
+            "structure_key": "nope",
+        },
+    )
+    assert is_error
+    assert "valid keys" in out
+    assert "try again" not in out
+
+
+def test_build_options_ticket_omitted_structure_key_passes_none(monkeypatch) -> None:
+    from tradinglib.assistant import planner, tools
+
+    seen: dict = {}
+
+    def fake_ticket(**kwargs):
+        seen.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(planner, "hypothesis_ticket", fake_ticket)
+    tools.dispatch(
+        "build_options_ticket",
+        {
+            "ticker": "TEST",
+            "stance": "long",
+            "entry": 100.0,
+            "stop": 96.0,
+            "target": 108.0,
+            "account_size": 100_000,
+            "risk_per_trade_pct": 0.01,
+        },
+    )
+    assert seen["structure_key"] is None
