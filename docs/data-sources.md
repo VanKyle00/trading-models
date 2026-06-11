@@ -88,6 +88,49 @@ Paid / keyed sources are documented as upgrades.
   E.g. Windows Task Scheduler:
   `schtasks /create /tn chain-snapshots /tr "uv run python scripts/collect_chain_snapshots.py" /sc daily /st 16:30`.
 
+### Google News RSS — ticker headlines
+
+- **What**: Recent news headlines per ticker (`[ticker, published, title,
+  publisher, url]`), query `"<TICKER> stock when:14d"`.
+- **Cost**: Free.
+- **Setup**: None — no API key required.
+- **Loader**: [`tradinglib.loaders.news.google_news`](../tradinglib/loaders/news/google_news.py)
+- **Notes**: Public RSS endpoint; mocked in tests. Snapshot-cached per UTC day.
+  Tier-1 source for the `/sentiment` page.
+
+### Seeking Alpha RSS — per-ticker article titles
+
+- **What**: Article/analysis titles per ticker (`[ticker, published, title, url]`).
+- **Cost**: Free.
+- **Setup**: None — no API key required.
+- **Loader**: [`tradinglib.loaders.forums.seeking_alpha`](../tradinglib/loaders/forums/seeking_alpha.py)
+- **Notes**: Seeking Alpha's public RSS feed (titles only — no bodies, no API).
+  The most fragile sentiment source (Cloudflare moods); failures degrade to
+  empty and Tier 2 proceeds on Reddit alone.
+
+### Reddit — forum posts mentioning a ticker
+
+- **What**: Posts from configurable subreddits (`[ticker, subreddit, created,
+  title, text, score, num_comments, url]`), last week, search `"<T> OR $<T>"`.
+- **Cost**: Free (OAuth app).
+- **Setup**: Create a **script** app at <https://www.reddit.com/prefs/apps>; set
+  `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` (and optionally
+  `REDDIT_USER_AGENT`). Without credentials the sentiment engine skips Reddit
+  sources gracefully.
+- **Loader**: [`tradinglib.loaders.forums.reddit`](../tradinglib/loaders/forums/reddit.py)
+- **Notes**: praw client, cached per (subreddit, ticker, day) — cache hits need
+  no credentials. Serves Tier 2 (serious subs) and Tier 3 (r/wallstreetbets).
+
+### Stocktwits — retail message stream
+
+- **What**: Last ~30 messages per symbol with user-tagged Bullish/Bearish labels
+  (`[ticker, created, body, sentiment, username, url]`).
+- **Cost**: Free.
+- **Setup**: None — no API key required (~200 requests/hour/IP).
+- **Loader**: [`tradinglib.loaders.social.stocktwits`](../tradinglib/loaders/social/stocktwits.py)
+- **Notes**: The user tags feed the mechanical bull/bear ratio on the
+  `/sentiment` page — free ground truth, no LLM involved.
+
 ## Planned / not yet wired in
 
 ### Polygon.io — higher-quality equities
