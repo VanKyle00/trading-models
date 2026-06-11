@@ -1,0 +1,27 @@
+{
+  "response": {"status": 200},
+  "symbol": {"id": 686, "symbol": "NVDA"},
+  "messages": [
+    {
+      "id": 101,
+      "body": "Loading calls into earnings, this thing rips",
+      "created_at": "2026-06-10T14:01:00Z",
+      "user": {"username": "bull_guy"},
+      "entities": {"sentiment": {"basic": "Bullish"}}
+    },
+    {
+      "id": 102,
+      "body": "Way overextended here, fading the pump",
+      "created_at": "2026-06-10T13:55:00Z",
+      "user": {"username": "fade_king"},
+      "entities": {"sentiment": {"basic": "Bearish"}}
+    },
+    {
+      "id": 103,
+      "body": "Anyone watching the morning level?",
+      "created_at": "2026-06-10T13:50:00Z",
+      "user": {"username": "lurker"},
+      "entities": {"sentiment": null}
+    }
+  ]
+}
