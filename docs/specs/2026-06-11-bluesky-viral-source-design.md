@@ -61,7 +61,9 @@ the tool otherwise only catches as an echo (news writeups, Trends spikes).
 - `report.py`: new `"bluesky"` job in `_fetch_sources` (max_items=25); the
   viral tier's items/metrics/source-status wiring gains the frame; viral
   `source_status` subset becomes `(wsb, stocktwits, bluesky, google_trends)`.
-- `packs.viral_items(wsb, stocktwits, bluesky)`: Bluesky items use source
+- `packs.viral_items(wsb, stocktwits, bluesky)` round-robin interleaves the
+  three sources (the bounded pack can't crowd any one source out; cross-source
+  dedupe stays, first-seen wins). Bluesky items use source
   label `Bluesky @<handle> (+<likes>, <reposts>r)` (mirrors the Reddit
   label), title = text[:80], text = full post text, url, published = created.
 - `scoring.viral_metrics(..., bluesky, interest)`: gains

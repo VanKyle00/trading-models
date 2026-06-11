@@ -203,3 +203,43 @@ def test_viral_items_includes_bluesky_posts() -> None:
     assert items[0]["source"] == "Bluesky @bull.bsky.social (+412, 88r)"
     assert items[0]["text"] == "$NVDA to the sky 🚀"
     assert items[0]["url"] == "https://bsky.app/profile/bull.bsky.social/post/1"
+
+
+def test_viral_items_round_robin_survives_pack_pressure() -> None:
+    wsb = pd.DataFrame(
+        {
+            "ticker": ["NVDA"] * 20,
+            "subreddit": ["wallstreetbets"] * 20,
+            "created": pd.to_datetime(["2026-06-10"] * 20, utc=True),
+            "title": [f"wsb long post {i} " + "x" * 300 for i in range(20)],
+            "text": ["y" * 300] * 20,
+            "score": [100] * 20,
+            "num_comments": [50] * 20,
+            "url": [f"https://reddit/{i}" for i in range(20)],
+        }
+    )
+    st = pd.DataFrame(
+        {
+            "ticker": ["NVDA"] * 30,
+            "created": pd.to_datetime(["2026-06-10"] * 30, utc=True),
+            "body": [f"st long message {i} " + "z" * 300 for i in range(30)],
+            "sentiment": ["Bullish"] * 30,
+            "username": [f"u{i}" for i in range(30)],
+            "url": [f"https://st/{i}" for i in range(30)],
+        }
+    )
+    bsky = pd.DataFrame(
+        {
+            "ticker": ["NVDA"] * 3,
+            "created": pd.to_datetime(["2026-06-10"] * 3, utc=True),
+            "text": [f"bsky post {i} about $NVDA" for i in range(3)],
+            "handle": [f"h{i}.bsky.social" for i in range(3)],
+            "likes": [10] * 3,
+            "reposts": [2] * 3,
+            "url": [f"https://bsky.app/profile/h{i}/post/{i}" for i in range(3)],
+        }
+    )
+    items = packs.viral_items(wsb, st, bsky)
+    _, kept = packs.build_pack("NVDA", "Viral / retail", items, [])
+    assert len(kept) < len(items)  # budget pressure is actually in play
+    assert any(item["source"].startswith("Bluesky") for item in kept)
