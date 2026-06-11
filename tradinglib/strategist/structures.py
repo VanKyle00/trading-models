@@ -416,11 +416,18 @@ def build_neutral_structures(
 
 
 def build_structures(
-    chain: pd.DataFrame, levels: Levels, stance: str, *, spot: float, asof: pd.Timestamp
+    chain: pd.DataFrame,
+    levels: Levels,
+    stance: str,
+    *,
+    spot: float,
+    asof: pd.Timestamp,
+    include_stock: bool = True,
 ) -> list[Structure]:
-    """Everything that passes the gate, stock plan first. Naked short calls are
-    never built (no builder exists for them — spec exclusion)."""
-    out = [stock_plan(levels, stance)]
+    """Everything that passes the gate, stock plan first — unless
+    ``include_stock=False`` (the chat path is options-only). Naked short calls
+    are never built (no builder exists for them — spec exclusion)."""
+    out = [stock_plan(levels, stance)] if include_stock else []
     candidates = [long_option(chain, levels, spot=spot, asof=asof, stance=stance)]
     if direction(stance) > 0:
         candidates.append(cash_secured_put(chain, levels, spot=spot, asof=asof))

@@ -94,8 +94,7 @@ def test_hypothesis_ticket_end_to_end(make_chain, monkeypatch) -> None:
     assert ticket["levels"]["condition"] == "bullish on TEST into summer"
     assert ticket["next_earnings"] is None
     assert sum(s["recommended"] for s in ticket["structures"]) == 1
-    stock = next(s for s in ticket["structures"] if s["kind"] == "stock")
-    assert stock["calculator_url"] is None  # no legs, nothing to prefill
+    assert all(s["legs"] for s in ticket["structures"])  # options only, no stock plan
     option = next(s for s in ticket["structures"] if s["legs"])
     assert option["calculator_url"].startswith("https://optionstrat.com/build/custom/TEST/")
 

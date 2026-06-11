@@ -9,7 +9,8 @@ built structure is ``recommended``: the first in the final order that sized to
 at least one unit, else the first overall (carrying its ``unsized`` warning).
 The ticket never asserts expected profitability (C5): quotes are indicative
 marks, PoP is the market's own number, and the OOS evidence rides along.
-build_hypothesis_ticket is the chat path: same core, user-confirmed levels, no tournament evidence.
+build_hypothesis_ticket is the chat path: same core, user-confirmed levels, no
+tournament evidence, and options-only — the stock plan is never offered.
 """
 
 from __future__ import annotations
@@ -75,6 +76,7 @@ def _assemble(
     chain: pd.DataFrame,
     premium_first: bool,
     use_iv_override: bool,
+    include_stock: bool = True,
     next_earnings: pd.Timestamp | None,
     earnings_warning: bool,
     account_size: float,
@@ -92,9 +94,14 @@ def _assemble(
         pd.Timestamp(chain["date"].iloc[0]) if has_chain else _naive(pd.Timestamp(bars.index[-1]))
     )
 
-    structures = build_structures(chain, levels, stance, spot=spot, asof=asof)
+    structures = build_structures(
+        chain, levels, stance, spot=spot, asof=asof, include_stock=include_stock
+    )
     warnings = [INDICATIVE_WARNING]
-    if len(structures) == 1:  # every option structure failed the gate (or no chain)
+    if not any(s.unit == "contract" for s in structures):
+        # every option structure failed the gate (or no chain)
+        if not include_stock:  # chat path: nothing to fall back on — surface it
+            raise ValueError("no option structure passed the liquidity gate")
         warnings.append("options_illiquid: no option structure passed the liquidity gate")
 
     rv = float(realized_vol(bars["close"]).iloc[-1])
@@ -201,6 +208,7 @@ def build_hypothesis_ticket(
         chain=chain,
         premium_first=preference == "premium",
         use_iv_override=preference == "auto",
+        include_stock=False,
         next_earnings=next_earnings,
         earnings_warning=earnings_warning,
         account_size=account_size,
