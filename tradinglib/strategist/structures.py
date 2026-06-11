@@ -35,6 +35,7 @@ from tradinglib.tournament.levels import Levels, direction
 DTE_DIRECTIONAL = (60, 90)
 DTE_INCOME = (30, 45)
 TARGET_DELTA = 0.65
+CANDIDATE_DELTAS = (0.65, 0.50, 0.80)  # chat ladder, recommendation anchor first
 SPREAD_SAVES_FRAC = 0.35  # debit spread offered only when it cuts cost by more than this
 SPREAD_WIDTH = 5.0
 MIN_CREDIT_FRAC = 1.0 / 3.0
@@ -141,6 +142,7 @@ def stock_plan(levels: Levels, stance: str) -> Structure:
     gain = abs(levels.target - levels.entry)
     return Structure(
         kind="stock_short" if short else "stock",
+        key="stock_short" if short else "stock",
         label="short stock plan" if short else "stock plan",
         unit="share",
         legs=[],
@@ -162,6 +164,69 @@ def stock_plan(levels: Levels, stance: str) -> Structure:
     )
 
 
+def _plain_long(leg: LegQuote, *, d: int, right: str, spot: float, key: str) -> Structure:
+    breakeven = leg.strike + d * leg.mid
+    return Structure(
+        kind=f"long_{right}",
+        key=key,
+        label=f"{leg.strike:g} {right} (~{leg.delta:+.2f} delta)",
+        unit="contract",
+        legs=[_leg("buy", leg)],
+        premium=leg.mid,
+        max_loss=leg.mid,
+        max_gain=None,
+        breakeven=breakeven,
+        pop_market_implied=pop_market_implied(
+            spot=spot, level=breakeven, vol=leg.iv, t_years=years(leg.dte), profit_above=d > 0
+        ),
+        rr=None,
+        premium_yield=None,
+    )
+
+
+def _debit_spread(
+    leg: LegQuote, short_leg: LegQuote, *, d: int, right: str, spot: float
+) -> Structure:
+    net = leg.mid - short_leg.mid
+    width = abs(short_leg.strike - leg.strike)
+    breakeven = leg.strike + d * net
+    return Structure(
+        kind=f"{right}_debit_spread",
+        key=f"{right}_debit_spread",
+        label=f"{leg.strike:g}/{short_leg.strike:g} {right} debit spread",
+        unit="contract",
+        legs=[_leg("buy", leg), _leg("sell", short_leg)],
+        premium=net,
+        max_loss=net,
+        max_gain=width - net,
+        breakeven=breakeven,
+        pop_market_implied=pop_market_implied(
+            spot=spot,
+            level=breakeven,
+            vol=_pop_vol([leg, short_leg], breakeven),
+            t_years=years(leg.dte),
+            profit_above=d > 0,
+        ),
+        rr=(width - net) / net,
+        premium_yield=None,
+    )
+
+
+def _spread_short_leg(
+    quotes: list[LegQuote], leg: LegQuote, levels: Levels, d: int
+) -> LegQuote | None:
+    """The short leg at the target — only when it cuts the long leg's cost > 35%."""
+    toward_target = [q for q in quotes if d * (q.strike - leg.strike) > 0]
+    short_leg = nearest_strike(toward_target, levels.target)
+    if short_leg is None:
+        return None
+    net = leg.mid - short_leg.mid
+    # net <= 0 (inverted junk quotes) falls through to the plain long option
+    if net > 0 and net <= (1.0 - SPREAD_SAVES_FRAC) * leg.mid:
+        return short_leg
+    return None
+
+
 def long_option(
     chain: pd.DataFrame, levels: Levels, *, spot: float, asof: pd.Timestamp, stance: str
 ) -> Structure | None:
@@ -176,50 +241,59 @@ def long_option(
     leg = by_delta(quotes, d * TARGET_DELTA)
     if leg is None or leg.mid <= 0:
         return None
-    t = years(leg.dte)
-    toward_target = [q for q in quotes if d * (q.strike - leg.strike) > 0]
-    short_leg = nearest_strike(toward_target, levels.target)
+    short_leg = _spread_short_leg(quotes, leg, levels, d)
     if short_leg is not None:
-        net = leg.mid - short_leg.mid
-        # net <= 0 (inverted junk quotes) falls through to the plain long option
-        if net > 0 and net <= (1.0 - SPREAD_SAVES_FRAC) * leg.mid:
-            width = abs(short_leg.strike - leg.strike)
-            breakeven = leg.strike + d * net
-            return Structure(
-                kind=f"{right}_debit_spread",
-                label=f"{leg.strike:g}/{short_leg.strike:g} {right} debit spread",
-                unit="contract",
-                legs=[_leg("buy", leg), _leg("sell", short_leg)],
-                premium=net,
-                max_loss=net,
-                max_gain=width - net,
-                breakeven=breakeven,
-                pop_market_implied=pop_market_implied(
-                    spot=spot,
-                    level=breakeven,
-                    vol=_pop_vol([leg, short_leg], breakeven),
-                    t_years=t,
-                    profit_above=d > 0,
-                ),
-                rr=(width - net) / net,
-                premium_yield=None,
-            )
-    breakeven = leg.strike + d * leg.mid
-    return Structure(
-        kind=f"long_{right}",
-        label=f"{leg.strike:g} {right} (~{leg.delta:+.2f} delta)",
-        unit="contract",
-        legs=[_leg("buy", leg)],
-        premium=leg.mid,
-        max_loss=leg.mid,
-        max_gain=None,
-        breakeven=breakeven,
-        pop_market_implied=pop_market_implied(
-            spot=spot, level=breakeven, vol=leg.iv, t_years=t, profit_above=d > 0
-        ),
-        rr=None,
-        premium_yield=None,
-    )
+        return _debit_spread(leg, short_leg, d=d, right=right, spot=spot)
+    return _plain_long(leg, d=d, right=right, spot=spot, key=f"long_{right}_d65")
+
+
+def long_option_candidates(
+    chain: pd.DataFrame, levels: Levels, *, spot: float, asof: pd.Timestamp, stance: str
+) -> tuple[list[Structure], list[str]]:
+    """The chat comparison ladder: the debit spread first when it cuts the
+    0.65-delta cost > 35% (today's family representative), then plain longs at
+    ~0.65/0.50/0.80 delta deduped by strike. Returns (structures, drop_notes);
+    a delta with no liquid leg drops its row and leaves a note."""
+    d = direction(stance)
+    right = "call" if d > 0 else "put"
+    exp = pick_expiration(chain, dte_lo=DTE_DIRECTIONAL[0], dte_hi=DTE_DIRECTIONAL[1], asof=asof)
+    if exp is None:
+        return [], []
+    quotes = liquid_quotes(chain, right=right, expiration=exp, spot=spot, asof=asof)
+    out: list[Structure] = []
+    notes: list[str] = []
+    anchor = by_delta(quotes, d * TARGET_DELTA)
+    if anchor is not None and anchor.mid > 0:
+        short_leg = _spread_short_leg(quotes, anchor, levels, d)
+        if short_leg is not None:
+            out.append(_debit_spread(anchor, short_leg, d=d, right=right, spot=spot))
+    used: set[float] = set()
+    for delta in CANDIDATE_DELTAS:
+        leg = by_delta(quotes, d * delta)
+        if leg is None or leg.mid <= 0:
+            notes.append(f"no liquid ~{delta:.2f}-delta {right}; ladder row dropped")
+            continue
+        if leg.strike in used:
+            continue  # same strike as an earlier rung — not a drop, just no new row
+        used.add(leg.strike)
+        out.append(
+            _plain_long(leg, d=d, right=right, spot=spot, key=f"long_{right}_d{int(delta * 100)}")
+        )
+    return out, notes
+
+
+def build_chat_structures(
+    chain: pd.DataFrame, levels: Levels, stance: str, *, spot: float, asof: pd.Timestamp
+) -> tuple[list[Structure], list[str]]:
+    """Options-only comparison set for the chat planner: the long-option ladder
+    plus the income structures. Returns (structures, drop_notes)."""
+    out, notes = long_option_candidates(chain, levels, spot=spot, asof=asof, stance=stance)
+    extras = []
+    if direction(stance) > 0:
+        extras.append(cash_secured_put(chain, levels, spot=spot, asof=asof))
+    extras.append(credit_spread(chain, levels, spot=spot, asof=asof, stance=stance))
+    out.extend(s for s in extras if s is not None)
+    return out, notes
 
 
 def cash_secured_put(
@@ -237,6 +311,7 @@ def cash_secured_put(
     breakeven = leg.strike - credit
     return Structure(
         kind="csp",
+        key="csp",
         label=f"{leg.strike:g} cash-secured put",
         unit="contract",
         legs=[_leg("sell", leg)],
@@ -281,6 +356,7 @@ def credit_spread(
     breakeven = short_leg.strike - d * credit
     return Structure(
         kind="bull_put_spread" if d > 0 else "bear_call_spread",
+        key="bull_put_spread" if d > 0 else "bear_call_spread",
         label=(
             f"{short_leg.strike:g}/{long_leg.strike:g} "
             f"{'bull put' if d > 0 else 'bear call'} credit spread"

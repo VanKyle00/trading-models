@@ -404,3 +404,71 @@ def test_structure_theta_week_none_without_legs() -> None:
 
     s = stock_plan(LONG_LEVELS, "long")
     assert structure_theta_week(s, spot=100.0) is None
+
+
+# With iv=0.30, spot=100, 75 DTE: deltas are 90→0.80, 95→0.67, 100→0.53, 105→0.39, 110→0.26.
+LADDER_MIDS = {**LONG_MIDS, ("call", 75, 90.0): 11.5}
+
+
+def test_long_option_candidates_full_ladder_keys_and_strikes(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    out, notes = long_option_candidates(
+        make_chain(mids=LADDER_MIDS), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long"
+    )
+    by_key = {s.key: s for s in out}
+    assert by_key["long_call_d65"].legs[0]["strike"] == 95.0
+    assert by_key["long_call_d50"].legs[0]["strike"] == 100.0
+    assert by_key["long_call_d80"].legs[0]["strike"] == 90.0
+    assert out[0].key == "long_call_d65"  # anchor leads when no spread builds
+    assert notes == []
+    assert all(s.kind in ("long_call", "call_debit_spread") for s in out)
+
+
+def test_long_option_candidates_dedupes_same_strike(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    # without a 90 strike the d80 pick lands on 95 — same as d65 — and dedupes silently
+    out, notes = long_option_candidates(
+        make_chain(mids=LONG_MIDS), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long"
+    )
+    keys = [s.key for s in out]
+    assert "long_call_d80" not in keys and "long_call_d65" in keys
+    strikes = [s.legs[0]["strike"] for s in out if s.kind == "long_call"]
+    assert len(strikes) == len(set(strikes))
+    assert notes == []  # dedupe is not a liquidity drop
+
+
+def test_long_option_candidates_spread_first_when_it_cuts_cost(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    mids = {**LADDER_MIDS, ("call", 75, 110.0): 3.0}  # saves 3.0/8.0 = 37.5% > 35%
+    out, _ = long_option_candidates(
+        make_chain(mids=mids), LONG_LEVELS, spot=100.0, asof=ASOF, stance="long"
+    )
+    assert out[0].kind == "call_debit_spread"  # family representative stays the spread
+    assert out[0].key == "call_debit_spread"
+    assert [(leg["action"], leg["strike"]) for leg in out[0].legs] == [
+        ("buy", 95.0),
+        ("sell", 110.0),
+    ]
+    assert "long_call_d65" in [s.key for s in out]  # plain anchor still a row
+
+
+def test_long_option_candidates_empty_without_expiry(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    chain = make_chain(mids={("call", 38, 100.0): 2.0})  # income window only
+    out, notes = long_option_candidates(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+    assert out == [] and notes == []
+
+
+def test_build_chat_structures_includes_income_rows_and_keys(make_chain) -> None:
+    from tradinglib.strategist.structures import build_chat_structures
+
+    out, notes = build_chat_structures(
+        make_chain(mids=LADDER_MIDS), LONG_LEVELS, "long", spot=100.0, asof=ASOF
+    )
+    keys = [s.key for s in out]
+    assert "csp" in keys and "bull_put_spread" in keys
+    assert "stock" not in [s.kind for s in out]
