@@ -63,6 +63,7 @@
              border: 1px solid var(--line); }
   .tc-chip.long { color: var(--up); border-color: var(--up); }
   .tc-chip.short { color: var(--down); border-color: var(--down); }
+  .tc-chip.neutral { color: var(--accent); border-color: var(--accent); }
   .tc-asof { margin-left: auto; color: var(--muted); font-size: 10px; }
   .tc-label { margin-top: 6px; font-weight: 600; }
   .tc-metrics { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 6px; }
@@ -175,6 +176,8 @@
       tcMetric(metrics, "max loss/sh", rec.max_loss == null ? "uncapped" : tcMoney(rec.max_loss));
       tcMetric(metrics, "max gain/sh", rec.max_gain == null ? "uncapped" : tcMoney(rec.max_gain));
       tcMetric(metrics, "breakeven", tcMoney(rec.breakeven));
+      if (rec.breakevens && rec.breakevens.length === 2)
+        tcMetric(metrics, "breakevens", tcMoney(rec.breakevens[0]) + " / " + tcMoney(rec.breakevens[1]));
       if (rec.pop_market_implied != null) tcMetric(metrics, "mkt pop", (rec.pop_market_implied * 100).toFixed(0) + "%");
       if (rec.rr != null) tcMetric(metrics, "r/r", Number(rec.rr).toFixed(2));
       card.appendChild(metrics);
