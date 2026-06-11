@@ -181,3 +181,46 @@ def test_run_partial_bad_ticker_shows_error_not_500():
     )
     assert resp.status_code == 400
     assert "could not run" in resp.text.lower()
+
+
+def test_index_console_extraction_preserves_markup():
+    client = TestClient(create_app())
+    html = client.get("/").text
+    assert 'id="console"' in html
+    assert 'id="console-resize"' in html  # index keeps the resize handle
+    assert 'id="chat-input"' in html and 'id="chat-clear"' in html
+    assert "Run a backtest, then ask about it" in html  # default empty-state text
+    assert html.count('id="transcript"') == 1
+
+
+def test_console_ships_ticket_card_renderer():
+    client = TestClient(create_app())
+    html = client.get("/").text
+    assert "renderTicketCard" in html
+    assert "build_options_ticket" in html  # the tool_result hook
+
+
+def test_planner_page_renders_console_and_chips():
+    client = TestClient(create_app())
+    resp = client.get("/planner")
+    assert resp.status_code == 200
+    html = resp.text
+    assert 'id="transcript"' in html and 'id="chat-input"' in html
+    assert 'class="chat-chip"' in html and "bullish on RIVN" in html  # chip BUTTONS render
+    assert "renderTicketCard" in html
+    assert 'id="console-resize"' not in html  # resize handle is index-only
+    assert html.count('id="transcript"') == 1  # the partial is included exactly once
+    assert 'href="/scans"' in html and 'href="/tournaments"' in html and 'href="/models"' in html
+
+
+def test_planner_nav_crumbs():
+    client = TestClient(create_app())
+    assert 'href="/planner"' in client.get("/").text
+    assert 'href="/planner"' in client.get("/models").text
+
+
+def test_index_has_no_chip_buttons():
+    # The partial's CSS/JS mention chat-chip on every page; only the planner
+    # context (console_chips set) renders actual chip BUTTONS.
+    client = TestClient(create_app())
+    assert 'class="chat-chip"' not in client.get("/").text
