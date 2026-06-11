@@ -420,8 +420,7 @@ def iron_condor(
         key="condor_wide" if widen else "condor",
         label=(
             f"{long_put.strike:g}/{short_put.strike:g}/"
-            f"{short_call.strike:g}/{long_call.strike:g} iron condor"
-            + (" (wide)" if widen else "")
+            f"{short_call.strike:g}/{long_call.strike:g} iron condor" + (" (wide)" if widen else "")
         ),
         unit="contract",
         legs=[
