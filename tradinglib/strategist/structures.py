@@ -130,7 +130,7 @@ def structure_theta_week(s: Structure, *, spot: float) -> float | None:
         return None
     total = 0.0
     for leg in s.legs:
-        g = bs_greeks(leg["right"], spot, leg["strike"], years(leg["dte"]), leg["iv"], 0.0)  # type: ignore[arg-type]
+        g = bs_greeks(leg["right"], spot, leg["strike"], years(leg["dte"]), leg["iv"], 0.0)
         total += (1.0 if leg["action"] == "buy" else -1.0) * g.theta
     return total * 7.0 / 365.0
 
