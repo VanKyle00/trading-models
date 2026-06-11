@@ -104,7 +104,11 @@ def _download_sub(reddit: Any, ticker: str, sub: str, limit: int) -> pd.DataFram
 def get_reddit_posts(
     ticker: str, subreddits: tuple[str, ...], *, limit: int = 20, refresh: bool = False
 ) -> pd.DataFrame:
-    """Posts mentioning ``ticker`` across ``subreddits`` (last week), newest first."""
+    """Posts mentioning ``ticker`` across ``subreddits`` (last week), newest first.
+
+    Raises ``MissingRedditCredentials`` if ANY subreddit needs a fresh fetch
+    without credentials — a partial cache hit does not return partial results.
+    """
     snapshot = pd.Timestamp.now("UTC").strftime("%Y-%m-%d")
     frames: list[pd.DataFrame] = []
     reddit: Any = None
