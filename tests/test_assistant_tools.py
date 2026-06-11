@@ -373,7 +373,7 @@ def test_build_options_ticket_passes_structure_key(monkeypatch) -> None:
         return {"ok": True}
 
     monkeypatch.setattr(planner, "hypothesis_ticket", fake_ticket)
-    out, is_error = tools.dispatch(
+    _out, is_error = tools.dispatch(
         "build_options_ticket",
         {
             "ticker": "TEST",
