@@ -198,6 +198,9 @@ def test_console_ships_ticket_card_renderer():
     html = client.get("/").text
     assert "renderTicketCard" in html
     assert "build_options_ticket" in html  # the tool_result hook
+    assert "tc-cands" in html  # candidate comparison table
+    assert "renderPlan" in html  # trade-plan section
+    assert "trade plan" in html
 
 
 def test_planner_page_renders_console_and_chips():

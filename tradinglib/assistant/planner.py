@@ -73,10 +73,12 @@ def hypothesis_ticket(
     risk_per_trade_pct: float,
     preference: str = "auto",
     hypothesis: str = "",
+    structure_key: str | None = None,
 ) -> dict:
     """Live-data ticket for a user hypothesis. Raises on bar/chain failures
     (the dispatcher relays them); an earnings-fetch failure only loses the
-    earnings demotion, mirroring the scan pipeline's isolation."""
+    earnings demotion, mirroring the scan pipeline's isolation. Pass
+    ``structure_key`` to pin the recommendation and exit plan to one candidate."""
     ticker = ticker.upper()
     now = pd.Timestamp.now(tz="UTC")
     start = (now - pd.Timedelta(days=_BARS_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
@@ -117,6 +119,7 @@ def hypothesis_ticket(
         earnings_warning=earnings_warning,
         account_size=account_size,
         risk_per_trade_pct=risk_per_trade_pct,
+        structure_key=structure_key,
     )
     if earnings_failed:
         ticket["warnings"].append("earnings lookup failed; earnings risk unchecked")

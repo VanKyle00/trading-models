@@ -66,20 +66,23 @@
   .tc-chip.neutral { color: var(--accent); border-color: var(--accent); }
   .tc-asof { margin-left: auto; color: var(--muted); font-size: 10px; }
   .tc-label { margin-top: 6px; font-weight: 600; }
-  .tc-metrics { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 6px; }
-  .tc-metric { font-size: 11px; }
-  .tc-m-label { color: var(--muted); font-family: "Martian Mono", "JetBrains Mono", monospace;
-                font-size: 8.5px; text-transform: uppercase; letter-spacing: .1em;
-                margin-right: 5px; }
   .tc-legs { border-collapse: collapse; margin-top: 8px; font-size: 11px; }
   .tc-legs th, .tc-legs td { text-align: left; padding: 2px 10px 2px 0; }
   .tc-legs th { font-family: "Martian Mono", "JetBrains Mono", monospace; font-size: 8px;
                 text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .tc-cands { border-collapse: collapse; margin-top: 8px; font-size: 10.5px; width: 100%; }
+  .tc-cands th, .tc-cands td { text-align: left; padding: 2px 8px 2px 0; }
+  .tc-cands th { font-family: "Martian Mono", "JetBrains Mono", monospace; font-size: 8px;
+                 text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .tc-cands tr.tc-rec td { color: var(--accent); font-weight: 600; }
+  .tc-reason { margin-top: 4px; color: var(--muted); font-size: 10.5px; }
+  .tc-plan { margin-top: 8px; font-size: 11px; }
+  .tc-plan-title { font-family: "Martian Mono", "JetBrains Mono", monospace; font-size: 8.5px;
+                   text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .tc-plan-line { margin-top: 2px; }
   .tc-link { display: inline-block; margin-top: 8px; font-size: 11px; color: var(--accent);
              border: 1px solid var(--accent); padding: 3px 10px; text-decoration: none; }
   .tc-warn { margin-top: 6px; color: var(--down); font-size: 11px; }
-  .tc-alt { margin-top: 4px; color: var(--muted); font-size: 11px; }
-  .tc-alt a { color: var(--accent); text-decoration: none; }
 </style>
 <section class="console" id="console">
   {% if console_resize %}<div class="console-resize" id="console-resize" title="Drag to resize"></div>{% endif %}
@@ -147,12 +150,75 @@
       return el;
     }
     function tcMoney(v) { return v == null ? null : "$" + Number(v).toFixed(2); }
-    function tcMetric(row, label, value) {
-      if (value == null) return;
-      var m = tcEl("div", "tc-metric");
-      m.appendChild(tcEl("span", "tc-m-label", label));
-      m.appendChild(tcEl("b", null, value));
-      row.appendChild(m);
+    function tcPct(v) { return v == null ? null : (v * 100).toFixed(0) + "%"; }
+    function renderCandidates(card, structures, rec) {
+      if (!structures.length) return;
+      var tbl = tcEl("table", "tc-cands"), hrow = tcEl("tr");
+      var heads = ["structure", "net/sh", "max loss/sh", "max gain/sh", "breakeven", "pop", "r/r", "qty", ""];
+      for (var i = 0; i < heads.length; i++) hrow.appendChild(tcEl("th", null, heads[i]));
+      tbl.appendChild(hrow);
+      for (i = 0; i < structures.length; i++) {
+        var s = structures[i], row = tcEl("tr", s === rec ? "tc-rec" : null);
+        var be = s.breakevens && s.breakevens.length === 2
+          ? tcMoney(s.breakevens[0]) + " / " + tcMoney(s.breakevens[1]) : tcMoney(s.breakeven);
+        row.appendChild(tcEl("td", null, (s === rec ? "▸ " : "") + s.label));
+        row.appendChild(tcEl("td", null, s.premium == null ? "" :
+          tcMoney(Math.abs(s.premium)) + (s.premium >= 0 ? " dr" : " cr")));
+        row.appendChild(tcEl("td", null, s.max_loss == null ? "uncapped" : tcMoney(s.max_loss)));
+        row.appendChild(tcEl("td", null, s.max_gain == null ? "uncapped" : tcMoney(s.max_gain)));
+        row.appendChild(tcEl("td", null, be || ""));
+        row.appendChild(tcEl("td", null, tcPct(s.pop_market_implied) || ""));
+        row.appendChild(tcEl("td", null, s.rr == null ? "" : Number(s.rr).toFixed(2)));
+        row.appendChild(tcEl("td", null, s.quantity ? String(s.quantity) : "unsized"));
+        var linkTd = tcEl("td");
+        if (s.calculator_url) {
+          var a = tcEl("a", null, "↗");
+          a.href = s.calculator_url; a.target = "_blank"; a.rel = "noopener";
+          a.title = "Open in OptionStrat";
+          linkTd.appendChild(a);
+        }
+        row.appendChild(linkTd);
+        tbl.appendChild(row);
+      }
+      card.appendChild(tbl);
+    }
+    function planLine(r, suffix) {
+      var t = r.trigger + " → " + r.action;
+      if (r.est_pnl != null) {
+        t += " · est " + (r.est_pnl >= 0 ? "+" : "-") + "$" + Math.abs(r.est_pnl).toFixed(0);
+        if (r.est_pnl_pct != null)
+          t += " (" + (r.est_pnl_pct >= 0 ? "+" : "") + (r.est_pnl_pct * 100).toFixed(0) + "%)";
+        t += suffix;
+      }
+      return t;
+    }
+    function renderPlan(card, plan, qty) {
+      if (!plan) return;
+      var box = tcEl("div", "tc-plan");
+      box.appendChild(tcEl("div", "tc-plan-title", qty ? "trade plan" : "trade plan (1-lot preview — unsized)"));
+      var suffix = plan.est_by ? " if hit by " + plan.est_by : "";
+      var rules = plan.price_rules || [], i;
+      for (i = 0; i < rules.length; i++)
+        box.appendChild(tcEl("div", "tc-plan-line", "▸ " + planLine(rules[i], suffix)));
+      if (plan.profit_take)
+        box.appendChild(tcEl("div", "tc-plan-line", "▸ " + planLine(plan.profit_take, "")));
+      if (plan.loss_cut)
+        box.appendChild(tcEl("div", "tc-plan-line", "▸ " + planLine(plan.loss_cut, "")));
+      var tr = plan.time_rules || [];
+      for (i = 0; i < tr.length; i++)
+        box.appendChild(tcEl("div", "tc-plan-line", "▸ " + planLine(tr[i], "")));
+      if (plan.theta_week != null) {
+        var dollars = Math.abs(plan.theta_week) * 100 * (qty || 1);
+        box.appendChild(tcEl("div", "tc-plan-line",
+          "▸ theta: " + (plan.theta_week <= 0 ? "bleeds" : "collects") +
+          " ≈ $" + dollars.toFixed(0) + "/week if the underlying sits still"));
+      }
+      var notes = plan.notes || [];
+      for (i = 0; i < notes.length; i++)
+        box.appendChild(tcEl("div", "tc-plan-line", "▸ " + notes[i]));
+      box.appendChild(tcEl("div", "tc-plan-line",
+        "▸ price estimates hold each leg's chain IV constant"));
+      card.appendChild(box);
     }
     function renderTicketCard(ticket) {
       var structures = ticket.structures || [], rec = null, i;
@@ -170,17 +236,9 @@
         ? rec.quantity + " " + (rec.unit === "contract" ? "contract" : "share") + (rec.quantity === 1 ? "" : "s")
         : "unsized";
       card.appendChild(tcEl("div", "tc-label", rec.label + " — " + qty));
+      if (rec.reason) card.appendChild(tcEl("div", "tc-reason", "why: " + rec.reason));
 
-      var metrics = tcEl("div", "tc-metrics");
-      if (rec.premium != null) tcMetric(metrics, rec.premium >= 0 ? "debit/sh" : "credit/sh", tcMoney(Math.abs(rec.premium)));
-      tcMetric(metrics, "max loss/sh", rec.max_loss == null ? "uncapped" : tcMoney(rec.max_loss));
-      tcMetric(metrics, "max gain/sh", rec.max_gain == null ? "uncapped" : tcMoney(rec.max_gain));
-      tcMetric(metrics, "breakeven", tcMoney(rec.breakeven));
-      if (rec.breakevens && rec.breakevens.length === 2)
-        tcMetric(metrics, "breakevens", tcMoney(rec.breakevens[0]) + " / " + tcMoney(rec.breakevens[1]));
-      if (rec.pop_market_implied != null) tcMetric(metrics, "mkt pop", (rec.pop_market_implied * 100).toFixed(0) + "%");
-      if (rec.rr != null) tcMetric(metrics, "r/r", Number(rec.rr).toFixed(2));
-      card.appendChild(metrics);
+      renderCandidates(card, structures, rec);
 
       if (rec.legs && rec.legs.length) {
         var tbl = tcEl("table", "tc-legs"), hrow = tcEl("tr");
@@ -205,23 +263,11 @@
         card.appendChild(btn);
       }
 
+      renderPlan(card, ticket.plan, rec.quantity);
+
       var warnings = (ticket.warnings || []).concat(rec.warnings || []);
       for (i = 0; i < warnings.length; i++) card.appendChild(tcEl("div", "tc-warn", "⚠ " + warnings[i]));
 
-      for (i = 0; i < structures.length; i++) {
-        var s = structures[i];
-        if (s === rec) continue;
-        var alt = tcEl("div", "tc-alt",
-          s.label + (s.max_loss != null ? " · max loss " + tcMoney(s.max_loss) + "/sh" : ""));
-        if (s.calculator_url) {
-          alt.appendChild(document.createTextNode(" "));
-          var al = tcEl("a", null, "↗");
-          al.href = s.calculator_url; al.target = "_blank"; al.rel = "noopener";
-          al.title = "Open in OptionStrat";
-          alt.appendChild(al);
-        }
-        card.appendChild(alt);
-      }
       transcript.appendChild(card);
       transcript.scrollTop = transcript.scrollHeight;
     }
