@@ -600,6 +600,59 @@ def test_index_by_tier_strips_render(tiered_tournaments_dir: Path) -> None:
     assert "0.50" in html
 
 
+def test_index_fresh_tiered_ledger_nothing_closed(tournaments_dir: Path) -> None:
+    """First night with tiers: one waiting watch ticket, zero closed trades anywhere.
+
+    Every nullable stat (hit_rate, avg_r, max_drawdown_r) is None in both tier
+    blocks — the page must render placeholders, not 500 (regression: 2026-06-11).
+    """
+    empty_tier = {
+        "issued": 0,
+        "waiting": 0,
+        "expired": 0,
+        "open": 0,
+        "stopped": 0,
+        "target": 0,
+        "errors": 0,
+        "hit_rate": None,
+        "total_r": 0.0,
+        "avg_r": None,
+        "max_drawdown_r": None,
+    }
+    ledger = {
+        "built_asof": "2026-06-11",
+        "stats": {
+            **empty_tier,
+            "issued": 1,
+            "waiting": 1,
+            "by_tier": {
+                "ticket": empty_tier,
+                "watch": {**empty_tier, "issued": 1, "waiting": 1},
+            },
+        },
+        "tickets": [
+            {
+                "date": "2026-06-11",
+                "ticker": "NVDA",
+                "stance": "long",
+                "strategy": "setup:ma_pullback",
+                "tier": "watch",
+                "levels": {"entry": 218.0, "entry_type": "stop", "stop": 191.9, "target": 270.1},
+                "status": "waiting",
+                "r": None,
+                "pct_move": None,
+                "sessions_held": 0,
+                "ambiguous_bar": False,
+                "closes": [],
+            }
+        ],
+    }
+    (tournaments_dir / "ledger.json").write_text(json.dumps(ledger), encoding="utf-8")
+    resp = TestClient(create_app()).get("/tournaments")
+    assert resp.status_code == 200
+    assert "Watchlist" in resp.text  # both tier strips still render
+
+
 def test_index_by_tier_badge_in_rows(tiered_tournaments_dir: Path) -> None:
     """Ledger table rows show tier badges for both ticket and watch rows."""
     html = TestClient(create_app()).get("/tournaments").text

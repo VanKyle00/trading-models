@@ -137,7 +137,7 @@
               <span><span class="m-label">Total R</span>
                 <span class="{{ 'up' if ts.total_r > 0 else 'down' if ts.total_r < 0 else '' }}">{{ '%+.2f' | format(ts.total_r) if ts.total_r is not none else '—' }}</span></span>
               <span><span class="m-label">Avg R</span>
-                <span class="{{ 'up' if ts.avg_r > 0 else 'down' if ts.avg_r < 0 else '' }}">{{ '%+.2f' | format(ts.avg_r) if ts.avg_r is not none else '—' }}</span></span>
+                <span class="{{ 'up' if ts.avg_r is not none and ts.avg_r > 0 else 'down' if ts.avg_r is not none and ts.avg_r < 0 else '' }}">{{ '%+.2f' | format(ts.avg_r) if ts.avg_r is not none else '—' }}</span></span>
               <span><span class="m-label">Max DD</span>
                 <span class="{{ 'down' if ts.max_drawdown_r is not none and ts.max_drawdown_r > 0 else '' }}">{{ '%.2f' | format(ts.max_drawdown_r) if ts.max_drawdown_r is not none else '—' }}</span></span>
             </div>
