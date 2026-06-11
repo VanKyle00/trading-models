@@ -253,15 +253,21 @@ def long_option_candidates(
     """The chat comparison ladder: the debit spread first when it cuts the
     0.65-delta cost > 35% (today's family representative), then plain longs at
     ~0.65/0.50/0.80 delta deduped by strike. Returns (structures, drop_notes);
-    a delta with no liquid leg drops its row and leaves a note."""
+    the ladder drops as a whole — with one note — only when no quote in the
+    directional expiry passes the gate (by_delta has no distance tolerance, so
+    rungs never drop individually)."""
     d = direction(stance)
     right = "call" if d > 0 else "put"
     exp = pick_expiration(chain, dte_lo=DTE_DIRECTIONAL[0], dte_hi=DTE_DIRECTIONAL[1], asof=asof)
     if exp is None:
         return [], []
     quotes = liquid_quotes(chain, right=right, expiration=exp, spot=spot, asof=asof)
+    if not quotes:
+        return [], [
+            f"no liquid {right} quotes in the {DTE_DIRECTIONAL[0]}-{DTE_DIRECTIONAL[1]} "
+            "DTE window; long-option ladder dropped"
+        ]
     out: list[Structure] = []
-    notes: list[str] = []
     anchor = by_delta(quotes, d * TARGET_DELTA)
     if anchor is not None and anchor.mid > 0:
         short_leg = _spread_short_leg(quotes, anchor, levels, d)
@@ -270,16 +276,13 @@ def long_option_candidates(
     used: set[float] = set()
     for delta in CANDIDATE_DELTAS:
         leg = by_delta(quotes, d * delta)
-        if leg is None or leg.mid <= 0:
-            notes.append(f"no liquid ~{delta:.2f}-delta {right}; ladder row dropped")
-            continue
-        if leg.strike in used:
+        if leg is None or leg.strike in used:
             continue  # same strike as an earlier rung — not a drop, just no new row
         used.add(leg.strike)
         out.append(
-            _plain_long(leg, d=d, right=right, spot=spot, key=f"long_{right}_d{int(delta * 100)}")
+            _plain_long(leg, d=d, right=right, spot=spot, key=f"long_{right}_d{round(delta * 100)}")
         )
-    return out, notes
+    return out, []
 
 
 def build_chat_structures(

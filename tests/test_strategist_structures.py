@@ -510,10 +510,18 @@ def test_iron_condor_widen_moves_both_shorts_one_strike_out(make_chain) -> None:
     assert "wide" in s.label
 
 
-def test_iron_condor_widen_none_without_further_strike(make_chain) -> None:
+def test_iron_condor_widen_none_without_further_short_strike(make_chain) -> None:
     from tradinglib.strategist.structures import iron_condor
 
-    # NEUTRAL_MIDS has no strikes beyond the 85/115 wings for the widened shorts
+    # no put below the regular 90 short: the widen step itself has nowhere to go
+    mids = {k: v for k, v in NEUTRAL_MIDS.items() if k != ("put", 38, 85.0)}
+    assert iron_condor(make_chain(mids=mids), _band(), spot=100.0, asof=ASOF, widen=True) is None
+
+
+def test_iron_condor_widen_none_without_wing_beyond_wide_shorts(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    # NEUTRAL_MIDS: widened shorts land on 85P/115C but no strikes remain for the wings
     assert (
         iron_condor(make_chain(mids=NEUTRAL_MIDS), _band(), spot=100.0, asof=ASOF, widen=True)
         is None
@@ -525,3 +533,27 @@ def test_build_neutral_structures_three_candidates(make_chain) -> None:
 
     out = build_neutral_structures(make_chain(mids=WIDE_MIDS), _band(), spot=100.0, asof=ASOF)
     assert [s.key for s in out] == ["condor", "condor_wide", "butterfly"]
+
+
+def test_long_option_candidates_single_note_when_expiry_illiquid(make_chain) -> None:
+    from tradinglib.strategist.structures import long_option_candidates
+
+    # expiry listed in the 60-90 window but every quote fails the OI gate
+    chain = make_chain(mids=LONG_MIDS, open_interest=50.0)
+    out, notes = long_option_candidates(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+
+    assert out == []
+    assert notes == ["no liquid call quotes in the 60-90 DTE window; long-option ladder dropped"]
+
+
+def test_build_chat_structures_short_stance_mirrors(make_chain) -> None:
+    from tradinglib.strategist.structures import build_chat_structures
+
+    out, notes = build_chat_structures(
+        make_chain(mids=SHORT_MIDS), SHORT_LEVELS, "short", spot=100.0, asof=ASOF
+    )
+    keys = [s.key for s in out]
+    assert "csp" not in keys  # CSP is long-stance only
+    assert "bear_call_spread" in keys
+    assert any(k.startswith("long_put_d") for k in keys)
+    assert notes == []
