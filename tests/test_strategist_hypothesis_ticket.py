@@ -207,7 +207,8 @@ def test_chat_ticket_has_candidate_ladder_with_keys(make_chain) -> None:
     assert all(keys), "every chat structure carries a stable key"
     assert len(keys) == len(set(keys))
     assert sum(1 for k in keys if k.startswith("long_call_d")) >= 2  # the ladder
-    assert all(s["quantity"] is not None for s in ticket["structures"])  # all sized
+    assert all(s["quantity"] is not None for s in ticket["structures"])  # sizing ran on every row
+    assert any(s["quantity"] for s in ticket["structures"])  # at least one row sized
 
 
 def test_chat_ticket_recommended_has_reason_and_theta(make_chain) -> None:
@@ -248,3 +249,103 @@ def test_structure_key_pins_recommendation_and_recomputes_plan(make_chain) -> No
 def test_unknown_structure_key_lists_valid_keys(make_chain) -> None:
     with pytest.raises(ValueError, match="valid keys"):
         _ticket(make_chain, structure_key="nope")
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: fall-through recommendation must not carry a contradictory tilt reason
+# ---------------------------------------------------------------------------
+
+
+def test_fallthrough_recommendation_reason_not_contradictory(make_chain) -> None:
+    # every long-call row costs > the $1k risk budget (qty = 0); the bull_put_spread
+    # sizes (credit 2.8-1.0=1.8 on width 5, max_loss 3.2, qty = 1000//320 = 3)
+    pricey = {
+        ("call", 75, 95.0): 18.0,
+        ("call", 75, 100.0): 14.0,
+        ("put", 38, 90.0): 1.0,
+        ("put", 38, 95.0): 2.8,
+    }
+    chain = make_chain(mids=pricey, iv=0.5 * _rv())  # buy-premium tilt
+    ticket = build_hypothesis_ticket(
+        ticker="TEST", stance="long", levels=dict(LEVELS), bars=_bars(), chain=chain
+    )
+
+    rec = next(s for s in ticket["structures"] if s["recommended"])
+    assert rec["kind"] == "bull_put_spread"  # long rows all unsized; spread sized
+    assert "favors buying premium" not in rec["reason"]
+    assert "first candidate to size" in rec["reason"]
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: neutral ticket-level coverage
+# ---------------------------------------------------------------------------
+
+# mirrors tests/test_strategist_structures.py: regular + wide condor + butterfly all build
+WIDE_MIDS = {
+    ("put", 38, 80.0): 0.3,
+    ("put", 38, 85.0): 1.2,
+    ("put", 38, 90.0): 2.6,
+    ("put", 38, 95.0): 2.8,
+    ("put", 38, 100.0): 3.4,
+    ("call", 38, 100.0): 3.5,
+    ("call", 38, 105.0): 2.4,
+    ("call", 38, 110.0): 2.0,
+    ("call", 38, 115.0): 1.1,
+    ("call", 38, 120.0): 0.2,
+}
+
+_NEUTRAL_LEVELS = {"lower": 92.0, "upper": 108.0, "condition": "user: TEST stays 92-108"}
+
+
+def test_neutral_ticket_three_candidates_reason_and_band_plan(make_chain) -> None:
+    chain = make_chain(mids=WIDE_MIDS, iv=_rv())
+    ticket = build_hypothesis_ticket(
+        ticker="TEST", stance="neutral", levels=dict(_NEUTRAL_LEVELS), bars=_bars(), chain=chain
+    )
+
+    assert [s["key"] for s in ticket["structures"]] == ["condor", "condor_wide", "butterfly"]
+    rec = next(s for s in ticket["structures"] if s["recommended"])
+    assert rec["key"] == "condor"
+    assert rec["reason"] == "shorts just beyond your band — best credit-for-room balance"
+    assert all(s["theta_week"] is not None for s in ticket["structures"])
+    lo, hi = ticket["plan"]["price_rules"]
+    assert "92" in lo["trigger"] and "band floor" in lo["trigger"]
+    assert "108" in hi["trigger"] and "band ceiling" in hi["trigger"]
+
+
+def test_neutral_structure_key_pins_butterfly(make_chain) -> None:
+    chain = make_chain(mids=WIDE_MIDS, iv=_rv())
+    base = build_hypothesis_ticket(
+        ticker="TEST", stance="neutral", levels=dict(_NEUTRAL_LEVELS), bars=_bars(), chain=chain
+    )
+    pinned = build_hypothesis_ticket(
+        ticker="TEST",
+        stance="neutral",
+        levels=dict(_NEUTRAL_LEVELS),
+        bars=_bars(),
+        chain=chain,
+        structure_key="butterfly",
+    )
+
+    rec = next(s for s in pinned["structures"] if s["recommended"])
+    assert rec["key"] == "butterfly" and rec["reason"] == "pinned by user request"
+    # the plan really was recomputed for the pinned structure, not copied
+    assert (
+        pinned["plan"]["price_rules"][0]["est_value"] != base["plan"]["price_rules"][0]["est_value"]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix 3: empty-string pin should error, not silently no-op
+# ---------------------------------------------------------------------------
+
+
+def test_empty_structure_key_raises(make_chain) -> None:
+    with pytest.raises(ValueError, match="valid keys"):
+        _ticket(make_chain, structure_key="")
+
+
+# ---------------------------------------------------------------------------
+# Fix 4: strengthen the sizing assertion (in test_chat_ticket_has_candidate_ladder_with_keys)
+# ---------------------------------------------------------------------------
+# (The existing test is updated below; this section documents the change.)

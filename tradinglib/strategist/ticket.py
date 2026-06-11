@@ -63,16 +63,24 @@ def _preference(premium_first: bool, stance: str, iv_ratio: float | None) -> lis
 
 
 def _reason_directional(
-    s: Structure, *, iv_ratio: float | None, use_iv_override: bool, premium_first: bool
+    s: Structure,
+    *,
+    iv_ratio: float | None,
+    use_iv_override: bool,
+    premium_first: bool,
+    fallthrough: bool = False,
 ) -> str:
-    base = ""
-    if use_iv_override and iv_ratio is not None:
-        if iv_ratio > IV_SELL_PREMIUM:
-            base = f"IV/RV {iv_ratio:.2f} > {IV_SELL_PREMIUM} favors selling premium"
-        elif iv_ratio < IV_BUY_PREMIUM:
-            base = f"IV/RV {iv_ratio:.2f} < {IV_BUY_PREMIUM} favors buying premium"
-    if not base:
-        base = "premium-selling preference" if premium_first else "directional preference"
+    if fallthrough:
+        base = "first candidate to size within the risk budget"
+    else:
+        base = ""
+        if use_iv_override and iv_ratio is not None:
+            if iv_ratio > IV_SELL_PREMIUM:
+                base = f"IV/RV {iv_ratio:.2f} > {IV_SELL_PREMIUM} favors selling premium"
+            elif iv_ratio < IV_BUY_PREMIUM:
+                base = f"IV/RV {iv_ratio:.2f} < {IV_BUY_PREMIUM} favors buying premium"
+        if not base:
+            base = "premium-selling preference" if premium_first else "directional preference"
     if s.kind in _FAMILY:
         return base + "; the short leg at the target cuts the long option's cost > 35%"
     if s.key.endswith("_d65"):
@@ -174,6 +182,7 @@ def _assemble(
         iv_ratio=iv_ratio,
         use_iv_override=use_iv_override,
         premium_first=premium_first,
+        fallthrough=recommended is not structures[0],
     )
     return structures, warnings, iv_ratio, asof, has_chain, spot
 
@@ -338,7 +347,7 @@ def build_hypothesis_ticket(
             risk_per_trade_pct=risk_per_trade_pct,
         )
         levels_obj = lvls
-    if structure_key:
+    if structure_key is not None:
         chosen = next((s for s in structures if s.key == structure_key), None)
         if chosen is None:
             valid = ", ".join(s.key for s in structures)
