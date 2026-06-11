@@ -197,8 +197,7 @@ def test_settings_folded_into_opening_message():
             provider,
             Budget(),
             settings=(
-                "Planner sizing (set on the page): account size $50,000; "
-                "risk per trade 2% (0.02)."
+                "Planner sizing (set on the page): account size $50,000; risk per trade 2% (0.02)."
             ),
         )
     )
@@ -217,8 +216,7 @@ def test_settings_and_context_both_fold_into_opening():
             Budget(),
             context="Backtest: SMA · SPY",
             settings=(
-                "Planner sizing (set on the page): account size $100,000; "
-                "risk per trade 1% (0.01)."
+                "Planner sizing (set on the page): account size $100,000; risk per trade 1% (0.01)."
             ),
         )
     )
