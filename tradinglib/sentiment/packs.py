@@ -17,6 +17,11 @@ _ITEM_MAX_CHARS = 280
 _PACK_MAX_CHARS = 10_000
 
 
+def _str(value: Any) -> str:
+    """Coerce a possibly-NaN/None pandas scalar to str ('' when not a string)."""
+    return value if isinstance(value, str) else ""
+
+
 def age_days(published: Any) -> float | None:
     """Days since ``published`` (UTC), rounded to 0.1; None when unknown."""
     ts = pd.to_datetime(published, utc=True, errors="coerce")
@@ -46,10 +51,11 @@ def news_items(yf_news: pd.DataFrame, google_news: pd.DataFrame) -> list[dict]:
     """Tier-1 items: yfinance headlines (title+summary) + Google News titles."""
     items: list[dict] = []
     for r in yf_news.itertuples():
-        text = r.title if not r.summary else f"{r.title} — {r.summary}"
+        summary = _str(r.summary)
+        text = f"{r.title} — {summary}" if summary else r.title
         items.append(
             {
-                "source": r.publisher or "Yahoo Finance",
+                "source": _str(r.publisher) or "Yahoo Finance",
                 "title": r.title,
                 "text": text,
                 "url": "",
@@ -59,7 +65,7 @@ def news_items(yf_news: pd.DataFrame, google_news: pd.DataFrame) -> list[dict]:
     for r in google_news.itertuples():
         items.append(
             {
-                "source": r.publisher or "Google News",
+                "source": _str(r.publisher) or "Google News",
                 "title": r.title,
                 "text": r.title,
                 "url": r.url,
@@ -70,7 +76,8 @@ def news_items(yf_news: pd.DataFrame, google_news: pd.DataFrame) -> list[dict]:
 
 
 def _reddit_item(r: Any) -> dict:
-    text = r.title if not r.text else f"{r.title} — {r.text}"
+    body = _str(r.text)
+    text = f"{r.title} — {body}" if body else r.title
     return {
         "source": f"r/{r.subreddit} (+{int(r.score)}, {int(r.num_comments)}c)",
         "title": r.title,
@@ -100,10 +107,8 @@ def viral_items(wsb_posts: pd.DataFrame, stocktwits: pd.DataFrame) -> list[dict]
     """Tier-3 items: r/wallstreetbets posts + Stocktwits messages."""
     items: list[dict] = [_reddit_item(r) for r in wsb_posts.itertuples()]
     for r in stocktwits.itertuples():
-        # isinstance guard: a non-normalized frame can carry float NaN, which is truthy
-        tag = (
-            f" [user-tagged {r.sentiment}]" if isinstance(r.sentiment, str) and r.sentiment else ""
-        )
+        # NaN-safe: a non-normalized frame can carry float NaN, which is truthy
+        tag = f" [user-tagged {_str(r.sentiment)}]" if _str(r.sentiment) else ""
         items.append(
             {
                 "source": "Stocktwits",

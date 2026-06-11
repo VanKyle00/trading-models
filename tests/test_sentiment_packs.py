@@ -65,6 +65,9 @@ def test_build_pack_indices_align_with_kept_items() -> None:
     for i, item in enumerate(kept):
         assert f"[{i}] " in pack
         assert item["text"] in pack
+    lines = pack.splitlines()
+    for i in range(len(kept)):
+        assert lines[3 + i].startswith(f"[{i}] ")
 
 
 def test_build_pack_bounds_total_chars() -> None:
@@ -99,6 +102,30 @@ def test_age_suffix_present_when_published_known() -> None:
     ]
     pack, _ = packs.build_pack("NVDA", "Official media", items, [])
     assert "(Reuters, 2d)" in pack
+
+
+def test_news_items_nan_summary_and_publisher_safe() -> None:
+    yf = pd.DataFrame(
+        {
+            "ticker": ["NVDA"],
+            "published": pd.to_datetime(["2026-06-10"], utc=True),
+            "title": ["Bare headline"],
+            "summary": [float("nan")],  # yfinance omits summaries; StringDtype stores None as NaN
+            "publisher": [float("nan")],
+        }
+    )
+    gn = pd.DataFrame(
+        {
+            "ticker": [],
+            "published": pd.Series([], dtype="datetime64[ms, UTC]"),
+            "title": [],
+            "publisher": [],
+            "url": [],
+        }
+    )
+    items = packs.news_items(yf, gn)
+    assert items[0]["text"] == "Bare headline"  # no " — nan"
+    assert items[0]["source"] == "Yahoo Finance"
 
 
 def test_viral_items_nan_sentiment_not_rendered() -> None:
