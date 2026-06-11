@@ -201,6 +201,28 @@ def _chat_history(raw: Any) -> list[tuple[str, str]] | None:
     return history
 
 
+def _planner_settings(raw: Any) -> str | None:
+    """Render the /planner sizing strip into one opening-message line.
+
+    Returns ``None`` for anything malformed (missing keys, non-numbers,
+    out-of-range values) so a bad payload degrades to the no-settings flow
+    instead of 400ing the chat.
+    """
+    if not isinstance(raw, dict):
+        return None
+    try:
+        account = float(raw["account_size"])
+        risk = float(raw["risk_per_trade_pct"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if account <= 0 or not 0 < risk <= 0.2:
+        return None
+    return (
+        f"Planner sizing (set on the page): account size ${account:,.0f}; "
+        f"risk per trade {risk * 100:g}% ({risk:g})."
+    )
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Trading Models — Workbench")
 
@@ -336,6 +358,7 @@ def create_app() -> FastAPI:
             return JSONResponse({"error": "message is required"}, status_code=400)
 
         context = _chat_context(payload.get("context"))
+        settings = _planner_settings(payload.get("settings"))
         history = _chat_history(payload.get("history"))
         if history is None:
             return JSONResponse(
@@ -370,7 +393,12 @@ def create_app() -> FastAPI:
                 else:
                     provider = _assistant_provider.ClaudeProvider()
                 for event in run_chat(
-                    message, provider, Budget(), context=context, history=history or None
+                    message,
+                    provider,
+                    Budget(),
+                    context=context,
+                    history=history or None,
+                    settings=settings,
                 ):
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception:  # never break the SSE stream; always end with a final event
