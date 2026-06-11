@@ -56,9 +56,19 @@ class Structure:
     recommended: bool = False
     quantity: int | None = None
     loss_at_stop: float | None = None  # CSP scenario P/L per share at the ticket stop (+ = loss)
+    breakevens: list[float] | None = None  # two-sided structures: [lower, upper]; breakeven stays None
 
     def as_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class Band:
+    """Range-hypothesis levels for a neutral stance (chat path only)."""
+
+    lower: float
+    upper: float
+    condition: str
 
 
 def pop_market_implied(
@@ -70,6 +80,23 @@ def pop_market_implied(
     d = (math.log(level / spot) + 0.5 * vol * vol * t_years) / (vol * math.sqrt(t_years))
     p_below = float(norm.cdf(d))
     return 1.0 - p_below if profit_above else p_below
+
+
+def pop_range_market_implied(
+    *, spot: float, lower: float, upper: float, vol_lower: float, vol_upper: float, t_years: float
+) -> float:
+    """P(lower < S_T < upper), zero-rate lognormal, one tail per band edge.
+
+    Each edge uses its nearest leg's vol so the number stays consistent with
+    the single-level PoPs; clamped at 0 because two different vols can cross.
+    """
+    p_below_upper = pop_market_implied(
+        spot=spot, level=upper, vol=vol_upper, t_years=t_years, profit_above=False
+    )
+    p_below_lower = pop_market_implied(
+        spot=spot, level=lower, vol=vol_lower, t_years=t_years, profit_above=False
+    )
+    return max(0.0, p_below_upper - p_below_lower)
 
 
 def _pop_vol(legs: list[LegQuote], breakeven: float) -> float:

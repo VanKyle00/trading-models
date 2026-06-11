@@ -233,3 +233,38 @@ def test_build_structures_empty_chain_is_stock_only(make_chain) -> None:
     empty = make_chain(mids={("call", 38, 100.0): 1.0}).iloc[0:0]
     out = build_structures(empty, LONG_LEVELS, "long", spot=100.0, asof=ASOF)
     assert [s.kind for s in out] == ["stock"]
+
+
+def test_pop_range_market_implied_is_difference_of_tails() -> None:
+    from tradinglib.strategist.structures import pop_range_market_implied
+
+    below_hi = pop_market_implied(
+        spot=100.0, level=112.0, vol=0.3, t_years=38 / 365, profit_above=False
+    )
+    below_lo = pop_market_implied(
+        spot=100.0, level=88.0, vol=0.3, t_years=38 / 365, profit_above=False
+    )
+
+    pop = pop_range_market_implied(
+        spot=100.0, lower=88.0, upper=112.0, vol_lower=0.3, vol_upper=0.3, t_years=38 / 365
+    )
+
+    assert pop == pytest.approx(below_hi - below_lo)
+    assert 0.0 < pop < 1.0
+
+
+def test_pop_range_market_implied_clamps_at_zero() -> None:
+    from tradinglib.strategist.structures import pop_range_market_implied
+
+    # an inverted band (junk breakevens) must clamp, not go negative
+    pop = pop_range_market_implied(
+        spot=100.0, lower=112.0, upper=88.0, vol_lower=0.3, vol_upper=0.3, t_years=38 / 365
+    )
+    assert pop == 0.0
+
+
+def test_band_holds_range_levels() -> None:
+    from tradinglib.strategist.structures import Band
+
+    band = Band(lower=92.0, upper=108.0, condition="t")
+    assert band.lower == 92.0 and band.upper == 108.0
