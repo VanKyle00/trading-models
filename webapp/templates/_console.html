@@ -216,6 +216,8 @@
       var notes = plan.notes || [];
       for (i = 0; i < notes.length; i++)
         box.appendChild(tcEl("div", "tc-plan-line", "▸ " + notes[i]));
+      box.appendChild(tcEl("div", "tc-plan-line",
+        "▸ price estimates hold each leg's chain IV constant"));
       card.appendChild(box);
     }
     function renderTicketCard(ticket) {
