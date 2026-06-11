@@ -57,6 +57,14 @@
 
     .strap { padding: 9px 18px; color: var(--muted); font-size: 11px;
              border-bottom: 1px solid var(--line); }
+    .settings { display: flex; align-items: center; gap: 10px; padding: 8px 18px;
+                border-bottom: 1px solid var(--line); }
+    .settings .label { font-size: 9px; color: var(--muted); }
+    .settings input { width: 110px; padding: 4px 6px; font: inherit; font-size: 12px;
+                      background: var(--field); color: var(--ink);
+                      border: 1px solid var(--line); border-radius: 0; }
+    .settings input:focus { outline: none; border-color: var(--accent); }
+    .settings .hint { color: var(--muted); font-size: 10px; }
     /* full-page console: fills the viewport below the strapline */
     .console { flex: 1; min-height: 0; background: var(--inset);
                display: flex; flex-direction: column; }
@@ -78,6 +86,14 @@
 
   <div class="strap">hypothesis → sized, liquidity-gated options ticket — decision support with a human executing, not an auto-trader</div>
 
+  <div class="settings" id="planner-settings">
+    <label class="label" for="ps-account">account $</label>
+    <input id="ps-account" type="number" min="1" step="1000" value="100000" />
+    <label class="label" for="ps-risk">risk/trade %</label>
+    <input id="ps-risk" type="number" min="0.1" max="20" step="0.1" value="1.0" />
+    <span class="hint">sizes every ticket — the chat won't ask</span>
+  </div>
+
   {% set console_empty = "State a directional or range-bound hypothesis and the assistant maps it onto the chart: proposed entry/stop/target scenarios (or a price band), 20-day support/resistance, and upcoming earnings/ex-dividend warnings. Confirm once — or just say go — and it prices live option structures." %}
   {% set console_chips = ["I'm bullish on RIVN", "Bearish on TSLA over the next month", "I think NVDA chops sideways into September"] %}
   {% include "_console.html" %}
@@ -92,6 +108,24 @@
       }
       buttons.forEach(b => b.addEventListener("click", () => apply(b.dataset.themeSet)));
       apply(document.documentElement.getAttribute("data-theme") || "bone");
+    })();
+    (function () {
+      var acct = document.getElementById("ps-account"),
+          risk = document.getElementById("ps-risk");
+      try {
+        var a = localStorage.getItem("tm-planner-account"),
+            r = localStorage.getItem("tm-planner-risk");
+        if (a) acct.value = a;
+        if (r) risk.value = r;
+      } catch (e) {}
+      function save() {
+        try {
+          localStorage.setItem("tm-planner-account", acct.value);
+          localStorage.setItem("tm-planner-risk", risk.value);
+        } catch (e) {}
+      }
+      acct.addEventListener("change", save);
+      risk.addEventListener("change", save);
     })();
   </script>
 </body>
