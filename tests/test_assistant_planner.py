@@ -431,14 +431,18 @@ def test_propose_levels_sparkline_and_context(monkeypatch) -> None:
     assert out["context"]["low_20d"] == pytest.approx(float(bars["low"].iloc[-20:].min()), abs=0.01)
 
 
-def test_hypothesis_ticket_chain_failure_propagates(monkeypatch) -> None:
+def test_hypothesis_ticket_chain_failure_propagates_when_fallback_also_down(monkeypatch) -> None:
     def _boom(t):
         raise ConnectionError("yfinance 429")
 
+    def _cboe_down(t):
+        raise ConnectionError("cdn offline")
+
     monkeypatch.setattr(planner, "load_daily", lambda *a, **k: _bars())
     monkeypatch.setattr(planner, "fetch_chain", _boom)
+    monkeypatch.setattr(planner, "fetch_cboe_chain", _cboe_down)
 
-    with pytest.raises(ConnectionError):
+    with pytest.raises(ConnectionError, match="yfinance 429"):  # the ORIGINAL error
         planner.hypothesis_ticket(
             ticker="TEST",
             stance="long",
@@ -446,3 +450,96 @@ def test_hypothesis_ticket_chain_failure_propagates(monkeypatch) -> None:
             account_size=100_000.0,
             risk_per_trade_pct=0.01,
         )
+
+
+# ── after-hours fallback: degenerate yfinance chain -> CBOE delayed quotes ──
+
+
+def _zeroed(chain: pd.DataFrame) -> pd.DataFrame:
+    """Yahoo's overnight artifact: the board is listed but bid/ask/OI are zeroed."""
+    out = chain.copy()
+    out[["bid", "ask", "open_interest"]] = 0.0
+    return out
+
+
+def _ticket(**overrides) -> dict:
+    kwargs: dict = {
+        "ticker": "TEST",
+        "stance": "long",
+        "levels": dict(LEVELS),
+        "account_size": 100_000.0,
+        "risk_per_trade_pct": 0.01,
+    }
+    kwargs.update(overrides)
+    return planner.hypothesis_ticket(**kwargs)
+
+
+def test_hypothesis_ticket_zeroed_yf_chain_falls_back_to_cboe(make_chain, monkeypatch) -> None:
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: _bars())
+    monkeypatch.setattr(planner, "fetch_chain", lambda t: _zeroed(make_chain(mids=MIDS)))
+    monkeypatch.setattr(planner, "fetch_cboe_chain", lambda t: make_chain(mids=MIDS))
+    monkeypatch.setattr(planner, "get_earnings_dates", _no_earnings)
+
+    ticket = _ticket()
+
+    assert any("CBOE delayed" in w for w in ticket["warnings"])
+    assert all(
+        s["calculator_url"].startswith("https://optionstrat.com/build/custom/TEST/")
+        for s in ticket["structures"]
+    )
+
+
+def test_hypothesis_ticket_healthy_chain_never_calls_cboe(make_chain, monkeypatch) -> None:
+    def _must_not_call(t):
+        raise AssertionError("CBOE fallback must not fire on a healthy chain")
+
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: _bars())
+    monkeypatch.setattr(planner, "fetch_chain", lambda t: make_chain(mids=MIDS))
+    monkeypatch.setattr(planner, "fetch_cboe_chain", _must_not_call)
+    monkeypatch.setattr(planner, "get_earnings_dates", _no_earnings)
+
+    ticket = _ticket()
+
+    assert not any("CBOE" in w for w in ticket["warnings"])
+
+
+def test_hypothesis_ticket_zeroed_chain_and_cboe_down_keeps_original_error(
+    make_chain, monkeypatch
+) -> None:
+    def _cboe_down(t):
+        raise ConnectionError("cdn offline")
+
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: _bars())
+    monkeypatch.setattr(planner, "fetch_chain", lambda t: _zeroed(make_chain(mids=MIDS)))
+    monkeypatch.setattr(planner, "fetch_cboe_chain", _cboe_down)
+    monkeypatch.setattr(planner, "get_earnings_dates", _no_earnings)
+
+    with pytest.raises(ValueError, match="liquidity gate"):
+        _ticket()
+
+
+def test_hypothesis_ticket_yf_fetch_error_rescued_by_cboe(make_chain, monkeypatch) -> None:
+    def _boom(t):
+        raise ConnectionError("yfinance 429")
+
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: _bars())
+    monkeypatch.setattr(planner, "fetch_chain", _boom)
+    monkeypatch.setattr(planner, "fetch_cboe_chain", lambda t: make_chain(mids=MIDS))
+    monkeypatch.setattr(planner, "get_earnings_dates", _no_earnings)
+
+    ticket = _ticket()
+
+    assert any("CBOE delayed" in w for w in ticket["warnings"])
+
+
+def test_hypothesis_ticket_empty_yf_chain_uses_fallback(make_chain, monkeypatch) -> None:
+    from tradinglib.loaders.options.yf_chain import CHAIN_COLUMNS
+
+    monkeypatch.setattr(planner, "load_daily", lambda *a, **k: _bars())
+    monkeypatch.setattr(planner, "fetch_chain", lambda t: pd.DataFrame(columns=CHAIN_COLUMNS))
+    monkeypatch.setattr(planner, "fetch_cboe_chain", lambda t: make_chain(mids=MIDS))
+    monkeypatch.setattr(planner, "get_earnings_dates", _no_earnings)
+
+    ticket = _ticket()
+
+    assert any("CBOE delayed" in w for w in ticket["warnings"])
