@@ -23,6 +23,7 @@ from tradinglib.features.technical import atr
 from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.loaders.events.dividends import get_next_ex_dividend
 from tradinglib.loaders.events.earnings import get_earnings_dates
+from tradinglib.loaders.options.cboe_chain import fetch_cboe_chain
 from tradinglib.loaders.options.yf_chain import fetch_chain
 from tradinglib.strategist import build_hypothesis_ticket
 from tradinglib.tournament.levels import _ATR_MULT, _ATR_WINDOW, direction, two_r_target
@@ -236,6 +237,44 @@ def propose_levels(ticker: str, stance: str) -> dict:
     }
 
 
+_MIN_LIVE_BID_FRAC = 0.20  # below this the yf chain is a closed-market artifact, not a market
+
+_STALE_QUOTES_WARNING = (
+    "live quotes unavailable (market closed?) — priced off CBOE delayed quotes "
+    "from the last session; re-verify at the open"
+)
+
+
+def _chain_with_fallback(ticker: str) -> tuple[pd.DataFrame, bool]:
+    """yfinance chain, falling back to CBOE delayed quotes when yfinance is
+    degenerate or down. Overnight, Yahoo zeroes bid/ask and open interest so
+    the liquidity gate would reject the whole board; CBOE's delayed feed keeps
+    the last session's closing quotes. Returns ``(chain, stale_quotes)``;
+    raises the original yfinance error only when the fallback also fails."""
+    chain: pd.DataFrame | None = None
+    fetch_error: Exception | None = None
+    try:
+        chain = fetch_chain(ticker)
+    except Exception as exc:  # yfinance down/429 — the fallback may still rescue the ticket
+        fetch_error = exc
+    if (
+        chain is not None
+        and len(chain) > 0
+        and float((chain["bid"] > 0).mean()) >= _MIN_LIVE_BID_FRAC
+    ):
+        return chain, False
+    try:
+        cboe = fetch_cboe_chain(ticker)
+        if len(cboe) > 0:
+            return cboe, True
+    except Exception:  # fallback unavailable — keep the original behavior
+        pass
+    if fetch_error is not None:
+        raise fetch_error
+    assert chain is not None  # fetch_chain succeeded (else fetch_error raised above)
+    return chain, False
+
+
 def hypothesis_ticket(
     *,
     ticker: str,
@@ -257,7 +296,7 @@ def hypothesis_ticket(
     bars = load_daily(ticker, start=start, refresh=True)
     if len(bars) == 0:
         raise ValueError(f"no daily bars for {ticker!r} — is the ticker valid?")
-    chain = fetch_chain(ticker)
+    chain, stale_quotes = _chain_with_fallback(ticker)
 
     next_earnings = None
     earnings_failed = False
@@ -290,6 +329,8 @@ def hypothesis_ticket(
     )
     if earnings_failed:
         ticket["warnings"].append("earnings lookup failed; earnings risk unchecked")
+    if stale_quotes:
+        ticket["warnings"].append(_STALE_QUOTES_WARNING)
     for s in ticket["structures"]:
         s["calculator_url"] = optionstrat_url(ticket["ticker"], s)
     return ticket

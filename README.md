@@ -73,7 +73,10 @@ ex-dividend dates. One bundled confirmation (sizing defaults to $100,000 and
 option chain (long option, debit spread, cash-secured put, credit spread — or
 an iron condor / iron butterfly for a range-bound view) and presents one
 sized, liquidity-gated recommendation with its max
-loss/gain, breakeven, and market-implied PoP. Every number comes from the
+loss/gain, breakeven, and market-implied PoP. Outside market hours — when
+Yahoo zeroes option bid/ask — the planner falls back to CBOE delayed quotes
+(the last session's close) and warns that fills must be re-verified at the
+open. Every number comes from the
 strategist pipeline, never the model; the conversation is held client-side and
 nothing is persisted. Option structures come with a prefilled OptionStrat
 profit-calculator link so you can inspect the payoff diagram in one click.
