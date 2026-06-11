@@ -53,6 +53,11 @@ def load_daily(
         out.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(out)
 
+    # yfinance occasionally emits a partial trailing row (volume populated,
+    # prices NaN); a bar without prices is unusable downstream, and filtering
+    # on the read path also heals caches written before this guard existed.
+    df = df.dropna(subset=["open", "high", "low", "close"])
+
     if start is not None:
         df = df[df.index >= pd.Timestamp(start, tz="UTC")]
     if end is not None:

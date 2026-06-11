@@ -71,12 +71,15 @@ TOOL_SPECS: list[dict[str, Any]] = [
     {
         "name": "propose_trade_levels",
         "description": (
-            "Propose data-grounded trade levels for a hypothesis on a ticker. "
-            "Directional stances (long/short): entry = last close (market order), "
-            "stop = 2x ATR(14), target = 2R. Neutral stance (range-bound view): a "
-            "lower/upper band = spot -/+ 2x ATR(14). Returns the levels plus "
-            "spot/ATR context. Present them to the user for confirmation or "
-            "adjustment before building a ticket."
+            "Find and propose data-grounded level scenarios for a hypothesis on a "
+            "ticker — call as soon as ticker and stance are known; never ask the "
+            "user for levels. Returns 2-3 scenarios (directional: entry/stop/target "
+            "from ATR multiples and 20-day swing structure; neutral: lower/upper "
+            "bands), exactly one recommended, plus spot/ATR, 20-day "
+            "support/resistance context, upcoming events (earnings, ex-dividend) "
+            "with warnings, and a price sparkline. The console renders all of it "
+            "as a chart card: relay the event warnings and the recommendation, "
+            "then confirm scenario + sizing in one bundled question."
         ),
         "input_schema": {
             "type": "object",

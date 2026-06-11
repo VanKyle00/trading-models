@@ -187,3 +187,45 @@ def test_tool_result_events_carry_output():
     tr = next(e for e in events if e["type"] == "tool_result")
     assert "output" in tr
     assert "models" in tr["output"]  # list_models returns a JSON string with a models key
+
+
+def test_settings_folded_into_opening_message():
+    provider = StubProvider([_final()])
+    _events(
+        run_chat(
+            "I'm bullish on RIVN",
+            provider,
+            Budget(),
+            settings=(
+                "Planner sizing (set on the page): account size $50,000; risk per trade 2% (0.02)."
+            ),
+        )
+    )
+    opening = provider.calls[0][0].text
+    assert "I'm bullish on RIVN" in opening
+    assert "$50,000" in opening
+    assert "do not ask the user for account size or risk" in opening
+
+
+def test_settings_and_context_both_fold_into_opening():
+    provider = StubProvider([_final()])
+    _events(
+        run_chat(
+            "explain",
+            provider,
+            Budget(),
+            context="Backtest: SMA · SPY",
+            settings=(
+                "Planner sizing (set on the page): account size $100,000; risk per trade 1% (0.01)."
+            ),
+        )
+    )
+    opening = provider.calls[0][0].text
+    assert "SMA" in opening and "$100,000" in opening and "explain" in opening
+
+
+def test_system_prompt_handles_page_sizing_settings():
+    from tradinglib.assistant.provider import SYSTEM_PROMPT
+
+    assert "planner sizing settings" in SYSTEM_PROMPT.lower()
+    assert "confirm only the scenario" in SYSTEM_PROMPT.lower()

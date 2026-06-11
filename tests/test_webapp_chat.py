@@ -201,3 +201,41 @@ def test_chat_history_caps_messages_and_chars(monkeypatch):
     assert all(
         len(m.text if hasattr(m, "text") else m.turn.text) <= 4000 + len("tail") + 2 for m in msgs
     )
+
+
+# ── planner sizing settings ────────────────────────────────────────────
+
+
+def test_chat_forwards_planner_settings_to_agent(monkeypatch):
+    stub = _stub_chat_provider(monkeypatch)
+    client = TestClient(create_app())
+    resp = client.post(
+        "/api/v1/chat",
+        json={
+            "message": "I'm bullish on RIVN",
+            "settings": {"account_size": 50000, "risk_per_trade_pct": 0.02},
+        },
+    )
+    assert resp.status_code == 200
+    opening = stub.calls[0][0].text
+    assert "account size $50,000" in opening
+    assert "2%" in opening
+    assert "do not ask the user for account size or risk" in opening
+
+
+def test_chat_malformed_settings_ignored_not_400(monkeypatch):
+    # Bad settings degrade to the no-settings flow — never block the chat.
+    client = TestClient(create_app())
+    for bad in (
+        "not a dict",
+        {"account_size": -5, "risk_per_trade_pct": 0.01},
+        {"account_size": 100000, "risk_per_trade_pct": 0.5},
+        {"account_size": "lots"},
+        {"account_size": "inf", "risk_per_trade_pct": 0.02},
+        {"account_size": "nan", "risk_per_trade_pct": 0.02},
+        None,
+    ):
+        stub = _stub_chat_provider(monkeypatch)
+        resp = client.post("/api/v1/chat", json={"message": "hi", "settings": bad})
+        assert resp.status_code == 200, f"rejected {bad!r}"
+        assert "Planner sizing" not in stub.calls[0][0].text, f"accepted {bad!r}"
