@@ -286,6 +286,67 @@ def credit_spread(
     )
 
 
+def iron_condor(
+    chain: pd.DataFrame, band: Band, *, spot: float, asof: pd.Timestamp
+) -> Structure | None:
+    """30-45 DTE four-leg credit: short put strictly below the band's lower
+    edge, short call strictly above its upper edge (the band is the
+    invalidation, same semantics as credit_spread's stop), wings ~$5 out,
+    total credit >= 1/3 of the widest wing."""
+    exp = pick_expiration(chain, dte_lo=DTE_INCOME[0], dte_hi=DTE_INCOME[1], asof=asof)
+    if exp is None:
+        return None
+    puts = liquid_quotes(chain, right="put", expiration=exp, spot=spot, asof=asof)
+    calls = liquid_quotes(chain, right="call", expiration=exp, spot=spot, asof=asof)
+    short_put = strictly_below(puts, band.lower)
+    short_call = strictly_above(calls, band.upper)
+    if short_put is None or short_call is None:
+        return None
+    long_put = nearest_strike(
+        [q for q in puts if q.strike < short_put.strike], short_put.strike - SPREAD_WIDTH
+    )
+    long_call = nearest_strike(
+        [q for q in calls if q.strike > short_call.strike], short_call.strike + SPREAD_WIDTH
+    )
+    if long_put is None or long_call is None:
+        return None
+    credit = short_put.mid - long_put.mid + short_call.mid - long_call.mid
+    width = max(short_put.strike - long_put.strike, long_call.strike - short_call.strike)
+    if width <= 0 or credit <= 0 or credit < width * MIN_CREDIT_FRAC:
+        return None
+    be_lo = short_put.strike - credit
+    be_hi = short_call.strike + credit
+    return Structure(
+        kind="iron_condor",
+        label=(
+            f"{long_put.strike:g}/{short_put.strike:g}/"
+            f"{short_call.strike:g}/{long_call.strike:g} iron condor"
+        ),
+        unit="contract",
+        legs=[
+            _leg("buy", long_put),
+            _leg("sell", short_put),
+            _leg("sell", short_call),
+            _leg("buy", long_call),
+        ],
+        premium=-credit,
+        max_loss=width - credit,
+        max_gain=credit,
+        breakeven=None,
+        breakevens=[be_lo, be_hi],
+        pop_market_implied=pop_range_market_implied(
+            spot=spot,
+            lower=be_lo,
+            upper=be_hi,
+            vol_lower=_pop_vol([short_put, long_put], be_lo),
+            vol_upper=_pop_vol([short_call, long_call], be_hi),
+            t_years=years(short_put.dte),
+        ),
+        rr=credit / (width - credit),
+        premium_yield=credit / width,
+    )
+
+
 def build_structures(
     chain: pd.DataFrame, levels: Levels, stance: str, *, spot: float, asof: pd.Timestamp
 ) -> list[Structure]:

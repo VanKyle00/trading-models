@@ -268,3 +268,72 @@ def test_band_holds_range_levels() -> None:
 
     band = Band(lower=92.0, upper=108.0, condition="t")
     assert band.lower == 92.0 and band.upper == 108.0
+
+
+# Neutral-band fixture: band 92-108 on spot 100, income window (38 DTE).
+# Condor: shorts 90P/110C (strictly beyond the band), wings 85P/115C ($5 out),
+# credit (1.6-0.6)+(1.5-0.5)=2.0 >= width 5 / 3. Butterfly: body 100, wings
+# 90P/110C (nearest the band edges), credit 3.5+3.4-1.6-1.5=3.8, width 10.
+NEUTRAL_MIDS = {
+    ("put", 38, 85.0): 0.6,
+    ("put", 38, 90.0): 1.6,
+    ("put", 38, 95.0): 2.8,
+    ("put", 38, 100.0): 3.4,
+    ("call", 38, 100.0): 3.5,
+    ("call", 38, 105.0): 2.4,
+    ("call", 38, 110.0): 1.5,
+    ("call", 38, 115.0): 0.5,
+}
+
+
+def _band():
+    from tradinglib.strategist.structures import Band
+
+    return Band(lower=92.0, upper=108.0, condition="t")
+
+
+def test_iron_condor_shorts_beyond_band_wings_5_wide(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor, pop_range_market_implied
+
+    s = iron_condor(make_chain(mids=NEUTRAL_MIDS), _band(), spot=100.0, asof=ASOF)
+
+    assert s is not None and s.kind == "iron_condor" and s.unit == "contract"
+    assert [(leg["action"], leg["right"], leg["strike"]) for leg in s.legs] == [
+        ("buy", "put", 85.0),
+        ("sell", "put", 90.0),
+        ("sell", "call", 110.0),
+        ("buy", "call", 115.0),
+    ]
+    assert s.premium == pytest.approx(-2.0)  # credit received
+    assert s.max_loss == pytest.approx(3.0)  # widest wing 5 - credit 2
+    assert s.max_gain == pytest.approx(2.0)
+    assert s.breakeven is None
+    assert s.breakevens == pytest.approx([88.0, 112.0])  # 90 - 2, 110 + 2
+    assert s.rr == pytest.approx(2.0 / 3.0)
+    assert s.premium_yield == pytest.approx(2.0 / 5.0)
+    expected_pop = pop_range_market_implied(
+        spot=100.0, lower=88.0, upper=112.0, vol_lower=0.30, vol_upper=0.30, t_years=38 / 365
+    )
+    assert s.pop_market_implied == pytest.approx(expected_pop)
+
+
+def test_iron_condor_rejected_when_credit_below_third_of_width(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    # credit (0.8-0.6)+(0.8-0.5)=0.5 < 5/3
+    mids = {**NEUTRAL_MIDS, ("put", 38, 90.0): 0.8, ("call", 38, 110.0): 0.8}
+    assert iron_condor(make_chain(mids=mids), _band(), spot=100.0, asof=ASOF) is None
+
+
+def test_iron_condor_not_offered_without_income_expiry(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    mids = {(right, 75, k): v for (right, _, k), v in NEUTRAL_MIDS.items()}  # 75 DTE only
+    assert iron_condor(make_chain(mids=mids), _band(), spot=100.0, asof=ASOF) is None
+
+
+def test_iron_condor_none_when_no_strike_beyond_band(make_chain) -> None:
+    from tradinglib.strategist.structures import iron_condor
+
+    mids = {k: v for k, v in NEUTRAL_MIDS.items() if k[2] not in (85.0, 90.0)}  # no put < 92
+    assert iron_condor(make_chain(mids=mids), _band(), spot=100.0, asof=ASOF) is None
