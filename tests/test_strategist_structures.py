@@ -376,3 +376,31 @@ def test_build_neutral_structures_empty_chain_is_empty(make_chain) -> None:
 
     empty = make_chain(mids={("call", 38, 100.0): 1.0}).iloc[0:0]
     assert build_neutral_structures(empty, _band(), spot=100.0, asof=ASOF) == []
+
+
+def test_structure_theta_week_signs_and_magnitude(make_chain) -> None:
+    from tradinglib.options.pricing import bs_greeks
+    from tradinglib.strategist.structures import (
+        credit_spread,
+        long_option,
+        structure_theta_week,
+    )
+
+    chain = make_chain(mids=LONG_MIDS)
+    lc = long_option(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+    assert lc is not None and lc.kind == "long_call"
+    # single bought leg: K95 call, 75 DTE, iv 0.30 (conftest default)
+    expected = bs_greeks("call", 100.0, 95.0, 75 / 365, 0.30, 0.0).theta * 7.0 / 365.0
+    assert structure_theta_week(lc, spot=100.0) == pytest.approx(expected)
+    assert structure_theta_week(lc, spot=100.0) < 0  # long premium decays
+
+    cs = credit_spread(chain, LONG_LEVELS, spot=100.0, asof=ASOF, stance="long")
+    assert cs is not None
+    assert structure_theta_week(cs, spot=100.0) > 0  # net short premium collects decay
+
+
+def test_structure_theta_week_none_without_legs() -> None:
+    from tradinglib.strategist.structures import structure_theta_week
+
+    s = stock_plan(LONG_LEVELS, "long")
+    assert structure_theta_week(s, spot=100.0) is None

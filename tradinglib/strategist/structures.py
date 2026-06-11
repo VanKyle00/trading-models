@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass, field
 import pandas as pd
 from scipy.stats import norm
 
+from tradinglib.options.pricing import bs_greeks
 from tradinglib.strategist.quotes import (
     LegQuote,
     at_or_below,
@@ -59,6 +60,9 @@ class Structure:
     breakevens: list[float] | None = (
         None  # two-sided structures: [lower, upper]; breakeven stays None
     )
+    key: str = ""  # stable candidate id for chat pinning, e.g. "long_call_d50"
+    reason: str | None = None  # set on the recommended structure only
+    theta_week: float | None = None  # position theta per share per 7 days; None: no legs
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -117,6 +121,17 @@ def _leg(action: str, q: LegQuote) -> dict:
         "iv": q.iv,
         "delta": q.delta,
     }
+
+
+def structure_theta_week(s: Structure, *, spot: float) -> float | None:
+    """Position theta per share per 7 calendar days at today's spot (None: no legs)."""
+    if not s.legs:
+        return None
+    total = 0.0
+    for leg in s.legs:
+        g = bs_greeks(leg["right"], spot, leg["strike"], years(leg["dte"]), leg["iv"], 0.0)  # type: ignore[arg-type]
+        total += (1.0 if leg["action"] == "buy" else -1.0) * g.theta
+    return total * 7.0 / 365.0
 
 
 def stock_plan(levels: Levels, stance: str) -> Structure:
