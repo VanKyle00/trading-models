@@ -44,7 +44,7 @@ the tool otherwise only catches as an echo (news writeups, Trends spikes).
   re-sort — the API's ranking IS the signal), capped at `max_items`.
 - Request: `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts` with
   `q=$<TICKER>`, `sort=top`, `since=<now-7d, ISO Z>`, `lang=en`,
-  `limit=max_items`, polite UA (same string as the Seeking Alpha loader),
+  `limit=100 (API max; max_items slices locally so the day's cache serves any caller)`, polite UA (same string as the Seeking Alpha loader),
   8s timeout, `follow_redirects`. Catch-all → warn + typed empty (house
   loader convention).
 - Field mapping per post: `record.text` → text, `record.createdAt` → created

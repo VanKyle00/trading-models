@@ -56,7 +56,7 @@ def test_bluesky_schema_fields_and_params(loader, monkeypatch: pytest.MonkeyPatc
     assert seen["params"]["q"] == "$NVDA"
     assert seen["params"]["sort"] == "top"
     assert seen["params"]["lang"] == "en"
-    assert "since" in seen["params"] and seen["params"]["limit"] == 25
+    assert "since" in seen["params"] and seen["params"]["limit"] == 100
 
 
 def test_bluesky_http_error_is_empty(loader, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -85,3 +85,9 @@ def test_bluesky_caps_items(loader, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(loader, "httpx", SimpleNamespace(get=lambda url, **kw: _Resp(_FIXTURE)))
     df = loader.get_bluesky_posts("NVDA", max_items=1)
     assert len(df) == 1
+
+
+def test_bluesky_cache_serves_larger_max_items(loader, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(loader, "httpx", SimpleNamespace(get=lambda url, **kw: _Resp(_FIXTURE)))
+    assert len(loader.get_bluesky_posts("NVDA", max_items=1)) == 1
+    assert len(loader.get_bluesky_posts("NVDA", max_items=3)) == 3  # cache holds the full page

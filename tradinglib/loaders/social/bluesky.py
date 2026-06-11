@@ -26,6 +26,7 @@ SOURCE = "social"
 _SUBDIR = "bluesky"
 _TIMEOUT_S = 8.0
 _WINDOW_DAYS = 7
+_PAGE_SIZE = 100  # API max; cache the full page so max_items only slices locally
 _UA = "Mozilla/5.0 (compatible; trading-models-sentiment/0.1)"
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ def _row(post: dict) -> dict:
     }
 
 
-def _download(ticker: str, max_items: int) -> pd.DataFrame:
+def _download(ticker: str) -> pd.DataFrame:
     since = (pd.Timestamp.now("UTC") - pd.Timedelta(days=_WINDOW_DAYS)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
@@ -72,7 +73,7 @@ def _download(ticker: str, max_items: int) -> pd.DataFrame:
                 "sort": "top",
                 "since": since,
                 "lang": "en",
-                "limit": max_items,
+                "limit": _PAGE_SIZE,
             },
             headers={"User-Agent": _UA},
             timeout=_TIMEOUT_S,
@@ -100,7 +101,7 @@ def get_bluesky_posts(ticker: str, *, max_items: int = 25, refresh: bool = False
     if out.exists() and not refresh:
         df = pd.read_parquet(out)
     else:
-        df = _download(ticker, max_items)
+        df = _download(ticker)
         out.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(out)
     return df.head(max_items).reset_index(drop=True)
