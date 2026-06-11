@@ -1,4 +1,4 @@
-"""Google News RSS loader -- Tier-1 headline search for one ticker.
+"""Google News RSS loader — Tier-1 headline search for one ticker.
 
 Schema (canonical): ``[ticker, published, title, publisher, url]`` with
 ``published`` UTC-aware, newest first, capped at ``max_items``. Query is
@@ -34,7 +34,7 @@ def _empty() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "ticker": pd.Series([], dtype="object"),
-            "published": pd.Series([], dtype="datetime64[ns, UTC]"),
+            "published": pd.Series([], dtype="datetime64[ms, UTC]"),
             "title": pd.Series([], dtype="object"),
             "publisher": pd.Series([], dtype="object"),
             "url": pd.Series([], dtype="object"),
@@ -73,6 +73,7 @@ def _download(ticker: str) -> pd.DataFrame:
         return _empty()
     df = pd.DataFrame(rows)
     df.insert(0, "ticker", ticker)
+    # ms (not ns) so the dtype survives the parquet round-trip and cached == fresh
     df["published"] = pd.to_datetime(df["published"], utc=True).astype("datetime64[ms, UTC]")
     return df.sort_values("published", ascending=False).reset_index(drop=True)
 
