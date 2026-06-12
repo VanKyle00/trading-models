@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradinglib.scanner.tiers import apply_fdr, build_watchlist
+from tradinglib.scanner.tiers import ENTRY_WINDOWS, apply_fdr, build_watchlist
 
 
 def _entry(ticker, stance, dsrs, survivors=(), winner_levels=None):
@@ -288,8 +288,6 @@ def test_build_watchlist_short_cohort_needs_short_tournament() -> None:
 
 
 def test_watch_row_carries_setup_entry_window() -> None:
-    from tradinglib.scanner.tiers import ENTRY_WINDOWS
-
     assert ENTRY_WINDOWS["pead"] == 15
     assert ENTRY_WINDOWS["pead_down"] == 15
     tournament = {

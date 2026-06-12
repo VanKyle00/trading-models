@@ -14,16 +14,15 @@ no actionable entry tonight) are report-only: there is nothing to simulate.
 from __future__ import annotations
 
 from tradinglib.backtest.metrics import benjamini_hochberg_fdr
+from tradinglib.strategist.evaluate import ENTRY_WINDOW as _DEFAULT_ENTRY_WINDOW
 
 TIER_TICKET = "ticket"
 TIER_WATCH = "watch"
 
-# Per-setup entry windows (sessions). Default 5 == strategist.evaluate.ENTRY_WINDOW;
-# the PEAD pair gets the drift's own persistence window (the detector accepts
-# 3-15 days since the reaction bar, so a 5-session stale-trigger rule cuts the
-# setup's thesis short).
+# Per-setup entry windows (sessions). The PEAD pair gets the drift's own
+# persistence window (the detector accepts 3-15 days since the reaction bar,
+# so a 5-session stale-trigger rule cuts the setup's thesis short).
 ENTRY_WINDOWS: dict[str, int] = {"pead": 15, "pead_down": 15}
-_DEFAULT_ENTRY_WINDOW = 5
 
 
 def best_dsr(entry: dict) -> float | None:
