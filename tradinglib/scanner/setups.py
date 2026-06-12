@@ -33,6 +33,7 @@ from tradinglib.features.technical import (
 _MIN_BARS = 260  # ~1 trading year + headroom for trailing windows
 _BASE_WINDOW = 40
 _NEAR_HIGH = -0.15
+_NEAR_LOW = 0.15
 _BREAKOUT_PROXIMITY = 0.05
 _TIGHTNESS_QUANTILE = 0.30
 _PULLBACK_BAND = 0.025
@@ -117,6 +118,59 @@ def detect_base_breakout(
         stop_level=float(max(base_low, close.iloc[-1] - 2.0 * last_atr)),
         evidence={
             "pct_off_52w_high": float(off_high),
+            "range_tightness": float(tightness.iloc[-1]),
+            "volume_ratio_10d": float(vol_ratio_10),
+            "base_high": float(base_high),
+            "base_low": float(base_low),
+            "atr": float(last_atr),
+        },
+    )
+
+
+def detect_base_breakdown(
+    bars: pd.DataFrame, *, benchmark_close: pd.Series | None = None
+) -> SetupSignal | None:
+    if len(bars) < _MIN_BARS:
+        return None
+    close, high, low, volume = bars["close"], bars["high"], bars["low"], bars["volume"]
+
+    low_252 = close.iloc[-252:].min()
+    off_low = close.iloc[-1] / low_252 - 1.0  # distance ABOVE the 52-week low
+    if not off_low <= _NEAR_LOW:
+        return None
+
+    tightness = range_tightness(high, low, close, _BASE_WINDOW)
+    threshold = tightness.iloc[-252:].quantile(_TIGHTNESS_QUANTILE)
+    if not tightness.iloc[-1] < threshold:
+        return None
+
+    vol_ratio_10 = volume_ratio(volume, 50).iloc[-10:].mean()
+    if not vol_ratio_10 < 1.0:
+        return None
+
+    base_high = high.iloc[-_BASE_WINDOW:].max()
+    base_low = low.iloc[-_BASE_WINDOW:].min()
+    if not close.iloc[-1] <= base_low * (1.0 + _BREAKOUT_PROXIMITY):
+        return None
+
+    last_atr = atr(high, low, close, 14).iloc[-1]
+    tightness_pct = float((tightness.iloc[-252:] <= tightness.iloc[-1]).mean())
+    proximity = 1.0 - min(off_low / _NEAR_LOW, 1.0)
+    # weak relative strength is the FAVORABLE condition for a short
+    score = _clip01(
+        0.4 * (1.0 - tightness_pct)
+        + 0.3 * proximity
+        + 0.3 * (1.0 - _rs_component(close, benchmark_close))
+    )
+    return SetupSignal(
+        ticker=_ticker(bars),
+        setup_type="base_breakdown",
+        score=score,
+        asof=_asof(bars),
+        trigger_level=float(base_low),
+        stop_level=float(min(base_high, close.iloc[-1] + 2.0 * last_atr)),
+        evidence={
+            "pct_off_52w_low": float(off_low),
             "range_tightness": float(tightness.iloc[-1]),
             "volume_ratio_10d": float(vol_ratio_10),
             "base_high": float(base_high),

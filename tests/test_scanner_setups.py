@@ -8,6 +8,7 @@ import pandas as pd
 from tradinglib.scanner.setups import (
     SetupSignal,
     detect_all,
+    detect_base_breakdown,
     detect_base_breakout,
     detect_ma_pullback,
     detect_pead,
@@ -44,6 +45,17 @@ def _breakout_bars() -> pd.DataFrame:
     trend = np.linspace(50.0, 100.0, 200)
     amp = np.linspace(3.0, 0.5, 100)
     base = 97.0 + amp * np.where(np.arange(100) % 2 == 0, 1.0, -1.0)
+    close = np.concatenate([trend, base])
+    volume = np.concatenate([np.full(200, 2_000_000.0), np.linspace(1_500_000, 800_000, 100)])
+    return _bars(close, volume)
+
+
+def _breakdown_bars() -> pd.DataFrame:
+    # Mirror of _breakout_bars: 200-bar downtrend 100 -> 50, then a 100-bar
+    # base around 52 whose range narrows while volume dries up.
+    trend = np.linspace(100.0, 50.0, 200)
+    amp = np.linspace(3.0, 0.5, 100)
+    base = 52.0 + amp * np.where(np.arange(100) % 2 == 0, 1.0, -1.0)
     close = np.concatenate([trend, base])
     volume = np.concatenate([np.full(200, 2_000_000.0), np.linspace(1_500_000, 800_000, 100)])
     return _bars(close, volume)
@@ -93,6 +105,20 @@ def test_base_breakout_rejects_beaten_down_stock() -> None:
     volume = np.concatenate([np.full(200, 2_000_000.0), np.linspace(1_500_000, 800_000, 100)])
 
     assert detect_base_breakout(_bars(close, volume)) is None
+
+
+def test_base_breakdown_detected() -> None:
+    signal = detect_base_breakdown(_breakdown_bars())
+
+    assert isinstance(signal, SetupSignal)
+    assert signal.setup_type == "base_breakdown"
+    assert 0.0 <= signal.score <= 1.0
+    assert signal.trigger_level < signal.stop_level  # short: stop ABOVE trigger
+
+
+def test_base_breakdown_rejects_stock_near_its_high() -> None:
+    # The long-side breakout fixture sits near its 52-week HIGH: not breakdown material.
+    assert detect_base_breakdown(_breakout_bars()) is None
 
 
 def test_base_breakout_requires_history() -> None:
