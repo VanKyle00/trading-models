@@ -54,7 +54,7 @@ def test_every_registered_strategy_has_a_style() -> None:
 
 def test_regime_state_drops_nan_closes() -> None:
     values = np.linspace(80.0, 120.0, 300)
-    values[10] = np.nan  # a stray NaN must not poison the SMA into gating "down"
+    values[250] = np.nan  # a stray NaN inside the SMA window must not poison it into gating "down"
     state = regime_state(_close(values))
     assert state["trend"] == "up"
 
