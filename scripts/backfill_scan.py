@@ -40,10 +40,29 @@ from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.ledger import _stats
 from tradinglib.scanner.setups import detect_all
 from tradinglib.scanner.tiers import apply_fdr, build_watchlist
-from tradinglib.strategist.evaluate import simulate_ticket
+from tradinglib.strategist.evaluate import ENTRY_WINDOW, simulate_ticket
 from tradinglib.tournament.run import run_tournament
 
 _BENCHMARK = "SPY"
+
+
+def _campaign_active(record: dict, bars: pd.DataFrame, night: pd.Timestamp) -> bool:
+    """Whether a previously issued (and fully simulated) row is still waiting/open at `night`.
+
+    Derived from the one full-history simulation instead of re-simulating per
+    night: an unfilled entry stays a live campaign until its entry window of
+    post-issue sessions has elapsed; a filled one until its exit date.
+    """
+    issue = pd.Timestamp(record["date"])
+    if record.get("status") == "error":
+        return False  # error rows never suppress (mirrors prod: errors fail open)
+    if record.get("entry_date") is None:
+        window = int(record.get("entry_window", ENTRY_WINDOW))
+        sessions_elapsed = int(((bars.index > issue) & (bars.index <= night)).sum())
+        return sessions_elapsed < window
+    if record.get("exit_date") is None:
+        return True  # open through the end of data
+    return night < pd.Timestamp(record["exit_date"])
 
 
 def _naive_utc(frame: pd.DataFrame) -> pd.DataFrame:
@@ -188,6 +207,7 @@ def run_night(
             issued.append(
                 {
                     "date": date,
+                    "entry_window": int(row.get("entry_window", ENTRY_WINDOW)),
                     **{k: row[k] for k in ("ticker", "stance", "strategy", "tier", "levels")},
                 }
             )
@@ -267,10 +287,33 @@ def main(argv: list[str] | None = None) -> int:
     for i, asof in enumerate(nights, 1):
         t0 = time.monotonic()
         funnel, issued, errors = run_night(asof, family, bars_by_ticker, earnings_by_ticker, config)
+        # prod's re-issue cooldown, replayed: a campaign still waiting/open at
+        # this night suppresses tonight's same (ticker, stance, strategy, tier)
+        active = {
+            (r["ticker"], r["stance"], r["strategy"], r["tier"])
+            for r in records
+            if _campaign_active(r, bars_by_ticker[r["ticker"]], asof)
+        }
+        suppressed = [
+            row
+            for row in issued
+            if (row["ticker"], row["stance"], row["strategy"], row["tier"]) in active
+        ]
+        issued = [row for row in issued if row not in suppressed]
+        funnel["suppressed"] = len(suppressed)
+        funnel["tickets"] -= sum(1 for r in suppressed if r["tier"] == "ticket")
+        funnel["watch"] -= sum(1 for r in suppressed if r["tier"] == "watch")
         for row in issued:
             record = dict(row)
             try:
-                record.update(simulate_ticket(row, bars_by_ticker[row["ticker"]], asof=row["date"]))
+                record.update(
+                    simulate_ticket(
+                        row,
+                        bars_by_ticker[row["ticker"]],
+                        asof=row["date"],
+                        entry_window=int(row.get("entry_window", ENTRY_WINDOW)),
+                    )
+                )
             except Exception as exc:
                 record.update(status="error", error=str(exc))
             records.append(record)
@@ -279,7 +322,8 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[{i}/{len(nights)}] {funnel['date']}: survivors={funnel['survivors']} "
             f"fdr_passed={funnel['fdr_passed']} tickets={funnel['tickets']} "
-            f"watch={funnel['watch']} best_dsr={funnel['best_dsr'] or 0:.3f} "
+            f"watch={funnel['watch']} suppressed={funnel['suppressed']} "
+            f"best_dsr={funnel['best_dsr'] or 0:.3f} "
             f"errors={funnel['errors']} ({time.monotonic() - t0:.0f}s)",
             flush=True,
         )

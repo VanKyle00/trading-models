@@ -855,7 +855,7 @@ def test_recent_ledger_closed_campaign_reissues(fdr_pipeline, status: str) -> No
     assert result["suppressed"] == []
 
 
-def test_recent_ledger_watch_tier_suppresses(fdr_pipeline, monkeypatch) -> None:
+def test_recent_ledger_watch_tier_suppresses(fdr_pipeline) -> None:
     """A watch-tier row (status='waiting') must suppress the matching watchlist entry."""
     # fdr_pipeline demotes QUIET to the watchlist (fails FDR). Inject a ledger
     # row that matches QUIET's watchlist identity so it gets suppressed.

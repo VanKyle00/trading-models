@@ -74,7 +74,7 @@ def _active_campaigns(recent_ledger: dict | None) -> set[tuple[str, str, str, st
         return set()
     return {
         (r["ticker"], r["stance"], r["strategy"], r.get("tier", "ticket"))
-        for r in recent_ledger.get("tickets", [])
+        for r in recent_ledger.get("tickets") or []
         if r.get("status") in ("waiting", "open")
         and all(k in r for k in ("ticker", "stance", "strategy"))
     }
@@ -398,6 +398,7 @@ def run_scan(
             "risk_per_trade_pct": config.risk_per_trade_pct,
             "fdr_alpha": config.fdr_alpha,
             "watch_dsr_floor": config.watch_dsr_floor,
+            "setup_score_floors": config.setup_score_floors,
         },
         "funnel": {
             "universe": len(universe),
