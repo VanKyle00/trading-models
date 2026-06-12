@@ -82,6 +82,31 @@ def _result(asof: str) -> dict:
                 ],
                 "brief": None,
             },
+            {
+                "ticker": "WEAK",
+                "name": "Weak Corp",
+                "sector": "Energy",
+                "fa_score": 0.1,
+                "setup_score": 0.6,
+                "final_score": 0.35,
+                "pinned": False,
+                "pinned_reason": "",
+                "qualitative_score": None,
+                "stance": None,
+                "cohort": "short",
+                "red_flags": [],
+                "earnings_warning": False,
+                "setups": [
+                    {
+                        "setup_type": "base_breakdown",
+                        "score": 0.6,
+                        "trigger_level": 48.0,
+                        "stop_level": 52.0,
+                        "evidence": {},
+                    }
+                ],
+                "brief": None,
+            },
         ],
         "errors": [{"ticker": "BAD", "stage": "bars", "error": "no data"}],
         "tickets": {
@@ -203,6 +228,15 @@ def test_scans_page_shows_pin_and_warnings(scan_dir: Path) -> None:
 
     assert "going concern doubt" in html  # pinned reason surfaces
     assert "earnings" in html.lower()  # earnings-soon warning surfaces
+
+
+def test_scans_page_shows_short_cohort_chip(scan_dir: Path) -> None:
+    client = TestClient(create_app())
+    html = client.get("/scans").text
+
+    # WEAK is a short-cohort candidate — the card head must render the chip
+    assert "WEAK" in html
+    assert 'chip flag">short</span>' in html
 
 
 def test_scans_page_specific_date(scan_dir: Path) -> None:

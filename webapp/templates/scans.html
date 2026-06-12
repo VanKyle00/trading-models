@@ -134,7 +134,7 @@
       <div class="funnel">
         <div class="metric"><div class="m-label">Universe</div><div class="m-value">{{ scan.funnel.universe }}</div></div>
         <div class="metric"><div class="m-label">Past FA gate</div><div class="m-value">{{ scan.funnel.fa_shortlist }}</div></div>
-        <div class="metric"><div class="m-label">Setups forming</div><div class="m-value">{{ scan.funnel.with_setups }}</div></div>
+        <div class="metric"><div class="m-label">Setups forming</div><div class="m-value">{{ scan.funnel.with_setups }}{% if scan.funnel.with_setups_short %} ({{ scan.funnel.with_setups_short }} short){% endif %}</div></div>
       </div>
 
       {% if scan.funnel.tournament_candidates is defined %}
@@ -154,6 +154,7 @@
           <div class="card-head">
             <span class="tkr">{{ loop.index }}. {{ c.ticker }}</span>
             <span class="nm">{{ c.name }} · {{ c.sector }}</span>
+            {% if c.cohort == 'short' %}<span class="chip flag">short</span>{% endif %}
             {% if c.stance %}<span class="chip {{ c.stance }}">{{ c.stance }}</span>{% endif %}
             {% if c.earnings_warning %}<span class="chip warn">earnings soon</span>{% endif %}
             {% for f in c.red_flags or [] %}<span class="chip flag">{{ f }}</span>{% endfor %}

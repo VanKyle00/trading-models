@@ -33,6 +33,8 @@ BRIEF_SYSTEM_PROMPT = (
     "stock: recent SEC filing excerpts, news headlines, fundamental metrics, "
     "and a detected technical setup for a 2-week-to-6-month swing trade. "
     "Assess whether the fundamentals and news SUPPORT or UNDERMINE the trade. "
+    "Judge SUPPORT/UNDERMINE and stance relative to the stated trade direction "
+    "(long or short), not company quality in the abstract. "
     "Respond with ONLY a JSON object, no prose before or after, with exactly "
     "these keys: thesis (string, 2-3 sentences), catalysts (array of strings), "
     "risks (array of strings), red_flags (array of strings — ONLY serious "
@@ -55,8 +57,17 @@ def _excerpt(text: str, *, marker: str | None, max_chars: int) -> str:
 def build_doc_pack(candidate: dict, cik: int, *, refresh: bool = False) -> str:
     """Assemble the bounded document pack for one finalist."""
     ticker = candidate["ticker"]
+    cohort = candidate.get("cohort", "long")
+    direction_line = (
+        "Cohort: SHORT — this is a SHORT swing-trade candidate; "
+        "judge whether the fundamentals support the SHORT thesis."
+        if cohort == "short"
+        else "Cohort: LONG — this is a LONG swing-trade candidate."
+    )
     parts: list[str] = [
         f"# {ticker} — {candidate.get('name', '')} ({candidate.get('sector', '?')})",
+        "",
+        direction_line,
         "",
         "## Detected setup",
         json.dumps(candidate.get("setups", []), default=str),

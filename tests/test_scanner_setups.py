@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from tradinglib.scanner.setups import (
     SetupSignal,
     detect_all,
+    detect_base_breakdown,
     detect_base_breakout,
     detect_ma_pullback,
+    detect_ma_rally_fade,
     detect_pead,
+    detect_pead_down,
 )
 
 
@@ -49,6 +53,17 @@ def _breakout_bars() -> pd.DataFrame:
     return _bars(close, volume)
 
 
+def _breakdown_bars() -> pd.DataFrame:
+    # Mirror of _breakout_bars: 200-bar downtrend 100 -> 50, then a 100-bar
+    # base around 52 whose range narrows while volume dries up.
+    trend = np.linspace(100.0, 50.0, 200)
+    amp = np.linspace(3.0, 0.5, 100)
+    base = 52.0 + amp * np.where(np.arange(100) % 2 == 0, 1.0, -1.0)
+    close = np.concatenate([trend, base])
+    volume = np.concatenate([np.full(200, 2_000_000.0), np.linspace(1_500_000, 800_000, 100)])
+    return _bars(close, volume)
+
+
 def _pullback_bars() -> pd.DataFrame:
     # Long gentle uptrend, a strong 56-bar leg, then a 24-bar orderly
     # pullback (alternating -1.4% / +0.8%) into the rising 50-day MA.
@@ -63,6 +78,21 @@ def _pullback_bars() -> pd.DataFrame:
     return _bars(close, volume)
 
 
+def _rally_fade_bars() -> pd.DataFrame:
+    # Mirror of _pullback_bars: gentle downtrend, a steep 56-bar down-leg,
+    # then a 24-bar orderly rally (alternating +1.4% / -0.8%) into the
+    # declining 50-day MA.
+    gentle = 100.0 * 0.998 ** np.arange(220)
+    leg = gentle[-1] * 0.994 ** np.arange(1, 57)
+    rally = [leg[-1]]
+    for i in range(24):
+        step = 0.014 if i % 2 == 0 else -0.008
+        rally.append(rally[-1] * (1 + step))
+    close = np.concatenate([gentle, leg, np.array(rally[1:])])
+    volume = np.concatenate([np.full(276, 1_000_000.0), np.full(24, 800_000.0)])
+    return _bars(close, volume)
+
+
 def _pead_bars() -> tuple[pd.DataFrame, pd.Timestamp]:
     # Flat at 100, an 8% earnings-day pop on 3x volume at bar 110, then a
     # gentle upward drift that holds above the earnings-day low.
@@ -70,6 +100,18 @@ def _pead_bars() -> tuple[pd.DataFrame, pd.Timestamp]:
     volume = np.concatenate([np.full(110, 1_000_000.0), [3_000_000.0], np.full(9, 1_200_000.0)])
     low = np.concatenate([np.full(110, 99.0), [105.0], np.linspace(107.0, 108.8, 9)])
     high = close * 1.01
+    bars = _bars(close, volume, high=high, low=low)
+    return bars, bars.index[110]
+
+
+def _pead_down_bars() -> tuple[pd.DataFrame, pd.Timestamp]:
+    # Mirror of _pead_bars: flat at 100, an -8% earnings-day drop on 3x
+    # volume at bar 110, then a drift lower that stays below the
+    # earnings-day high.
+    close = np.concatenate([np.full(110, 100.0), [92.0], np.linspace(91.8, 90.0, 9)])
+    volume = np.concatenate([np.full(110, 1_000_000.0), [3_000_000.0], np.full(9, 1_200_000.0)])
+    high = np.concatenate([np.full(110, 101.0), [95.0], np.linspace(93.0, 91.2, 9)])
+    low = close * 0.99
     bars = _bars(close, volume, high=high, low=low)
     return bars, bars.index[110]
 
@@ -93,6 +135,26 @@ def test_base_breakout_rejects_beaten_down_stock() -> None:
     volume = np.concatenate([np.full(200, 2_000_000.0), np.linspace(1_500_000, 800_000, 100)])
 
     assert detect_base_breakout(_bars(close, volume)) is None
+
+
+def test_base_breakdown_detected() -> None:
+    signal = detect_base_breakdown(_breakdown_bars())
+
+    assert isinstance(signal, SetupSignal)
+    assert signal.setup_type == "base_breakdown"
+    assert signal.ticker == "TEST"
+    assert 0.0 <= signal.score <= 1.0
+    assert signal.trigger_level < signal.stop_level  # short: stop ABOVE trigger
+
+
+def test_base_breakdown_rejects_stock_near_its_high() -> None:
+    # The long-side breakout fixture sits near its 52-week HIGH: not breakdown material.
+    assert detect_base_breakdown(_breakout_bars()) is None
+
+
+def test_base_breakdown_requires_history() -> None:
+    short = _breakdown_bars().iloc[-100:]
+    assert detect_base_breakdown(short) is None
 
 
 def test_base_breakout_requires_history() -> None:
@@ -156,3 +218,51 @@ def test_detect_all_empty_for_quiet_stock() -> None:
     volume = np.full(300, 1_000_000.0)
 
     assert detect_all(_bars(close, volume)) == []
+
+
+def test_ma_rally_fade_detected() -> None:
+    signal = detect_ma_rally_fade(_rally_fade_bars())
+
+    assert isinstance(signal, SetupSignal)
+    assert signal.setup_type == "ma_rally_fade"
+    assert 0.0 <= signal.score <= 1.0
+    assert signal.trigger_level < signal.stop_level
+
+
+def test_ma_rally_fade_rejects_uptrend() -> None:
+    assert detect_ma_rally_fade(_pullback_bars()) is None
+
+
+def test_pead_down_detected() -> None:
+    bars, earnings_ts = _pead_down_bars()
+    signal = detect_pead_down(bars, [earnings_ts])
+
+    assert isinstance(signal, SetupSignal)
+    assert signal.setup_type == "pead_down"
+    assert signal.stop_level == 95.0
+    assert 0.0 <= signal.score <= 1.0
+    assert signal.stop_level > signal.trigger_level
+
+
+def test_pead_down_rejects_up_gap() -> None:
+    bars, earnings_ts = _pead_bars()
+    assert detect_pead_down(bars, [earnings_ts]) is None
+
+
+def test_detect_all_short_stance_runs_short_detectors() -> None:
+    bars, earnings_ts = _pead_down_bars()
+    signals = detect_all(bars, stance="short", earnings_datetimes=[earnings_ts])
+    assert [s.setup_type for s in signals] == ["pead_down"]
+
+
+def test_detect_all_default_stance_is_long() -> None:
+    bars, earnings_ts = _pead_bars()
+    types = {s.setup_type for s in detect_all(bars, earnings_datetimes=[earnings_ts])}
+    assert "pead" in types
+    assert "pead_down" not in types
+
+
+def test_detect_all_rejects_unknown_stance() -> None:
+    bars, earnings_ts = _pead_bars()
+    with pytest.raises(ValueError, match="stance"):
+        detect_all(bars, stance="neutral", earnings_datetimes=[earnings_ts])

@@ -332,10 +332,12 @@ def test_run_scan_runs_tournament_on_fa_candidates(patched_pipeline) -> None:
     result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
 
     entries = result["tournament"]["long"] + result["tournament"]["short"]
-    t_errors = [e for e in result["errors"] if e["stage"] == "tournament"]
-    # one long + one short candidate; each either produced an entry or an error
-    assert len(entries) + len(t_errors) == 2
-    assert entries  # at most one fixture ticker (BROKEN) can fail bar loading
+    # BROKEN is the short FA candidate (after EDGAR) and fails bar loading in the
+    # setup-detect loop before reaching the tournament, so it contributes neither
+    # an entry nor a tournament-stage error; DRIFT (long) always produces an entry.
+    assert len(entries) == 1  # only DRIFT (long) reaches the tournament
+    bars_errors = [e for e in result["errors"] if e["stage"] == "bars"]
+    assert len(bars_errors) == 1 and bars_errors[0]["ticker"] == "BROKEN"
     for entry in entries:
         assert entry["winner"]["strategy"] == "sma_cross"
         assert entry["winner"]["levels"]["entry"] == 100.0
@@ -384,7 +386,9 @@ def test_run_scan_isolates_tournament_failures(patched_pipeline, monkeypatch) ->
     result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
 
     t_errors = [e for e in result["errors"] if e["stage"] == "tournament"]
-    assert len(t_errors) == 2  # both candidates failed, scan completed
+    # BROKEN is the short FA candidate and fails bar loading in the setup-detect loop
+    # (before the tournament), so only DRIFT (long) reaches run_tournament and errors.
+    assert len(t_errors) == 1  # DRIFT failed in tournament; BROKEN failed bars earlier
     assert result["tournament"] == {"long": [], "short": []}
     assert result["funnel"]["tournament_candidates"] == 2
     assert result["funnel"]["tournament_survivors"] == 0
@@ -699,6 +703,88 @@ def test_fdr_skip_strategies_zeroes_out(patched_pipeline) -> None:
     assert result["fdr"] is None
     assert result["funnel"]["fdr_passed"] == 0
     assert result["funnel"]["watchlist"] == 0
+
+
+def test_candidates_carry_cohort_for_both_slates(patched_pipeline) -> None:
+    # short slate exercised end-to-end in test_scanner_tiers.py;
+    # here we just prove every candidate dict has a "cohort" key and it is "long"
+    # (BROKEN is the short FA pick but bars loading raises, so it never reaches
+    # the candidates list — the fixture universe is entirely absorbed by the
+    # long gate at fa_keep=3).
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))
+    assert result["candidates"], "fixture should produce at least one candidate"
+    assert all("cohort" in c for c in result["candidates"])
+    assert {c["cohort"] for c in result["candidates"]} <= {"long", "short"}
+
+
+def test_short_cohort_candidate_dispatched_and_tagged(
+    patched_pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # After EDGAR enrichment (default), BROKEN is the short FA pick at short_keep=1
+    # (pass-1 prelim doubles the slates so BROKEN enters the short side; after
+    # pass-2 re-ranking it remains the worst-fundamental name). The fixture
+    # patched_pipeline raises for BROKEN on bars load, so:
+    #   1. Serve bars for BROKEN via an overriding load_daily patch.
+    #   2. Patch get_earnings_dates to return a UTC-localized empty frame for BROKEN
+    #      (the fixture's fake_earnings returns tz-naive empty, which causes a timezone
+    #      mismatch in the earnings comparison inside the bars try-block).
+    #   3. Monkeypatch detect_all to return a real SetupSignal for BROKEN/short.
+    from tradinglib.scanner import pipeline, setups
+    from tradinglib.scanner.setups import SetupSignal
+
+    detect_calls: list[tuple[str, str]] = []
+    real_detect = setups.detect_all
+    broken_bars = _quiet_bars("BROKEN")
+
+    original_load = patched_pipeline.load_daily
+
+    def load_with_broken(symbol, start=None, end=None, *, refresh=False):
+        if symbol == "BROKEN":
+            return broken_bars
+        return original_load(symbol, start=start, end=end, refresh=refresh)
+
+    monkeypatch.setattr(pipeline, "load_daily", load_with_broken)
+
+    original_earnings = patched_pipeline.get_earnings_dates
+
+    def earnings_with_broken(tickers, start=None, end=None, *, refresh=False):
+        rows = original_earnings(tickers, start=start, end=end, refresh=refresh)
+        # ensure tz-aware column so the upcoming-earnings comparison doesn't raise
+        if "earnings_datetime" in rows.columns and len(rows) == 0:
+            rows = rows.astype({"earnings_datetime": "datetime64[ns, UTC]"})
+        return rows
+
+    monkeypatch.setattr(pipeline, "get_earnings_dates", earnings_with_broken)
+
+    def recording_detect(bars, *, stance="long", **kwargs):
+        ticker = str(bars["symbol"].iloc[0]) if "symbol" in bars.columns else "?"
+        detect_calls.append((ticker, stance))
+        if ticker == "BROKEN" and stance == "short":
+            return [
+                SetupSignal(
+                    ticker="BROKEN",
+                    setup_type="base_breakdown",
+                    score=0.75,
+                    asof="2026-06-12",
+                    trigger_level=98.0,
+                    stop_level=102.0,
+                    evidence={"atr": 1.0},
+                )
+            ]
+        return real_detect(bars, stance=stance, **kwargs)
+
+    monkeypatch.setattr(pipeline, "detect_all", recording_detect)
+
+    result = patched_pipeline.run_scan(
+        ScanConfig(fa_keep=1, short_keep=1, skip_llm=True, skip_strategies=True)
+    )
+
+    short_cands = [c for c in result["candidates"] if c.get("cohort") == "short"]
+    assert short_cands, "BROKEN should appear as a short candidate when bars are served"
+    assert short_cands[0]["ticker"] == "BROKEN"
+    assert short_cands[0]["cohort"] == "short"
+    # detect_all must have been called with stance="short" for BROKEN
+    assert ("BROKEN", "short") in detect_calls
 
 
 def test_fdr_wiring_unmocked(patched_pipeline) -> None:

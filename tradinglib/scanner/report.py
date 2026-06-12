@@ -18,6 +18,8 @@ def _md_table(candidates: list[dict]) -> list[str]:
     ]
     for i, c in enumerate(candidates, start=1):
         setups = ", ".join(s["setup_type"] for s in c.get("setups", []))
+        if c.get("cohort") == "short":
+            setups = f"{setups} (short)"
         best = max(c.get("setups", []), key=lambda s: s["score"], default=None)
         trigger = f"{best['trigger_level']:.2f}" if best else "-"
         stop = f"{best['stop_level']:.2f}" if best else "-"
@@ -176,7 +178,10 @@ def render_markdown(result: dict) -> str:
         "",
         f"Funnel: {funnel.get('universe', '?')} universe → "
         f"{funnel.get('fa_shortlist', '?')} past FA gate → "
-        f"{funnel.get('with_setups', '?')} with setups forming",
+        + (
+            f"{funnel.get('with_setups', '?')} with setups forming"
+            + (f" ({funnel['with_setups_short']} short)" if funnel.get("with_setups_short") else "")
+        ),
         "",
     ]
     if "tournament_candidates" in funnel:

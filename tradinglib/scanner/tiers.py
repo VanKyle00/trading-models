@@ -44,15 +44,18 @@ def apply_fdr(tournament: dict, alpha: float) -> tuple[dict[tuple[str, str], boo
     return dict(zip(keys, rejected, strict=True)), threshold, len(keys)
 
 
-def _setup_watch_levels(setup: dict) -> dict:
-    """Detector trigger/stop turned into simulate-able levels (2R target)."""
+def _setup_watch_levels(setup: dict, stance: str) -> dict | None:
+    """Detector trigger/stop turned into simulate-able levels (2R target).
+
+    ``None`` when the 2R target is not a positive price (short risk can
+    exceed trigger/2 on low-priced names) — the row stays report-only.
+    """
     trigger, stop = float(setup["trigger_level"]), float(setup["stop_level"])
-    return {
-        "entry": trigger,
-        "entry_type": "stop",
-        "stop": stop,
-        "target": trigger + 2.0 * (trigger - stop),
-    }
+    risk = abs(stop - trigger)
+    target = trigger + 2.0 * risk if stance == "long" else trigger - 2.0 * risk
+    if target <= 0.0:
+        return None
+    return {"entry": trigger, "entry_type": "stop", "stop": stop, "target": target}
 
 
 def build_watchlist(
@@ -108,7 +111,10 @@ def build_watchlist(
         for e in tournament.get(stance) or []
     }
     for cand in candidates:
-        key = ("long", cand["ticker"])
+        stance = cand.get("cohort") or "long"
+        if stance not in watchlist:
+            raise ValueError(f"unknown cohort {stance!r} for {cand['ticker']}")
+        key = (stance, cand["ticker"])
         if key in seen:
             continue
         d = dsr_by_key.get(key)
@@ -117,15 +123,15 @@ def build_watchlist(
         if not cand.get("setups"):
             continue
         setup = max(cand["setups"], key=lambda s: s["score"])
-        watchlist["long"].append(
+        watchlist[stance].append(
             {
                 "ticker": cand["ticker"],
-                "stance": "long",
+                "stance": stance,
                 "strategy": f"setup:{setup['setup_type']}",
                 "tier": TIER_WATCH,
                 "tier_reason": "sub-threshold evidence",
                 "deflated_sharpe": d,
-                "levels": _setup_watch_levels(setup),
+                "levels": _setup_watch_levels(setup, stance),
             }
         )
     return watchlist

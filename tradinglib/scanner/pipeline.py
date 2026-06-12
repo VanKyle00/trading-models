@@ -144,54 +144,62 @@ def run_scan(
         errors.append({"ticker": _BENCHMARK, "stage": "benchmark", "error": str(exc)})
 
     candidates: list[dict] = []
-    for row in shortlist.itertuples():
-        ticker = row.ticker
-        try:
-            bars = load_daily(ticker, start=start)
+    cohorts = [("long", shortlist)]
+    if config.short_keep:
+        cohorts.append(("short", scored[scored["passed_short_gate"]]))
+    for cohort, slate in cohorts:
+        for row in slate.itertuples():
+            ticker = row.ticker
             try:
-                earnings = get_earnings_dates([ticker], refresh=config.refresh)
-                earnings_dts = pd.DatetimeIndex(earnings["earnings_datetime"])
+                bars = load_daily(ticker, start=start)
+                try:
+                    earnings = get_earnings_dates([ticker], refresh=config.refresh)
+                    earnings_dts = pd.DatetimeIndex(earnings["earnings_datetime"])
+                except Exception as exc:
+                    errors.append({"ticker": ticker, "stage": "earnings", "error": str(exc)})
+                    earnings_dts = pd.DatetimeIndex([], tz="UTC")
+
+                setups = detect_all(
+                    bars,
+                    stance=cohort,
+                    benchmark_close=benchmark_close,
+                    earnings_datetimes=earnings_dts,
+                )
+                if not setups:
+                    continue
+
+                upcoming = earnings_dts[
+                    (earnings_dts > asof)
+                    & (earnings_dts <= asof + pd.Timedelta(days=config.earnings_warn_days))
+                ]
+                candidates.append(
+                    {
+                        "ticker": ticker,
+                        "name": getattr(row, "name", ticker),
+                        "sector": row.sector,
+                        "fa_score": float(row.fa_score),
+                        "cohort": cohort,
+                        "setup_score": max(s.score for s in setups),
+                        "setups": [
+                            {
+                                "setup_type": s.setup_type,
+                                "score": s.score,
+                                "asof": s.asof,
+                                "trigger_level": s.trigger_level,
+                                "stop_level": s.stop_level,
+                                "evidence": s.evidence,
+                            }
+                            for s in setups
+                        ],
+                        "qualitative_score": None,
+                        "stance": None,
+                        "red_flags": [],
+                        "brief": None,
+                        "earnings_warning": bool(len(upcoming) > 0),
+                    }
+                )
             except Exception as exc:
-                errors.append({"ticker": ticker, "stage": "earnings", "error": str(exc)})
-                earnings_dts = pd.DatetimeIndex([], tz="UTC")
-
-            setups = detect_all(
-                bars, benchmark_close=benchmark_close, earnings_datetimes=earnings_dts
-            )
-            if not setups:
-                continue
-
-            upcoming = earnings_dts[
-                (earnings_dts > asof)
-                & (earnings_dts <= asof + pd.Timedelta(days=config.earnings_warn_days))
-            ]
-            candidates.append(
-                {
-                    "ticker": ticker,
-                    "name": getattr(row, "name", ticker),
-                    "sector": row.sector,
-                    "fa_score": float(row.fa_score),
-                    "setup_score": max(s.score for s in setups),
-                    "setups": [
-                        {
-                            "setup_type": s.setup_type,
-                            "score": s.score,
-                            "asof": s.asof,
-                            "trigger_level": s.trigger_level,
-                            "stop_level": s.stop_level,
-                            "evidence": s.evidence,
-                        }
-                        for s in setups
-                    ],
-                    "qualitative_score": None,
-                    "stance": None,
-                    "red_flags": [],
-                    "brief": None,
-                    "earnings_warning": bool(len(upcoming) > 0),
-                }
-            )
-        except Exception as exc:
-            errors.append({"ticker": ticker, "stage": "bars", "error": str(exc)})
+                errors.append({"ticker": ticker, "stage": "bars", "error": str(exc)})
 
     bars_failed: set[str] = {e["ticker"] for e in errors if e["stage"] == "bars"}
 
@@ -350,6 +358,7 @@ def run_scan(
             "fa_shortlist": len(shortlist),
             "fa_shortlist_short": int(scored["passed_short_gate"].sum()),
             "with_setups": len(candidates),
+            "with_setups_short": sum(1 for c in candidates if c.get("cohort") == "short"),
             "tournament_candidates": (
                 0
                 if config.skip_strategies
