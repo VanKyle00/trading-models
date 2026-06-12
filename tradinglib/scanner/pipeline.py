@@ -68,13 +68,27 @@ def _previous_winners(previous_report: dict | None) -> dict[tuple[str, str], str
     return out
 
 
+def _active_campaigns(recent_ledger: dict | None) -> set[tuple[str, str, str, str]]:
+    """(ticker, stance, strategy, tier) for every ledger row still waiting or open."""
+    if not recent_ledger:
+        return set()
+    return {
+        (r["ticker"], r["stance"], r["strategy"], r.get("tier", "ticket"))
+        for r in recent_ledger.get("tickets", [])
+        if r.get("status") in ("waiting", "open")
+    }
+
+
 def run_scan(
     config: ScanConfig,
     provider: LLMProvider | None = None,
     previous_report: dict | None = None,
+    recent_ledger: dict | None = None,
 ) -> dict:
     """Run the full funnel and return the report-ready result dict."""
     asof = _now()
+    active = _active_campaigns(recent_ledger)
+    suppressed: list[dict] = []
     start = (asof - pd.Timedelta(days=config.lookback_days)).strftime("%Y-%m-%d")
 
     if config.universe == "russell1000":
@@ -276,6 +290,22 @@ def run_scan(
         watchlist = build_watchlist(
             tournament, candidates, fdr_passed, watch_dsr_floor=config.watch_dsr_floor
         )
+        for stance in ("long", "short"):
+            kept = []
+            for row in watchlist[stance]:
+                if (row["ticker"], stance, row["strategy"], row["tier"]) in active:
+                    suppressed.append(
+                        {
+                            "ticker": row["ticker"],
+                            "stance": stance,
+                            "strategy": row["strategy"],
+                            "tier": row["tier"],
+                            "reason": "open campaign",
+                        }
+                    )
+                else:
+                    kept.append(row)
+            watchlist[stance] = kept
 
     tickets: dict[str, list[dict]] = {"long": [], "short": []}
     fa_by_key = {
@@ -288,6 +318,17 @@ def run_scan(
             if not fdr_passed.get((stance, entry["ticker"]), False):
                 continue  # demoted to the watchlist by the nightly FDR
             ticker = entry["ticker"]
+            if (ticker, stance, entry["winner"]["strategy"], "ticket") in active:
+                suppressed.append(
+                    {
+                        "ticker": ticker,
+                        "stance": stance,
+                        "strategy": entry["winner"]["strategy"],
+                        "tier": "ticket",
+                        "reason": "open campaign",
+                    }
+                )
+                continue
             try:
                 try:
                     chain = fetch_chain(ticker)
@@ -370,12 +411,14 @@ def run_scan(
             "tickets": sum(len(entries) for entries in tickets.values()),
             "fdr_passed": sum(1 for v in fdr_passed.values() if v) if fdr else 0,
             "watchlist": sum(len(v) for v in watchlist.values()),
+            "suppressed": len(suppressed),
         },
         "fa_candidates": fa_candidates,
         "tournament": tournament,
         "tickets": tickets,
         "watchlist": watchlist,
         "fdr": fdr,
+        "suppressed": suppressed,
         "candidates": rank_candidates(candidates, top=config.top),
         "errors": errors,
     }

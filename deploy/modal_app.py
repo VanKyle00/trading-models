@@ -190,14 +190,19 @@ def scheduled_swing_scan() -> None:
     from tradinglib.assistant.provider import ClaudeProvider
     from tradinglib.data.paths import processed_dir
     from tradinglib.scanner.config import ScanConfig
-    from tradinglib.scanner.ledger import build_ledger, write_ledger
+    from tradinglib.scanner.ledger import build_ledger, load_ledger, write_ledger
     from tradinglib.scanner.pipeline import run_scan
     from tradinglib.scanner.report import load_latest_report, write_report
 
     base = processed_dir("scans")
     # without last night's report every winner_changed stays null forever
     previous = load_latest_report(base, before=datetime.now(UTC).strftime("%Y-%m-%d"))
-    result = run_scan(ScanConfig(), ClaudeProvider(), previous_report=previous)
+    result = run_scan(
+        ScanConfig(),
+        ClaudeProvider(),
+        previous_report=previous,
+        recent_ledger=load_ledger(base),
+    )
     json_path, _ = write_report(result, base / result["asof"])
     try:
         # forward ticket-performance ledger; must never cost the night's report

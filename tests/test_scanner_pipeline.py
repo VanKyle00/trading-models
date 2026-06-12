@@ -804,3 +804,51 @@ def test_fdr_wiring_unmocked(patched_pipeline) -> None:
     assert result["fdr"]["threshold"] == pytest.approx(0.05)
     assert isinstance(result["fdr"]["threshold"], float)
     assert result["funnel"]["fdr_passed"] == 1
+
+
+def test_recent_ledger_suppresses_same_campaign(fdr_pipeline) -> None:
+    # fdr_pipeline tickets DRIFT long / sma_cross; a matching open campaign must
+    # suppress the re-issue and record it in result["suppressed"].
+    recent = {
+        "tickets": [
+            {
+                "ticker": "DRIFT",
+                "stance": "long",
+                "strategy": "sma_cross",
+                "tier": "ticket",
+                "status": "open",
+            }
+        ]
+    }
+    result = fdr_pipeline.run_scan(
+        ScanConfig(fa_keep=2, short_keep=0, skip_llm=True), recent_ledger=recent
+    )
+    issued = {(t["ticker"], t["stance"]) for t in result["tickets"]["long"]}
+    assert ("DRIFT", "long") not in issued
+    suppressed = result["suppressed"]
+    assert any(
+        s["ticker"] == "DRIFT" and s["tier"] == "ticket" and s["reason"] == "open campaign"
+        for s in suppressed
+    )
+    assert result["funnel"]["suppressed"] == len(suppressed) >= 1
+
+
+def test_recent_ledger_closed_campaign_reissues(fdr_pipeline) -> None:
+    # A stopped (closed) campaign must NOT block re-issuance.
+    recent = {
+        "tickets": [
+            {
+                "ticker": "DRIFT",
+                "stance": "long",
+                "strategy": "sma_cross",
+                "tier": "ticket",
+                "status": "stopped",
+            }
+        ]
+    }
+    result = fdr_pipeline.run_scan(
+        ScanConfig(fa_keep=2, short_keep=0, skip_llm=True), recent_ledger=recent
+    )
+    issued = {(t["ticker"], t["stance"]) for t in result["tickets"]["long"]}
+    assert ("DRIFT", "long") in issued
+    assert result["suppressed"] == []
