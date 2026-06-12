@@ -806,9 +806,9 @@ def test_fdr_wiring_unmocked(patched_pipeline) -> None:
     assert result["funnel"]["fdr_passed"] == 1
 
 
-def test_recent_ledger_suppresses_same_campaign(fdr_pipeline) -> None:
-    # fdr_pipeline tickets DRIFT long / sma_cross; a matching open campaign must
-    # suppress the re-issue and record it in result["suppressed"].
+@pytest.mark.parametrize("status", ["waiting", "open"])
+def test_recent_ledger_suppresses_active_campaign(fdr_pipeline, status: str) -> None:
+    """Statuses 'waiting' and 'open' must suppress re-issuance."""
     recent = {
         "tickets": [
             {
@@ -816,7 +816,7 @@ def test_recent_ledger_suppresses_same_campaign(fdr_pipeline) -> None:
                 "stance": "long",
                 "strategy": "sma_cross",
                 "tier": "ticket",
-                "status": "open",
+                "status": status,
             }
         ]
     }
@@ -833,8 +833,9 @@ def test_recent_ledger_suppresses_same_campaign(fdr_pipeline) -> None:
     assert result["funnel"]["suppressed"] == len(suppressed) >= 1
 
 
-def test_recent_ledger_closed_campaign_reissues(fdr_pipeline) -> None:
-    # A stopped (closed) campaign must NOT block re-issuance.
+@pytest.mark.parametrize("status", ["stopped", "target", "expired", "error"])
+def test_recent_ledger_closed_campaign_reissues(fdr_pipeline, status: str) -> None:
+    """Statuses 'stopped', 'target', 'expired', 'error' must NOT block re-issuance."""
     recent = {
         "tickets": [
             {
@@ -842,7 +843,7 @@ def test_recent_ledger_closed_campaign_reissues(fdr_pipeline) -> None:
                 "stance": "long",
                 "strategy": "sma_cross",
                 "tier": "ticket",
-                "status": "stopped",
+                "status": status,
             }
         ]
     }
@@ -852,3 +853,112 @@ def test_recent_ledger_closed_campaign_reissues(fdr_pipeline) -> None:
     issued = {(t["ticker"], t["stance"]) for t in result["tickets"]["long"]}
     assert ("DRIFT", "long") in issued
     assert result["suppressed"] == []
+
+
+def test_recent_ledger_watch_tier_suppresses(fdr_pipeline, monkeypatch) -> None:
+    """A watch-tier row (status='waiting') must suppress the matching watchlist entry."""
+    # fdr_pipeline demotes QUIET to the watchlist (fails FDR). Inject a ledger
+    # row that matches QUIET's watchlist identity so it gets suppressed.
+    # build_watchlist assigns strategy from the tournament winner; in our fixture
+    # that is "sma_cross". The tier for a watchlist row is "watch".
+    recent = {
+        "tickets": [
+            {
+                "ticker": "QUIET",
+                "stance": "long",
+                "strategy": "sma_cross",
+                "tier": "watch",
+                "status": "waiting",
+            }
+        ]
+    }
+    result = fdr_pipeline.run_scan(
+        ScanConfig(fa_keep=2, short_keep=0, skip_llm=True), recent_ledger=recent
+    )
+    wl_tickers = {r["ticker"] for r in result["watchlist"].get("long", [])}
+    assert "QUIET" not in wl_tickers, "watch-tier waiting campaign must suppress watchlist row"
+    suppressed = result["suppressed"]
+    assert any(s["ticker"] == "QUIET" and s["tier"] == "watch" for s in suppressed), (
+        f"expected QUIET watch suppression, got: {suppressed}"
+    )
+
+
+def test_recent_ledger_schema_round_trip(fdr_pipeline, tmp_path, monkeypatch) -> None:
+    """A ledger built from real build_ledger output (status='waiting') must suppress
+    the matching campaign — pins the vocabulary coupling between ledger.py and pipeline.py."""
+    import json
+
+    import pandas as pd
+
+    from tradinglib.scanner.ledger import build_ledger
+
+    # Build a minimal scan report directory that build_ledger can read.
+    # The ticket must match what fdr_pipeline produces for DRIFT long.
+    ticket = {
+        "ticker": "DRIFT",
+        "stance": "long",
+        "strategy": "sma_cross",
+        "tier": "ticket",
+        "levels": {"entry": 100.0, "entry_type": "stop", "stop": 95.0, "target": 110.0},
+    }
+    report = {
+        "asof": "2026-06-11",
+        "funnel": {},
+        "candidates": [],
+        "errors": [],
+        "tickets": {"long": [ticket], "short": []},
+    }
+    scan_dir = tmp_path / "scans" / "2026-06-11"
+    scan_dir.mkdir(parents=True)
+    (scan_dir / "report.json").write_text(json.dumps(report), encoding="utf-8")
+
+    # Provide bars where entry never triggers so status stays "waiting".
+    idx = pd.date_range("2026-06-12", periods=3, freq="B", tz="UTC")
+    bars = pd.DataFrame(
+        {
+            "open": [90.0, 91.0, 92.0],
+            "high": [91.0, 92.0, 93.0],
+            "low": [89.0, 90.0, 91.0],
+            "close": [90.0, 91.0, 92.0],
+        },
+        index=idx,
+    )
+    ledger = build_ledger(tmp_path / "scans", asof="2026-06-12", loader=lambda t, **kw: bars)
+
+    # Confirm the ledger produced a "waiting" row for DRIFT.
+    waiting = [r for r in ledger["tickets"] if r["ticker"] == "DRIFT" and r["status"] == "waiting"]
+    assert waiting, f"expected a waiting DRIFT row, got: {ledger['tickets']}"
+
+    # Now run_scan with this real ledger as recent_ledger must suppress DRIFT.
+    result = fdr_pipeline.run_scan(
+        ScanConfig(fa_keep=2, short_keep=0, skip_llm=True), recent_ledger=ledger
+    )
+    issued = {(t["ticker"], t["stance"]) for t in result["tickets"]["long"]}
+    assert ("DRIFT", "long") not in issued, "build_ledger 'waiting' row must suppress re-issuance"
+    assert any(s["ticker"] == "DRIFT" for s in result["suppressed"])
+
+
+def test_active_campaigns_tolerates_malformed_rows(fdr_pipeline) -> None:
+    """A ledger row missing identity keys must not cause a KeyError; valid rows still suppress."""
+    recent = {
+        "tickets": [
+            # malformed: status open but no 'strategy' key
+            {"ticker": "DRIFT", "stance": "long", "status": "open"},
+            # valid: this must still suppress
+            {
+                "ticker": "DRIFT",
+                "stance": "long",
+                "strategy": "sma_cross",
+                "tier": "ticket",
+                "status": "open",
+            },
+        ]
+    }
+    result = fdr_pipeline.run_scan(
+        ScanConfig(fa_keep=2, short_keep=0, skip_llm=True), recent_ledger=recent
+    )
+    # Scan must complete (no KeyError).
+    issued = {(t["ticker"], t["stance"]) for t in result["tickets"]["long"]}
+    assert ("DRIFT", "long") not in issued, (
+        "valid row must still suppress despite malformed sibling"
+    )

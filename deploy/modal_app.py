@@ -201,6 +201,7 @@ def scheduled_swing_scan() -> None:
         ScanConfig(),
         ClaudeProvider(),
         previous_report=previous,
+        # yesterday's rebuild: a campaign that exited TODAY still suppresses tonight (deliberate one-night lag; report must never wait on ledger work)
         recent_ledger=load_ledger(base),
     )
     json_path, _ = write_report(result, base / result["asof"])

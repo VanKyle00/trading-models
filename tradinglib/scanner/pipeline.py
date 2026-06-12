@@ -76,6 +76,7 @@ def _active_campaigns(recent_ledger: dict | None) -> set[tuple[str, str, str, st
         (r["ticker"], r["stance"], r["strategy"], r.get("tier", "ticket"))
         for r in recent_ledger.get("tickets", [])
         if r.get("status") in ("waiting", "open")
+        and all(k in r for k in ("ticker", "stance", "strategy"))
     }
 
 

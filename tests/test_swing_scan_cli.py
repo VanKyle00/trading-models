@@ -141,7 +141,7 @@ def test_cli_writes_report_and_passes_config(
 ) -> None:
     seen: dict = {}
 
-    def fake_run_scan(config, provider=None, previous_report=None):
+    def fake_run_scan(config, provider=None, previous_report=None, recent_ledger=None):
         seen["config"] = config
         seen["provider"] = provider
         return _canned_result()
@@ -189,7 +189,7 @@ def test_cli_passes_sizing_flags(
 ) -> None:
     seen: dict = {}
 
-    def fake_run_scan(config, provider=None, previous_report=None):
+    def fake_run_scan(config, provider=None, previous_report=None, recent_ledger=None):
         seen["config"] = config
         return _canned_result()
 
@@ -223,7 +223,7 @@ def test_cli_builds_claude_provider_unless_skipped(
 
     seen: dict = {}
 
-    def fake_run_scan(config, provider=None, previous_report=None):
+    def fake_run_scan(config, provider=None, previous_report=None, recent_ledger=None):
         seen["provider"] = provider
         return _canned_result()
 
