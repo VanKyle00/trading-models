@@ -38,6 +38,7 @@ from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.loaders.events.earnings import get_earnings_dates
 from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.ledger import _stats
+from tradinglib.scanner.regime import gate_reason, regime_state
 from tradinglib.scanner.setups import detect_all
 from tradinglib.scanner.tiers import apply_fdr, build_watchlist
 from tradinglib.strategist.evaluate import ENTRY_WINDOW, simulate_ticket
@@ -140,6 +141,7 @@ def run_night(
     bench_close = (
         _slice(benchmark, asof, config.lookback_days)["close"] if benchmark is not None else None
     )
+    regime = regime_state(bench_close)
     candidates: list[dict] = []
     for cohort, tickers in [("long", family["long"]), ("short", family["short"])]:
         for ticker in tickers:
@@ -212,6 +214,13 @@ def run_night(
                 }
             )
 
+    regime_blocked: list[dict] = []
+    if config.regime_gate:
+        regime_blocked = [
+            row for row in issued if gate_reason(row["strategy"], row["stance"], regime) is not None
+        ]
+        issued = [row for row in issued if row not in regime_blocked]
+
     funnel = {
         "date": date,
         "tournaments": sum(len(v) for v in tournament.values()),
@@ -220,6 +229,8 @@ def run_night(
         "fdr_passed": sum(1 for v in fdr_passed.values() if v),
         "tickets": sum(1 for r in issued if r["tier"] == "ticket"),
         "watch": sum(1 for r in issued if r["tier"] == "watch"),
+        "regime_trend": regime["trend"],
+        "regime_blocked": len(regime_blocked),
         "best_dsr": max(
             (v["deflated_sharpe"] for t in tournament.values() for e in t for v in e["verdicts"]),
             default=None,
@@ -236,9 +247,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", type=Path, default=None, help="report.json for the FA family")
     parser.add_argument("--out", type=Path, default=None, help="output JSON path")
     parser.add_argument("--smoke", action="store_true", help="run only the oldest night, timed")
+    parser.add_argument(
+        "--regime-gate",
+        action="store_true",
+        help="apply the meanrev-against-trend gate at issuance (A/B arm)",
+    )
     args = parser.parse_args(argv)
 
-    config = ScanConfig()
+    config = ScanConfig(regime_gate=args.regime_gate)
     today = pd.Timestamp(datetime.now(UTC).strftime("%Y-%m-%d"))
     replay_start = today - pd.Timedelta(days=args.days)
     bar_start = (replay_start - pd.Timedelta(days=config.tournament_lookback_days)).strftime(
@@ -323,6 +339,7 @@ def main(argv: list[str] | None = None) -> int:
             f"[{i}/{len(nights)}] {funnel['date']}: survivors={funnel['survivors']} "
             f"fdr_passed={funnel['fdr_passed']} tickets={funnel['tickets']} "
             f"watch={funnel['watch']} suppressed={funnel['suppressed']} "
+            f"regime_blocked={funnel['regime_blocked']} "
             f"best_dsr={funnel['best_dsr'] or 0:.3f} "
             f"errors={funnel['errors']} ({time.monotonic() - t0:.0f}s)",
             flush=True,
@@ -346,6 +363,7 @@ def main(argv: list[str] | None = None) -> int:
                 "generated_asof": today.strftime("%Y-%m-%d"),
                 "family_report": str(report_path),
                 "step_sessions": args.step,
+                "regime_gate": args.regime_gate,
                 "caveats": [
                     "FA family frozen to the latest real report (selection-layer survivorship)",
                     "earnings flags from today's fetch (thinner at the oldest nights)",
