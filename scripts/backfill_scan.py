@@ -5,6 +5,7 @@ Examples:
     uv run python scripts/backfill_scan.py                  # full replay
     uv run python scripts/backfill_scan.py --days 300 --step 5
     uv run python scripts/backfill_scan.py --days 300 --step 5 --regime-gate   # gated A/B arm
+    uv run python scripts/backfill_scan.py --days 300 --step 5 --pooled        # pooled A/B arm
 
 Replays setups -> tournament -> FDR -> tiers as-of past nights using the same
 pipeline functions the nightly cron runs, then forward-scores every issued
@@ -39,6 +40,7 @@ from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.loaders.events.earnings import get_earnings_dates
 from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.ledger import _stats
+from tradinglib.scanner.pooled import build_certification
 from tradinglib.scanner.regime import gate_reason, regime_state
 from tradinglib.scanner.setups import detect_all
 from tradinglib.scanner.tiers import apply_fdr, build_watchlist
@@ -99,12 +101,57 @@ def _earnings_flags(index: pd.DatetimeIndex, dts: pd.DatetimeIndex) -> pd.Series
     return flags
 
 
+def _promote_certified(
+    watchlist: dict[str, list[dict]],
+    certification: dict,
+    config: ScanConfig,
+    date: str,
+) -> tuple[dict[str, list[dict]], list[dict]]:
+    """Promote pooled-certified setup watch rows to ticket tier (replays the pipeline).
+
+    Mirrors tradinglib.scanner.pipeline: a setup:* watch row with levels whose
+    (setup_type, stance) verdict is certified leaves the watchlist and becomes a
+    ticket-tier issued row. Returns (watchlist sans promoted, promoted issued rows).
+    """
+    verdicts = certification.get("verdicts", {})
+    promoted: list[dict] = []
+    kept_by_stance: dict[str, list[dict]] = {}
+    for stance in ("long", "short"):
+        kept = []
+        for row in watchlist[stance]:
+            key = f"{row['strategy'].removeprefix('setup:')}:{stance}"
+            verdict = verdicts.get(key)
+            if (
+                row["strategy"].startswith("setup:")
+                and row.get("levels")
+                and verdict
+                and verdict.get("certified")
+            ):
+                promoted.append(
+                    {
+                        "date": date,
+                        "ticker": row["ticker"],
+                        "stance": stance,
+                        "strategy": row["strategy"],
+                        "tier": "ticket",
+                        "tier_reason": "pooled-certified",
+                        "entry_window": int(row.get("entry_window", ENTRY_WINDOW)),
+                        "levels": row["levels"],
+                    }
+                )
+            else:
+                kept.append(row)
+        kept_by_stance[stance] = kept
+    return kept_by_stance, promoted
+
+
 def run_night(
     asof: pd.Timestamp,
     family: dict[str, list[str]],
     bars_by_ticker: dict[str, pd.DataFrame],
     earnings_by_ticker: dict[str, pd.DatetimeIndex],
     config: ScanConfig,
+    certification: dict | None = None,
 ) -> tuple[dict, list[dict], list[str]]:
     """One replayed night: (tournament-funnel summary, issued rows, errors)."""
     errors: list[str] = []
@@ -188,6 +235,16 @@ def run_night(
     )
 
     date = asof.strftime("%Y-%m-%d")
+    # Pooled-certified promotion: setup watch rows of certified types graduate to
+    # ticket tier and leave the watchlist (mirrors the pipeline). ORDERING NOTE:
+    # prod orders promotion -> cooldown -> regime; this replay runs regime (below,
+    # in run_night) before cooldown (in main). The two filters are independent
+    # predicates, so the SET of surviving rows is identical either order; only
+    # doubly-blocked attribution differs (see the artifact's regime_blocked caveat).
+    promoted: list[dict] = []
+    if certification and config.pooled_certification:
+        watchlist, promoted = _promote_certified(watchlist, certification, config, date)
+
     issued: list[dict] = []
     for stance in ("long", "short"):
         for entry in tournament[stance]:
@@ -214,6 +271,10 @@ def run_night(
                     **{k: row[k] for k in ("ticker", "stance", "strategy", "tier", "levels")},
                 }
             )
+    # promoted rows join the issued set BEFORE the regime gate, so the existing
+    # gate applies to them; cooldown (main) applies via their ticket-tier keys.
+    pooled_promoted = len(promoted)
+    issued.extend(promoted)
 
     regime_blocked: list[dict] = []
     if config.regime_gate:
@@ -230,6 +291,7 @@ def run_night(
         "fdr_passed": sum(1 for v in fdr_passed.values() if v),
         "tickets": sum(1 for r in issued if r["tier"] == "ticket"),
         "watch": sum(1 for r in issued if r["tier"] == "watch"),
+        "pooled_promoted": pooled_promoted,
         "regime_trend": regime["trend"],
         "regime_blocked": len(regime_blocked),
         "best_dsr": max(
@@ -252,6 +314,11 @@ def main(argv: list[str] | None = None) -> int:
         "--regime-gate",
         action="store_true",
         help="apply the meanrev-against-trend gate at issuance (A/B arm)",
+    )
+    parser.add_argument(
+        "--pooled",
+        action="store_true",
+        help="apply pooled-certified promotion from a per-night as-of certification (A/B arm)",
     )
     args = parser.parse_args(argv)
 
@@ -301,9 +368,33 @@ def main(argv: list[str] | None = None) -> int:
     funnels: list[dict] = []
     records: list[dict] = []
     all_errors: list[str] = []
+    cert_cache: dict[str, dict] = {}
     for i, asof in enumerate(nights, 1):
         t0 = time.monotonic()
-        funnel, issued, errors = run_night(asof, family, bars_by_ticker, earnings_by_ticker, config)
+        certification = None
+        if args.pooled:
+            week = f"{asof.isocalendar().year}-{asof.isocalendar().week:02d}"
+            if week not in cert_cache:
+                t_cert = time.monotonic()
+                sliced = {
+                    t: _slice(b, asof, config.pooled_lookback_days + 450)
+                    for t, b in bars_by_ticker.items()
+                    if t != _BENCHMARK
+                }
+                cert_cache[week] = build_certification(
+                    sliced, earnings_by_ticker, asof=asof, config=config
+                )
+                certified = sum(1 for v in cert_cache[week]["verdicts"].values() if v["certified"])
+                print(
+                    f"  certification {week}: {certified}/6 certified,"
+                    f" sim_errors={cert_cache[week]['sim_errors']}"
+                    f" ({time.monotonic() - t_cert:.0f}s)",
+                    flush=True,
+                )
+            certification = cert_cache[week]
+        funnel, issued, errors = run_night(
+            asof, family, bars_by_ticker, earnings_by_ticker, config, certification=certification
+        )
         # prod's re-issue cooldown, replayed: a campaign still waiting/open at
         # this night suppresses tonight's same (ticker, stance, strategy, tier)
         active = {
@@ -336,10 +427,12 @@ def main(argv: list[str] | None = None) -> int:
             records.append(record)
         funnels.append(funnel)
         all_errors.extend(errors)
+        pooled_suffix = f"pooled_promoted={funnel['pooled_promoted']} " if args.pooled else ""
         print(
             f"[{i}/{len(nights)}] {funnel['date']}: survivors={funnel['survivors']} "
             f"fdr_passed={funnel['fdr_passed']} tickets={funnel['tickets']} "
             f"watch={funnel['watch']} suppressed={funnel['suppressed']} "
+            f"{pooled_suffix}"
             f"regime_blocked={funnel['regime_blocked']} "
             f"best_dsr={funnel['best_dsr'] or 0:.3f} "
             f"errors={funnel['errors']} ({time.monotonic() - t0:.0f}s)",
@@ -352,6 +445,9 @@ def main(argv: list[str] | None = None) -> int:
         "by_stance": {
             s: _stats([r for r in records if r["stance"] == s]) for s in ("long", "short")
         },
+        "pooled_certified": _stats(
+            [r for r in records if r.get("tier_reason") == "pooled-certified"]
+        ),
     }
     out_path = args.out or (
         processed_dir("backfill")
@@ -365,12 +461,15 @@ def main(argv: list[str] | None = None) -> int:
                 "family_report": str(report_path),
                 "step_sessions": args.step,
                 "regime_gate": args.regime_gate,
+                "pooled": args.pooled,
                 "caveats": [
                     "FA family frozen to the latest real report (selection-layer survivorship)",
                     "earnings flags from today's fetch (thinner at the oldest nights)",
                     "regime_blocked attribution differs from prod: replay gates before the "
                     "cooldown (prod: after, so doubly-blocked rows read 'open campaign') and "
-                    "never sees report-only watch rows prod would gate; issued set unaffected",
+                    "never sees report-only watch rows prod would gate; issued set unaffected. "
+                    "Pooled-certified promotions are gated before cooldown too (prod: after); "
+                    "same independent-predicate argument, so the issued set is unaffected",
                 ],
                 "nights": funnels,
                 "records": records,
