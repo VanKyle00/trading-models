@@ -142,5 +142,6 @@ def certify(
         v = verdicts[key]
         if not passed and not v["reasons"]:
             v["reasons"].append("failed pooled FDR")
+        # invariant: blocking reasons must NOT start with "failed" — that prefix marks informational-only
         v["certified"] = passed and not [r for r in v["reasons"] if not r.startswith("failed")]
     return verdicts

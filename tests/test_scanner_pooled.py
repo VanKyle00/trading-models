@@ -121,3 +121,27 @@ def test_certify_requires_min_dates_and_dsr() -> None:
     assert verdicts[("pead", "long")]["certified"] is True
     assert verdicts[("base_breakout", "long")]["certified"] is False
     assert "n_dates 5 < 20" in verdicts[("base_breakout", "long")]["reasons"]
+
+
+def test_certify_dsr_block_and_fdr_informational() -> None:
+    from tradinglib.scanner.pooled import certify
+
+    rng = np.random.default_rng(42)
+    strong = pd.Series(
+        rng.normal(0.5, 0.2, 25), index=pd.date_range("2025-01-01", periods=25, freq="W")
+    )
+    weak = pd.Series(
+        rng.normal(-0.05, 0.5, 25), index=pd.date_range("2025-01-01", periods=25, freq="W")
+    )
+
+    # DSR floor blocks even when the FDR pass is generous
+    verdicts = certify({("pead", "long"): weak}, n_trials=1, min_dates=20, fdr_alpha=0.99)
+    v = verdicts[("pead", "long")]
+    assert v["certified"] is False
+    assert any(r.startswith("pooled_dsr") for r in v["reasons"])
+
+    # FDR failure on an otherwise-clean key is informational-only
+    verdicts = certify({("pead", "long"): strong}, n_trials=6, min_dates=20, fdr_alpha=0.0)
+    v = verdicts[("pead", "long")]
+    assert v["certified"] is False
+    assert v["reasons"] == ["failed pooled FDR"]
