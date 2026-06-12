@@ -13,6 +13,7 @@ from tradinglib.scanner.setups import (
     detect_ma_pullback,
     detect_ma_rally_fade,
     detect_pead,
+    detect_pead_down,
 )
 
 
@@ -98,6 +99,18 @@ def _pead_bars() -> tuple[pd.DataFrame, pd.Timestamp]:
     volume = np.concatenate([np.full(110, 1_000_000.0), [3_000_000.0], np.full(9, 1_200_000.0)])
     low = np.concatenate([np.full(110, 99.0), [105.0], np.linspace(107.0, 108.8, 9)])
     high = close * 1.01
+    bars = _bars(close, volume, high=high, low=low)
+    return bars, bars.index[110]
+
+
+def _pead_down_bars() -> tuple[pd.DataFrame, pd.Timestamp]:
+    # Mirror of _pead_bars: flat at 100, an -8% earnings-day drop on 3x
+    # volume at bar 110, then a drift lower that stays below the
+    # earnings-day high.
+    close = np.concatenate([np.full(110, 100.0), [92.0], np.linspace(91.8, 90.0, 9)])
+    volume = np.concatenate([np.full(110, 1_000_000.0), [3_000_000.0], np.full(9, 1_200_000.0)])
+    high = np.concatenate([np.full(110, 101.0), [95.0], np.linspace(93.0, 91.2, 9)])
+    low = close * 0.99
     bars = _bars(close, volume, high=high, low=low)
     return bars, bars.index[110]
 
@@ -210,3 +223,17 @@ def test_ma_rally_fade_detected() -> None:
 
 def test_ma_rally_fade_rejects_uptrend() -> None:
     assert detect_ma_rally_fade(_pullback_bars()) is None
+
+
+def test_pead_down_detected() -> None:
+    bars, earnings_ts = _pead_down_bars()
+    signal = detect_pead_down(bars, [earnings_ts])
+
+    assert isinstance(signal, SetupSignal)
+    assert signal.setup_type == "pead_down"
+    assert signal.stop_level > signal.trigger_level
+
+
+def test_pead_down_rejects_up_gap() -> None:
+    bars, earnings_ts = _pead_bars()
+    assert detect_pead_down(bars, [earnings_ts]) is None

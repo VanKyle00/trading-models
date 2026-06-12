@@ -341,6 +341,62 @@ def detect_pead(
     )
 
 
+def detect_pead_down(
+    bars: pd.DataFrame, earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex
+) -> SetupSignal | None:
+    if len(bars) < 60 or len(earnings_datetimes) == 0:
+        return None
+    close, high, volume = bars["close"], bars["high"], bars["volume"]
+    index = cast(pd.DatetimeIndex, bars.index)
+
+    past = [ts for ts in pd.DatetimeIndex(earnings_datetimes) if ts <= index[-1]]
+    if not past:
+        return None
+    reaction_pos = int(index.searchsorted(max(past)))
+    if reaction_pos >= len(index):
+        return None
+    days_since = len(index) - 1 - reaction_pos
+    if not (_PEAD_WINDOW[0] <= days_since <= _PEAD_WINDOW[1]):
+        return None
+    if reaction_pos == 0:
+        return None
+
+    move = close.iloc[reaction_pos] / close.iloc[reaction_pos - 1] - 1.0
+    if not move <= -_PEAD_MIN_MOVE:
+        return None
+    vol_ratio = volume_ratio(volume, 50).iloc[reaction_pos]
+    if not vol_ratio >= _PEAD_MIN_VOLUME_RATIO:
+        return None
+    reaction_high = high.iloc[reaction_pos]
+    if not close.iloc[-1] < reaction_high:
+        return None
+
+    reaction_close = close.iloc[reaction_pos]
+    if close.iloc[-1] <= reaction_close:
+        hold = 1.0
+    else:
+        hold = _clip01(
+            1.0 - (close.iloc[-1] - reaction_close) / max(reaction_high - reaction_close, 1e-9)
+        )
+    score = _clip01(
+        0.5 * min(abs(move) / 0.10, 1.0) + 0.3 * min(float(vol_ratio) / 3.0, 1.0) + 0.2 * hold
+    )
+    return SetupSignal(
+        ticker=_ticker(bars),
+        setup_type="pead_down",
+        score=score,
+        asof=_asof(bars),
+        trigger_level=float(close.iloc[-1]),
+        stop_level=float(reaction_high),
+        evidence={
+            "earnings_day_move": float(move),
+            "earnings_day_volume_ratio": float(vol_ratio),
+            "days_since_earnings": days_since,
+            "reaction_high": float(reaction_high),
+        },
+    )
+
+
 def detect_all(
     bars: pd.DataFrame,
     *,
