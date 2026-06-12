@@ -151,3 +151,49 @@ def test_watchlist_tolerates_candidate_without_setups() -> None:
     wl = build_watchlist(tournament, candidates, fdr_passed, watch_dsr_floor=0.5)
     assert "NOSETUP" not in {w["ticker"] for w in wl["long"]}
     assert "ALSONONE" not in {w["ticker"] for w in wl["long"]}
+
+
+def test_setup_watch_levels_short_target_below_trigger() -> None:
+    from tradinglib.scanner.tiers import _setup_watch_levels
+
+    setup = {"trigger_level": 50.0, "stop_level": 55.0}
+    levels = _setup_watch_levels(setup, "short")
+    assert levels["entry"] == 50.0
+    assert levels["stop"] == 55.0
+    assert levels["target"] == 40.0  # trigger - 2 * (stop - trigger)
+    assert levels["entry_type"] == "stop"
+
+
+def test_build_watchlist_sub_threshold_short_cohort() -> None:
+    tournament = {
+        "long": [],
+        "short": [
+            {
+                "ticker": "WEAK",
+                "stance": "short",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.7}],
+            }
+        ],
+    }
+    candidates = [
+        {
+            "ticker": "WEAK",
+            "cohort": "short",
+            "setups": [
+                {
+                    "setup_type": "base_breakdown",
+                    "score": 0.8,
+                    "trigger_level": 50.0,
+                    "stop_level": 55.0,
+                }
+            ],
+        }
+    ]
+    watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
+    assert len(watchlist["short"]) == 1
+    row = watchlist["short"][0]
+    assert row["strategy"] == "setup:base_breakdown"
+    assert row["stance"] == "short"
+    assert row["levels"]["target"] == 40.0
