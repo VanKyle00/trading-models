@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Engineering devlog — trading-models</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#0b0e0c; --panel:#10140f; --inset:#0d110e; --code:#090c0a;
+    --ink:#d9e2d6; --muted:#7e8b7c; --faint:#5a665a;
+    --line:#1f2820; --line-strong:#31402f;
+    --green:#4cc38a; --red:#e0564d; --amber:#d9a13f; --cyan:#5fb2c9;
+    --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --disp:"Fraunces", Georgia, serif;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--mono); font-size:14.5px; line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(1100px 500px at 50% -120px, rgba(76,195,138,.05), transparent 70%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px);
+  }
+  .wrap { max-width:900px; margin:0 auto; padding:0 24px 130px; }
+  a { color:var(--cyan); text-decoration:none; border-bottom:1px solid transparent; }
+  a:hover { border-bottom-color:currentColor; }
+  code { font-family:var(--mono); font-size:12.5px; background:var(--code); color:#bfd8b4;
+         padding:1px 6px; border-radius:4px; border:1px solid var(--line); }
+  strong { color:#f2f6ef; font-weight:600; }
+  .good { color:var(--green); } .bad { color:var(--red); } .warn { color:var(--amber); }
+
+  /* ===== masthead ===== */
+  header { padding:50px 0 12px; }
+  .kicker { font-size:11px; letter-spacing:.26em; text-transform:uppercase; color:var(--green); margin:0 0 16px; }
+  .kicker .blink { display:inline-block; width:8px; height:14px; background:var(--green);
+                   vertical-align:-2px; margin-left:8px; animation:blink 1.15s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  h1 { font-family:var(--disp); font-weight:600; font-size:42px; line-height:1.08;
+       letter-spacing:-.015em; margin:0 0 16px; color:#eef4ea; }
+  h1 em { font-style:italic; color:var(--green); }
+  .lede { color:var(--muted); max-width:66ch; margin:0; }
+  .meta { margin-top:22px; font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:8px 20px; }
+  .meta b { color:var(--ink); font-weight:500; }
+
+  figure.chart { margin:34px 0 0; background:var(--panel); border:1px solid var(--line);
+                 border-radius:10px; padding:18px 18px 12px; }
+  figure.chart svg { display:block; width:100%; height:auto; }
+  figcaption { color:var(--faint); font-size:11.5px; margin-top:10px; line-height:1.55; }
+  .ax { font-size:10px; fill:var(--faint); font-family:var(--mono); }
+  .axb { font-size:10px; fill:var(--muted); font-family:var(--mono); font-weight:600; }
+  .lbl { font-size:11px; fill:var(--ink); font-family:var(--mono); }
+  .lblm { font-size:10.5px; fill:var(--muted); font-family:var(--mono); }
+
+  /* ===== toc ===== */
+  nav.toc { margin:30px 0 0; border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:16px 18px; }
+  nav.toc .lbl-t { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted); }
+  nav.toc ol { list-style:none; margin:10px 0 0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:3px 26px; }
+  @media (max-width:700px){ nav.toc ol { grid-template-columns:1fr; } }
+  nav.toc li { font-size:12.5px; display:flex; gap:10px; align-items:baseline; }
+  nav.toc .no { color:var(--green); min-width:26px; }
+  nav.toc .dt { color:var(--faint); min-width:50px; font-size:11px; }
+  .keyline { margin:14px 0 0; font-size:11.5px; color:var(--faint); }
+  .keyline b { color:var(--amber); font-weight:600; }
+
+  /* ===== entries / timeline rail ===== */
+  .log { margin-top:26px; }
+  article.entry { position:relative; padding:44px 0 8px 34px; border-left:1px solid var(--line-strong); margin-left:6px; }
+  article.entry::before {
+    content:""; position:absolute; left:-6px; top:58px; width:11px; height:11px;
+    border-radius:50%; background:var(--bg); border:2px solid var(--green);
+  }
+  article.entry.neg::before { border-color:var(--red); }
+  article.entry:last-of-type { border-left-color:transparent; }
+  @media (max-width:700px){ article.entry { padding-left:20px; } }
+
+  .e-no { font-size:10.5px; letter-spacing:.22em; color:var(--green); text-transform:uppercase; }
+  .e-no .pr { color:var(--faint); letter-spacing:.04em; text-transform:none; margin-left:12px; }
+  h2 { font-family:var(--disp); font-weight:600; font-size:27px; line-height:1.18;
+       letter-spacing:-.01em; margin:8px 0 2px; color:#eef4ea; scroll-margin-top:24px; }
+  .e-sub { color:var(--muted); font-size:12.5px; margin:4px 0 18px; }
+  h3 { font-family:var(--disp); font-weight:600; font-size:17.5px; color:#e7eee2; margin:26px 0 6px; }
+  p { margin:12px 0; }
+
+  /* callouts */
+  .c { border:1px solid var(--line); border-left-width:3px; border-radius:8px;
+       padding:12px 15px; margin:14px 0; background:var(--panel); font-size:13.5px; }
+  .c .tag { font-size:10px; letter-spacing:.18em; text-transform:uppercase; display:block; margin-bottom:5px; font-weight:600; }
+  .c p { margin:5px 0; }
+  .c-why  { border-left-color:var(--cyan); }  .c-why .tag  { color:var(--cyan); }
+  .c-prob { border-left-color:var(--red); }   .c-prob .tag { color:var(--red); }
+  .c-fix  { border-left-color:var(--green); } .c-fix .tag  { color:var(--green); }
+  .c-find { border-left-color:var(--amber); } .c-find .tag { color:var(--amber); }
+
+  ul.clean { margin:12px 0; padding-left:20px; }
+  ul.clean li { margin:7px 0; }
+  .pill { display:inline-block; font-size:11px; padding:1px 9px; border-radius:20px;
+          border:1px solid var(--line-strong); color:var(--muted); margin-right:4px; }
+
+  /* ledger table */
+  .tbl { overflow-x:auto; margin:20px 0; border:1px solid var(--line); border-radius:10px; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th, td { text-align:left; padding:7px 12px; border-bottom:1px solid var(--line); }
+  thead th { background:var(--inset); color:var(--muted); font-weight:500; font-size:10.5px;
+             letter-spacing:.08em; text-transform:uppercase; position:sticky; top:0; }
+  tbody tr:last-child td { border-bottom:0; }
+  td.num { color:var(--green); white-space:nowrap; }
+  td.dt  { color:var(--faint); white-space:nowrap; }
+  tr.era td { background:var(--inset); color:var(--amber); font-size:10.5px;
+              letter-spacing:.16em; text-transform:uppercase; padding-top:9px; padding-bottom:9px; }
+
+  hr.sep { border:0; border-top:1px solid var(--line); margin:46px 0 0; }
+  footer { margin-top:64px; padding-top:22px; border-top:1px solid var(--line); color:var(--faint); font-size:12px; }
+  footer a { color:var(--muted); }
+
+  /* load-in */
+  header, figure.chart, nav.toc { animation:rise .5s ease-out backwards; }
+  figure.chart { animation-delay:.08s; } nav.toc { animation-delay:.16s; }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion:reduce){ header, figure.chart, nav.toc, .kicker .blink { animation:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="kicker">Engineering log · trading-models<span class="blink"></span></p>
+  <h1>Fifteen days, seventy-nine pull requests,<br/>and the <em>corrections</em> along the way</h1>
+  <p class="lede">The running build log of this repository: why each major change was needed, what broke or surprised us while building it, and what fixed it. From a Streamlit prototype hitting a 1&nbsp;GB memory wall to a nightly Russell-1000 scanning pipeline whose newest feature exists to tell us our own best headline number was wrong.</p>
+  <div class="meta">
+    <span><b>Window:</b> 2026-05-29 → 2026-06-12</span>
+    <span><b>Merged PRs:</b> 79</span>
+    <span><b>Newest first</b> · oldest at the bottom</span>
+    <span><a href="index.html">← research hub</a></span>
+  </div>
+</header>
+
+<figure class="chart">
+  <svg viewBox="0 0 760 205" role="img" aria-label="Step chart of cumulative merged pull requests from 2026-05-29 to 2026-06-12, rising from 5 to 79">
+    <!-- gridlines -->
+    <line x1="40" y1="160" x2="715" y2="160" stroke="#31402f" stroke-width="1"/>
+    <line x1="40" y1="90"  x2="715" y2="90"  stroke="#1f2820" stroke-width="1"/>
+    <line x1="40" y1="20"  x2="715" y2="20"  stroke="#1f2820" stroke-width="1"/>
+    <text class="ax" x="30" y="164" text-anchor="end">0</text>
+    <text class="ax" x="30" y="94"  text-anchor="end">40</text>
+    <text class="ax" x="30" y="24"  text-anchor="end">80</text>
+    <!-- equity-curve of merges -->
+    <path d="M40,151.3 H328 V118 H376 V105.8 H424 V98.8 H472 V95.3 H520 V86.5 H568 V72.5 H616 V51.5 H664 V32.3 H712 V21.8 L712,160 L40,160 Z"
+          fill="#4cc38a" opacity="0.07"/>
+    <path d="M40,151.3 H328 V118 H376 V105.8 H424 V98.8 H472 V95.3 H520 V86.5 H568 V72.5 H616 V51.5 H664 V32.3 H712 V21.8"
+          fill="none" stroke="#4cc38a" stroke-width="1.8"/>
+    <circle cx="40" cy="151.3" r="2.6" fill="#4cc38a"/>
+    <circle cx="328" cy="118" r="2.6" fill="#4cc38a"/>
+    <circle cx="568" cy="72.5" r="2.6" fill="#4cc38a"/>
+    <circle cx="616" cy="51.5" r="2.6" fill="#4cc38a"/>
+    <circle cx="712" cy="21.8" r="3.2" fill="#4cc38a"/>
+    <text class="axb" x="704" y="14" text-anchor="end" style="fill:#4cc38a">79 merged</text>
+    <!-- date ticks -->
+    <text class="ax" x="40"  y="178" text-anchor="middle">05-29</text>
+    <text class="ax" x="328" y="178" text-anchor="middle">06-04</text>
+    <text class="ax" x="472" y="178" text-anchor="middle">06-07</text>
+    <text class="ax" x="568" y="178" text-anchor="middle">06-09</text>
+    <text class="ax" x="664" y="178" text-anchor="middle">06-11</text>
+    <text class="ax" x="712" y="178" text-anchor="middle">06-12</text>
+    <!-- era annotations -->
+    <text class="lblm" x="44"  y="142">streamlit era</text>
+    <text class="lblm" x="332" y="111">service + papers</text>
+    <text class="lblm" x="572" y="64">scanner → tournament</text>
+  </svg>
+  <figcaption>Cumulative merged PRs, drawn the way this repo draws everything else. The flat stretch (05-30 → 06-03) is real: nothing merged. The steepening from 06-09 on is the scanner-pipeline era — entries 07 through 12 below. PR #58 was never merged, so 80 numbers, 79 merges.</figcaption>
+</figure>
+
+<nav class="toc">
+  <span class="lbl-t">Entries · newest first</span>
+  <ol>
+    <li><span class="no">12</span><span class="dt">06-12</span><a href="#e12">Replay the past, then fix five things at once (plans A–E)</a></li>
+    <li><span class="no">11</span><span class="dt">06-11</span><a href="#e11">Reading the tape: three-tier sentiment</a></li>
+    <li><span class="no">10</span><span class="dt">06-10</span><a href="#e10">The options planner</a></li>
+    <li><span class="no">09</span><span class="dt">06-10</span><a href="#e09">Hardening the pipeline until it says no</a></li>
+    <li><span class="no">08</span><span class="dt">06-10</span><a href="#e08">Russell 1000: tournament → tickets → ledger</a></li>
+    <li><span class="no">07</span><span class="dt">06-09</span><a href="#e07">The swing scanner ships</a></li>
+    <li><span class="no">06</span><span class="dt">06-08</span><a href="#e06">Earnings straddle: publishing the no</a></li>
+    <li><span class="no">05</span><span class="dt">06-07</span><a href="#e05">Frictions without a data bill</a></li>
+    <li><span class="no">04</span><span class="dt">06-05</span><a href="#e04">Teaching a 7B model to talk about backtests</a></li>
+    <li><span class="no">03</span><span class="dt">06-04</span><a href="#e03">From script to service: the workbench</a></li>
+    <li><span class="no">02</span><span class="dt">06-04</span><a href="#e02">Options engine, honest fills, a reading room</a></li>
+    <li><span class="no">01</span><span class="dt">05-29</span><a href="#e01">Streamlit and the one-gigabyte wall</a></li>
+  </ol>
+  <p class="keyline"><b>key</b> &nbsp;R = return in risk units (1R = the distance from entry to stop) · FA = fundamentals gate · DSR = Deflated Sharpe Ratio · <em>watch</em> rows are tracked-not-traded, <em>tickets</em> are actionable · full <a href="#ledger">PR ledger</a> at the bottom.</p>
+</nav>
+
+<div class="log">
+
+<!-- ============================================================ E12 -->
+<article class="entry" id="e12">
+  <p class="e-no">Entry 12 · 2026-06-12 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/75">#75</a>–<a href="https://github.com/VanKyle00/trading-models/pull/80">#80</a></span></p>
+  <h2>Replay the past, then fix five things at once (plans A–E)</h2>
+  <p class="e-sub">A no-lookahead replay harness, the study it enabled, and five plans executed in one day — whose two biggest results were nulls.</p>
+
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>The scanner had been issuing tickets nightly since 06-10, but forward evidence accumulates at exactly one night per night. To learn anything this year we needed to replay the funnel over history <em>without cheating</em>: each replayed night may only see data available as of that night. PR <a href="https://github.com/VanKyle00/trading-models/pull/75">#75</a> built that harness (<code>scripts/backfill_scan.py</code>), and the resulting study — every 5th session over ~6 months — produced a headline: the watch tier looked like <strong>+23.4R</strong>. Five improvement plans (A–E) came out of that study. Then one of them quietly destroyed the headline.</p>
+  </div>
+
+  <h3>B — issuance mechanics, and the correction (<a href="https://github.com/VanKyle00/trading-models/pull/77">#77</a>)</h3>
+  <p>Plan B gave issuance some discipline: per-setup entry windows (the post-earnings-drift pair gets 15 sessions instead of the default), a re-issue <strong>cooldown</strong> keyed on (ticker, stance, strategy, tier) so a campaign that is still waiting or open cannot be issued again, and score-floor plumbing left deliberately empty until live evidence justifies any floor.</p>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>Replaying the study <em>with</em> the cooldown suppressed 43 of the 128 baseline watch rows. They were not new signals — they were the same persistent setups re-firing every replay night while their first campaign was still live, each re-fire counted as if it were a fresh trade.</p>
+  </div>
+  <div class="c c-find"><span class="tag">Finding</span>
+    <p>The +23.4R headline was <strong>inflated roughly 3× by pseudo-replication</strong>. Deduplicated to one count per campaign, the window's truth is <strong>watch +3.15R</strong>: post-earnings drift +2.8R (3 of 4 campaigns hit), base breakouts ≈ noise (+1.2R across 36), shorts −6.6R. The replay harness's most valuable output to date is this correction to our own beliefs.</p>
+  </div>
+
+  <figure class="chart">
+    <svg viewBox="0 0 760 240" role="img" aria-label="Bar chart comparing the inflated +23.4R headline against the deduplicated +3.15R, with per-strategy components">
+      <line x1="248.6" y1="14" x2="248.6" y2="208" stroke="#31402f" stroke-width="1"/>
+      <text class="ax" x="248.6" y="226" text-anchor="middle">0R</text>
+      <text class="ax" x="437" y="226" text-anchor="middle">+10R</text>
+      <text class="ax" x="626" y="226" text-anchor="middle">+20R</text>
+      <text class="ax" x="60" y="226" text-anchor="middle">−10R</text>
+      <!-- claimed -->
+      <rect x="248.6" y="22" width="441.2" height="22" fill="#7e8b7c" opacity="0.32"/>
+      <line x1="248.6" y1="33" x2="689.8" y2="33" stroke="#e0564d" stroke-width="1.4" stroke-dasharray="5 4"/>
+      <text class="lbl" x="540" y="37" style="fill:#e0564d">study headline +23.4R — withdrawn</text>
+      <text class="lblm" x="242" y="37" text-anchor="end">watch, raw rows</text>
+      <!-- deduped -->
+      <rect x="248.6" y="62" width="59.4" height="22" fill="#4cc38a" opacity="0.85"/>
+      <text class="lbl" x="316" y="77" style="fill:#4cc38a">+3.15R deduplicated per campaign</text>
+      <text class="lblm" x="242" y="77" text-anchor="end">watch, true</text>
+      <!-- components -->
+      <rect x="248.6" y="112" width="51.8" height="16" fill="#4cc38a" opacity="0.6"/>
+      <text class="lblm" x="308" y="124">pead +2.8R (3/4 campaigns)</text>
+      <text class="lblm" x="242" y="124" text-anchor="end">post-earnings drift</text>
+      <rect x="248.6" y="140" width="21.6" height="16" fill="#4cc38a" opacity="0.4"/>
+      <text class="lblm" x="278" y="152">+1.2R over 36 — noise</text>
+      <text class="lblm" x="242" y="152" text-anchor="end">base breakout</text>
+      <rect x="124.1" y="168" width="124.5" height="16" fill="#e0564d" opacity="0.65"/>
+      <text class="lblm" x="118" y="180" text-anchor="end">shorts −6.6R</text>
+      <text class="lblm" x="256" y="180">in a mostly-up window</text>
+    </svg>
+    <figcaption>The correction, to scale. 43 of 128 baseline rows were the same campaigns re-firing on consecutive replay nights; counting each campaign once shrinks the window's watch-tier result from +23.4R to +3.15R. The per-strategy components are the deduplicated truth.</figcaption>
+  </figure>
+
+  <h3>A — short detectors (<a href="https://github.com/VanKyle00/trading-models/pull/76">#76</a>)</h3>
+  <p>The FA gate already computed a bottom-40 cohort that long-only scanning threw away. Plan A mirrored the detectors — <code>base_breakdown</code>, <code>ma_rally_fade</code>, <code>pead_down</code> — over that cohort into the watch path, with direction-aware briefs and a short chip on /scans.</p>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>Mirroring levels is where the bugs live: review caught moving-average pairs emitting trigger/stop in the wrong order — and the guard built for it exposed a <em>pre-existing long-side bug</em> (squeeze-spike tape emitting inverted levels). Short 2R targets can also be arithmetically unattainable when the risk exceeds half the trigger price.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p>Ordering guards on every emitted level pair, hard <code>ValueError</code>s on stance/cohort mismatches, and unattainable targets demoted to report-only rows with <code>levels: null</code>. Replayed: the long side stayed byte-identical; the new shorts went 14 issued / 1 hit, <strong>−8.6R in an up-trending window</strong> — stated plainly in the PR, tracked in the live ledger by stance, not traded.</p>
+  </div>
+
+  <h3>C — regime overlay, first null (<a href="https://github.com/VanKyle00/trading-models/pull/78">#78</a>)</h3>
+  <p>A November loss on a PLTR mean-reversion pair motivated a regime gate: block mean-reversion-against-trend when SPY is below its 200-day moving average. Built as <code>scanner/regime.py</code>, always reported, gating only behind a default-off flag, with a replay A/B arm.</p>
+  <div class="c c-find"><span class="tag">Finding — null</span>
+    <p>The A/B arms were <strong>byte-identical</strong> (85 rows, +1.15R both). The motivating PLTR pair fired with SPY ~12% <em>above</em> its 200dma — that "selloff" never breached the trend line, and only 2 of 42 replay nights were down-trend at all. The plan's own sanity expectation (PLTR blocked) was not met, and we recorded that instead of tuning the definition until it fired. The gate ships dark; flipping it on requires ≥20 live nights of regime-block evidence. If mean-reversion losses recur in pullbacks that don't breach the 200dma, the fix is a better trend <em>definition</em>, not a forced flip.</p>
+  </div>
+
+  <h3>E — honest families for the replay (<a href="https://github.com/VanKyle00/trading-models/pull/79">#79</a>)</h3>
+  <p>The replay had been using <em>today's</em> FA family for historical nights — a quiet survivorship distortion. <code>--family-mode archived</code> reconstructs each night's family from the newest archived report at or before that night, stamps <code>family_source: "fallback"</code> explicitly wherever coverage predates the archives, and loads the union of bars. A local 2026-06-09 report turned out to predate the FA format entirely — the skip path handled it in the wild on day one.</p>
+
+  <h3>D — pooled certification, the bigger null (<a href="https://github.com/VanKyle00/trading-models/pull/80">#80</a>)</h3>
+  <p>Per-ticker forward ledgers starve: no single ticker accumulates enough campaign dates to certify anything. Plan D pools by <strong>setup type</strong> across all tickers — an as-of sweep stamps every historical firing, per-date mean-R series feed the existing metrics engine, and a type is certified only at <strong>DSR ≥ 0.90, ≥ 20 pooled dates, and a Benjamini-Hochberg FDR pass across the 6-type menu</strong>. Certified types promote watch rows to real tickets, ahead of cooldown and regime in the pipeline (the ordering is mutation-locked by a test). A weekly Modal sidecar recomputes certification, failure-isolated and keep-stale-on-failure.</p>
+
+  <figure class="chart">
+    <svg viewBox="0 0 760 175" role="img" aria-label="Two threshold charts: pooled dates clear the 20-date bar for all six setup types, but Deflated Sharpe sits at 0.00 to 0.22 against a 0.90 bar">
+      <!-- row 1: dates -->
+      <text class="axb" x="14" y="38">pooled dates</text>
+      <text class="lblm" x="14" y="52">all 6 types</text>
+      <line x1="170" y1="44" x2="690" y2="44" stroke="#31402f" stroke-width="1"/>
+      <rect x="352" y="34" width="318.5" height="20" rx="3" fill="#4cc38a" opacity="0.5"/>
+      <line x1="300" y1="24" x2="300" y2="64" stroke="#d9e2d6" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text class="lblm" x="300" y="18" text-anchor="middle">bar: ≥20</text>
+      <text class="lbl" x="360" y="48" style="fill:#4cc38a">28 – 77 ✓ clears</text>
+      <text class="ax" x="170" y="76" text-anchor="middle">0</text>
+      <text class="ax" x="430" y="76" text-anchor="middle">40</text>
+      <text class="ax" x="690" y="76" text-anchor="middle">80</text>
+      <!-- row 2: DSR -->
+      <text class="axb" x="14" y="118">deflated sharpe</text>
+      <text class="lblm" x="14" y="132">all 6 types</text>
+      <line x1="170" y1="124" x2="690" y2="124" stroke="#31402f" stroke-width="1"/>
+      <rect x="170" y="114" width="114.4" height="20" rx="3" fill="#d9a13f" opacity="0.55"/>
+      <line x1="638" y1="104" x2="638" y2="144" stroke="#d9e2d6" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text class="lblm" x="638" y="98" text-anchor="middle">bar: ≥0.90</text>
+      <text class="lbl" x="292" y="128" style="fill:#d9a13f">0.00 – 0.22 ✗ binds everywhere</text>
+      <text class="ax" x="170" y="156" text-anchor="middle">0.0</text>
+      <text class="ax" x="430" y="156" text-anchor="middle">0.5</text>
+      <text class="ax" x="690" y="156" text-anchor="middle">1.0</text>
+    </svg>
+    <figcaption>Why nothing certifies. Pooling solved the structural problem — every setup type now has 28–77 dates against a 20-date bar — so sample size is no longer the excuse. The Deflated Sharpe of the pooled per-date returns is what fails, for every type, every week of the replay.</figcaption>
+  </figure>
+
+  <div class="c c-find"><span class="tag">Finding — the null is the result</span>
+    <p><strong>0 of 6 types certified on every weekly recompute; the A/B arms were byte-identical</strong> (85 rows, +1.15R). And the pooled base rates contradict the study's best story: unconditioned post-earnings drift loses <strong>−18.5R over 54 pooled dates</strong> (its short mirror −18.2R over 55). The 86%-hit pead record that looked so good was 4 deduplicated campaigns — selection plus small-n noise, not an edge the cross-section corroborates. Promotion ships <em>on</em>, because certification is itself the evidence bar — and stays dark in practice until a type genuinely earns it. One known conservative bias, deliberately kept: the sweep has no cooldown, so serial re-fires over-count within a ticker; softening that to make the bar passable would be replay-tuning.</p>
+  </div>
+
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>Review caught a true Critical before it reached production: <code>render_markdown</code> assumed every row has option structures and would have crashed with a <code>KeyError</code> on the first night a promoted row appeared — killing that night's report. Two test-fixture gotchas also bit: a constant return series produces DSR ≈ 1.0 from float noise, and a bimodal alternating series produces negative sample-kurtosis variance and a 0.0 sentinel.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p>Report, webapp, and scan-runner all hardened against structure-less promoted rows, with regression tests; DSR tests use a seeded normal series, the only fixture that behaves. The promotion-before-cooldown ordering and the default-on flag are both pinned by tests so they cannot drift silently.</p>
+  </div>
+
+  <figure class="chart">
+    <svg viewBox="0 0 760 130" role="img" aria-label="Nightly pipeline order: FA family, detectors, rank and FDR tiers, pooled promotion, cooldown, regime gate, report">
+      <defs>
+        <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#5a665a"/>
+        </marker>
+      </defs>
+      <g>
+        <rect x="8"   y="34" width="84"  height="40" rx="6" fill="#10140f" stroke="#31402f"/>
+        <text class="lbl" x="50" y="51" text-anchor="middle">FA gate</text>
+        <text class="lblm" x="50" y="65" text-anchor="middle">top+bot 40</text>
+        <rect x="112" y="34" width="92"  height="40" rx="6" fill="#10140f" stroke="#31402f"/>
+        <text class="lbl" x="158" y="51" text-anchor="middle">detectors</text>
+        <text class="lblm" x="158" y="65" text-anchor="middle">long + short</text>
+        <rect x="224" y="34" width="98"  height="40" rx="6" fill="#10140f" stroke="#31402f"/>
+        <text class="lbl" x="273" y="51" text-anchor="middle">rank + FDR</text>
+        <text class="lblm" x="273" y="65" text-anchor="middle">tiers</text>
+        <rect x="342" y="34" width="108" height="40" rx="6" fill="#10140f" stroke="#d9a13f" stroke-width="1.4"/>
+        <text class="lbl" x="396" y="51" text-anchor="middle" style="fill:#d9a13f">pooled cert</text>
+        <text class="lblm" x="396" y="65" text-anchor="middle">promotion ★</text>
+        <rect x="470" y="34" width="92"  height="40" rx="6" fill="#10140f" stroke="#31402f"/>
+        <text class="lbl" x="516" y="51" text-anchor="middle">cooldown</text>
+        <text class="lblm" x="516" y="65" text-anchor="middle">re-issue</text>
+        <rect x="582" y="34" width="84"  height="40" rx="6" fill="#10140f" stroke="#1f2820" stroke-dasharray="4 3"/>
+        <text class="lbl" x="624" y="51" text-anchor="middle" style="fill:#7e8b7c">regime</text>
+        <text class="lblm" x="624" y="65" text-anchor="middle">ships dark</text>
+        <rect x="686" y="34" width="66"  height="40" rx="6" fill="#10140f" stroke="#31402f"/>
+        <text class="lbl" x="719" y="58" text-anchor="middle">report</text>
+        <line x1="92"  y1="54" x2="110" y2="54" stroke="#5a665a" marker-end="url(#arr)"/>
+        <line x1="204" y1="54" x2="222" y2="54" stroke="#5a665a" marker-end="url(#arr)"/>
+        <line x1="322" y1="54" x2="340" y2="54" stroke="#5a665a" marker-end="url(#arr)"/>
+        <line x1="450" y1="54" x2="468" y2="54" stroke="#5a665a" marker-end="url(#arr)"/>
+        <line x1="562" y1="54" x2="580" y2="54" stroke="#5a665a" marker-end="url(#arr)"/>
+        <line x1="666" y1="54" x2="684" y2="54" stroke="#5a665a" marker-end="url(#arr)"/>
+        <path d="M342,86 H450" stroke="#d9a13f" stroke-width="1" opacity="0.6"/>
+        <text class="lblm" x="396" y="102" text-anchor="middle" style="fill:#d9a13f">order mutation-locked by test</text>
+        <text class="lblm" x="396" y="116" text-anchor="middle">promote BEFORE suppress — a certified ticket must not be cooled away</text>
+      </g>
+    </svg>
+    <figcaption>The nightly funnel after plans A–E. Promotion runs before cooldown and the (dark) regime gate so that a freshly certified ticket cannot be suppressed by its own watch-campaign history; a test fails if anyone reorders it.</figcaption>
+  </figure>
+
+  <div class="c c-find"><span class="tag">Lessons from the week</span>
+    <p>(1) A replay harness's best product is corrections — the 3× inflation, two null A/Bs, and an uncorroborated star strategy were each worth more than a feature. (2) Nulls get recorded, not tuned away. (3) Two-stage review caught a real bug in <em>every</em> plan, including one that would have killed a production report. (4) Evidence bars ship dark (or dark-in-practice) until the evidence exists.</p>
+  </div>
+  <p>Carried forward: ranking is cohort-blind (shorts sink in a mixed top-15 — needs a stance-aware term), suppressed rows and the regime block are JSON-only (should be visible before C's flip review), and a campaign-deduplicated pooled sweep becomes its own plan if live evidence says D's bar is wrongly harsh.</p>
+</article>
+
+<!-- ============================================================ E11 -->
+<article class="entry" id="e11">
+  <p class="e-no">Entry 11 · 2026-06-11 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/69">#69</a> <a href="https://github.com/VanKyle00/trading-models/pull/70">#70</a> <a href="https://github.com/VanKyle00/trading-models/pull/71">#71</a> <a href="https://github.com/VanKyle00/trading-models/pull/73">#73</a> <a href="https://github.com/VanKyle00/trading-models/pull/74">#74</a></span></p>
+  <h2>Reading the tape: three-tier sentiment</h2>
+  <p class="e-sub">What people are saying about a ticker, separated by who is saying it — plus two production lessons the same day.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>The scanner says <em>what</em> is setting up; it says nothing about the conversation around a name. The /sentiment page reads a ticker three ways and refuses to blend them: <strong>official</strong> (filings, news), <strong>forums</strong> (Reddit), and <strong>viral</strong> (short-form social) — because "the company said" and "the crowd is chanting" are different signals with different failure modes.</p>
+  </div>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>The viral tier needed breadth without API bills. Bluesky's documented public host (<code>public.api.bsky.app</code>) gates the search endpoint; and a naive source order let one noisy network dominate the page. Separately, the same day delivered two production lessons: CI smoke tests fetch <em>live</em> Google Trends data and got rate-limited into breaking main, and the first live night of the tiered ledger 500'd the /tournaments index on a <code>None</code> average-R that only a first night can produce.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p>Keyless search via <code>api.bsky.app</code> directly (<a href="https://github.com/VanKyle00/trading-models/pull/73">#73</a>) with round-robin interleaving so each viral source gets alternating slots; Trends rate-limits in CI classified as environment-unavailable and skipped rather than failed (<a href="https://github.com/VanKyle00/trading-models/pull/70">#70</a>); the tier strip guards <code>None</code> aggregates (<a href="https://github.com/VanKyle00/trading-models/pull/74">#74</a>). Rule extracted from the 500: <strong>first-night shapes are real shapes</strong> — any aggregate over an empty ledger needs a rendering path.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E10 -->
+<article class="entry" id="e10">
+  <p class="e-no">Entry 10 · 2026-06-10/11 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/57">#57</a> <a href="https://github.com/VanKyle00/trading-models/pull/62">#62</a>–<a href="https://github.com/VanKyle00/trading-models/pull/68">#68</a> <a href="https://github.com/VanKyle00/trading-models/pull/72">#72</a></span></p>
+  <h2>The options planner</h2>
+  <p class="e-sub">A conversation in, a priced options ticket out — and the week's best disguised bug.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>Scanner tickets are share-denominated; expressing the same hypothesis in options means picking structure, strikes, expiry, and exits. The planner turns a stated hypothesis ("NVDA grinds higher into earnings") into a ticket through a short dialogue (<a href="https://github.com/VanKyle00/trading-models/pull/57">#57</a>), then grew a dedicated page (<a href="https://github.com/VanKyle00/trading-models/pull/62">#62</a>), neutral structures — iron condors and butterflies (<a href="https://github.com/VanKyle00/trading-models/pull/63">#63</a>), candidate strike ladders with computed exit plans (<a href="https://github.com/VanKyle00/trading-models/pull/65">#65</a>), guided level scenarios with a chart card and event warnings (<a href="https://github.com/VanKyle00/trading-models/pull/66">#66</a>), page-level sizing (<a href="https://github.com/VanKyle00/trading-models/pull/68">#68</a>), and after-hours quotes via a CBOE delayed-quote fallback (<a href="https://github.com/VanKyle00/trading-models/pull/72">#72</a>).</p>
+  </div>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>Tickets intermittently came out with a <em>degenerate ATR</em> — risk distances near zero, absurd ladders. The cause was nowhere near the options code: yfinance daily history can end in a trailing row whose OHLC is all-NaN (today's half-formed bar), and every volatility window that touched it collapsed. Process-side, two planner PRs (#64, #67) were merged into the <em>wrong base branch</em> of a PR stack and had to be re-landed cleanly as #65 and #68.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p><code>load_daily</code> now drops a trailing all-NaN OHLC row at the loader — every consumer inherits the fix. The stack mishap became protocol: retarget a stacked PR's base <em>before</em> deleting the branch under it, and prefer clean re-lands over surgery on a wrong-base merge.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E09 -->
+<article class="entry" id="e09">
+  <p class="e-no">Entry 09 · 2026-06-10 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/56">#56</a> <a href="https://github.com/VanKyle00/trading-models/pull/59">#59</a> <a href="https://github.com/VanKyle00/trading-models/pull/60">#60</a> <a href="https://github.com/VanKyle00/trading-models/pull/61">#61</a></span></p>
+  <h2>Hardening the pipeline until it says no</h2>
+  <p class="e-sub">Golden metrics, walk-forward validation everywhere, FDR control, and tiers — the night the funnel returned one name.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>With real tickets flowing, the pipeline needed the disciplines the concept survey (CON-02) ranked highest: guard against non-stationarity and multiple testing before chasing edge. Four PRs landed it: a golden lock-down of the metrics engine plus a strategy conformance harness (<a href="https://github.com/VanKyle00/trading-models/pull/56">#56</a>), setup detectors rebuilt as walk-forward-validated strategies (<a href="https://github.com/VanKyle00/trading-models/pull/61">#61</a>), nightly Benjamini-Hochberg FDR with ticket/watchlist tiers and a tiered ledger (<a href="https://github.com/VanKyle00/trading-models/pull/59">#59</a>), and an ML model path with <code>ridge_momentum</code> plus an adding-a-model guide (<a href="https://github.com/VanKyle00/trading-models/pull/60">#60</a>).</p>
+  </div>
+  <div class="c c-find"><span class="tag">Finding</span>
+    <p>The first live FDR night took <strong>1003 candidates down to exactly 1</strong> watch-tier name (NVDA). A funnel that strict feels broken; it is the opposite. Most nights, most setups are indistinguishable from noise, and a pipeline that admits that is the only kind whose survivors mean anything.</p>
+  </div>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>Two quiet traps from this batch: the scan lookback is measured in <em>calendar</em> days (~3.3 trading-years — easy to misread as trading days), and squash-merging a PR stack deletes context — the retarget-before-delete rule was learned here first.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E08 -->
+<article class="entry" id="e08">
+  <p class="e-no">Entry 08 · 2026-06-10 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/51">#51</a>–<a href="https://github.com/VanKyle00/trading-models/pull/55">#55</a></span></p>
+  <h2>Russell 1000: tournament → tickets → ledger</h2>
+  <p class="e-sub">Double the universe, fight strategies per ticker, write the winners down, then grade them forward.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>The S&amp;P-500 scanner proved the funnel; scale and accountability were missing. This run widened the universe to the Russell 1000 with a two-sided FA gate (<a href="https://github.com/VanKyle00/trading-models/pull/51">#51</a>), made strategy choice empirical — a per-ticker walk-forward <strong>tournament</strong> in which candidate strategies compete on out-of-sample folds (<a href="https://github.com/VanKyle00/trading-models/pull/52">#52</a>) — turned winners into concrete trade tickets with trigger/stop/target (<a href="https://github.com/VanKyle00/trading-models/pull/53">#53</a>), wired the nightly cron (<a href="https://github.com/VanKyle00/trading-models/pull/54">#54</a>), and gave it all a public face plus a <strong>forward performance ledger</strong> that grades every issued ticket against subsequent bars (<a href="https://github.com/VanKyle00/trading-models/pull/55">#55</a>).</p>
+  </div>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>Free data at Russell scale: yfinance starts returning 429s around a thousand tickers a night (request thinning is still a standing carry-forward). Deploy-side, Modal redeploys don't roll a warm container — twice the "shipped" code wasn't the running code until the app was stopped explicitly; <code>modal app history</code> commit vs <code>origin/main</code> became the standard cross-check.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p>The ledger is the heart of it: every ticket simulated forward with the same fill rules as the backtests (a limit-entry bar cannot also exit at target), refreshed on read. Strategy selection stopped being an opinion — if a setup family can't win its ticker's tournament out-of-sample, it doesn't issue tickets.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E07 -->
+<article class="entry" id="e07">
+  <p class="e-no">Entry 07 · 2026-06-09 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/46">#46</a>–<a href="https://github.com/VanKyle00/trading-models/pull/48">#48</a> <a href="https://github.com/VanKyle00/trading-models/pull/50">#50</a></span></p>
+  <h2>The swing scanner ships</h2>
+  <p class="e-sub">From backtesting the past to scanning tonight — a funnel that ends in grounded briefs.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>Everything before this analyzed history. The scanner (<a href="https://github.com/VanKyle00/trading-models/pull/47">#47</a>) looks at <em>tonight</em>: the S&amp;P 500 through a two-pass fundamentals gate (with EDGAR filing trends), three technical setup detectors over the survivors, and an LLM brief per candidate that may only cite documents actually retrieved — the same grounding discipline the fine-tuned assistant was trained under. A nightly cron publishes to /scans. The Jane Street concept survey (<a href="https://github.com/VanKyle00/trading-models/pull/46">#46</a>) landed the same day and became the project's north star: adapt to non-stationarity first, validate with purged time-series CV, train on the true objective.</p>
+  </div>
+
+  <figure class="chart">
+    <svg viewBox="0 0 760 120" role="img" aria-label="Funnel: 503 universe to 40 past the fundamentals gate to 4 setups forming to ranked cards with briefs">
+      <path d="M20,18 L200,30 L200,78 L20,102 Z" fill="#4cc38a" opacity="0.12" stroke="#31402f"/>
+      <path d="M220,30 L420,40 L420,70 L220,78 Z" fill="#4cc38a" opacity="0.2" stroke="#31402f"/>
+      <path d="M440,40 L620,47 L620,62 L440,70 Z" fill="#4cc38a" opacity="0.35" stroke="#31402f"/>
+      <rect x="640" y="40" width="108" height="30" rx="6" fill="#4cc38a" opacity="0.55"/>
+      <text class="lbl" x="110" y="55" text-anchor="middle">universe</text>
+      <text class="axb" x="110" y="72" text-anchor="middle" style="fill:#d9e2d6">503</text>
+      <text class="lbl" x="320" y="51" text-anchor="middle">past FA gate</text>
+      <text class="axb" x="320" y="66" text-anchor="middle" style="fill:#d9e2d6">40</text>
+      <text class="lbl" x="530" y="52" text-anchor="middle">setups forming</text>
+      <text class="axb" x="530" y="65" text-anchor="middle" style="fill:#d9e2d6">4</text>
+      <text class="lbl" x="694" y="59" text-anchor="middle" fill="#0b0e0c" font-weight="600">cards + briefs</text>
+      <text class="lblm" x="110" y="116" text-anchor="middle">one real night, from the README screenshot</text>
+    </svg>
+    <figcaption>The original S&amp;P-500 funnel on a real night: 503 → 40 → 4 → ranked cards with trigger/stop levels and grounded briefs. Later entries widen the left edge (Russell 1000) and tighten the right one (FDR tiers).</figcaption>
+  </figure>
+
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>The first production wrinkle was infrastructure, not signal: the web app served /scans from a <em>stale</em> Modal volume — the cron wrote nightly reports the page never picked up.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p>Reload the data volume before serving (<a href="https://github.com/VanKyle00/trading-models/pull/48">#48</a>). The README got a scanner section with a live screenshot and an FA-gate walkthrough (<a href="https://github.com/VanKyle00/trading-models/pull/50">#50</a>), and the nightly cron has run since.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E06 -->
+<article class="entry neg" id="e06">
+  <p class="e-no">Entry 06 · 2026-06-08/09 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/40">#40</a>–<a href="https://github.com/VanKyle00/trading-models/pull/45">#45</a> <a href="https://github.com/VanKyle00/trading-models/pull/49">#49</a></span></p>
+  <h2>Earnings straddle: publishing the no</h2>
+  <p class="e-sub">A complete model, a thorough backtest, and a verdict of "don't" — written up like the wins.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>An SSRN paper specified an earnings-vol strategy but declined to implement it; we finished the job. Long an at-the-money straddle into scheduled earnings (<a href="https://github.com/VanKyle00/trading-models/pull/40">#40</a>), validated with bootstrap and FDR rather than a lone Sharpe, surfaced in the workbench (<a href="https://github.com/VanKyle00/trading-models/pull/42">#42</a>), then re-run thoroughly (<a href="https://github.com/VanKyle00/trading-models/pull/45">#45</a>) and on real option chains — DoltHub history plus live yfinance snapshots (<a href="https://github.com/VanKyle00/trading-models/pull/49">#49</a>).</p>
+  </div>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>The first pass scanned a hardcoded 2023–2024 window for earnings events regardless of the window requested — silently producing empty calendars elsewhere (<a href="https://github.com/VanKyle00/trading-models/pull/43">#43</a> fixed it).</p>
+  </div>
+  <div class="c c-find"><span class="tag">Finding — negative result</span>
+    <p>Buying earnings volatility loses to the volatility risk premium and the post-report IV crush; the only defensible edge is a selection filter (trade only when the forecast move beats the implied one), and even filtered trades didn't clear significance — profit factor 0.82, bootstrap p ≈ 0.83, viability 3/10 (<a href="https://github.com/VanKyle00/trading-models/pull/44">#44</a>). Published with the same care as a win: a documented "no" prevents re-deriving it in six months.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E05 -->
+<article class="entry" id="e05">
+  <p class="e-no">Entry 05 · 2026-06-07/08 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/37">#37</a> <a href="https://github.com/VanKyle00/trading-models/pull/38">#38</a></span></p>
+  <h2>Frictions without a data bill</h2>
+  <p class="e-sub">A validation-and-overfitting harness, and synthetic options frictions calibrated instead of purchased.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>Backtests flatter. PR <a href="https://github.com/VanKyle00/trading-models/pull/37">#37</a> built the validation harness — overfitting checks as first-class machinery, next-open fills as the default everywhere. PR <a href="https://github.com/VanKyle00/trading-models/pull/38">#38</a> made options backtests pay realistic costs: a synthetic volatility surface and bid/ask spreads, calibrated rather than bought.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Decision</span>
+    <p>Two scoping calls, made explicit: no paid options data until a strategy survives the synthetic frictions (a real-chain loader stays deferred), and no low-latency work at all — for 2-week-to-6-month holding periods, microseconds are someone else's problem.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E04 -->
+<article class="entry" id="e04">
+  <p class="e-no">Entry 04 · 2026-06-05/07 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/25">#25</a>–<a href="https://github.com/VanKyle00/trading-models/pull/36">#36</a></span></p>
+  <h2>Teaching a 7B model to talk about backtests</h2>
+  <p class="e-sub">QLoRA on one RTX 5080, a three-metric eval gate, and one symptom hiding three bugs.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>The workbench assistant called a hosted model on every question. The bet: the domain is narrow enough that a fine-tuned local 7B (Qwen2.5 + LoRA) can match it here — answering about <em>these</em> backtests, calling <em>these</em> tools, inventing nothing. Claude plays teacher and judge; a grounding filter discards any training answer citing a number absent from its tool outputs. Data harness (<a href="https://github.com/VanKyle00/trading-models/pull/25">#25</a>), QLoRA trainer (<a href="https://github.com/VanKyle00/trading-models/pull/26">#26</a>), eval gate (<a href="https://github.com/VanKyle00/trading-models/pull/27">#27</a>), then a GPU service on Modal (<a href="https://github.com/VanKyle00/trading-models/pull/36">#36</a>).</p>
+  </div>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>A new, larger dataset scored <em>worse</em> on methodology questions. That one regression was three stacked bugs: an exact-string-match scorer punishing paraphrased search queries, checkpoint selection by eval-loss handing over the epoch before tool-call format locked in, and gold answers that were simply wrong (ML train/test boilerplate pasted onto rule-based models). The full story has its own page: <a href="training-journey.html">the fine-tuning build log</a>.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p>Token-overlap scoring, an epoch sweep keyed to the metric we actually care about (<a href="https://github.com/VanKyle00/trading-models/pull/33">#33</a>), and curated gold answers (<a href="https://github.com/VanKyle00/trading-models/pull/34">#34</a>) — methodology judge score 0.31 → 0.59 with tool-calls intact. Deploy gotchas worth remembering: Windows consoles crash printing "✓" without <code>PYTHONIOENCODING=utf-8</code>, and a Modal redeploy does not restart a warm container — stop the app to actually ship.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E03 -->
+<article class="entry" id="e03">
+  <p class="e-no">Entry 03 · 2026-06-04/05 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/13">#13</a> <a href="https://github.com/VanKyle00/trading-models/pull/17">#17</a> <a href="https://github.com/VanKyle00/trading-models/pull/21">#21</a> <a href="https://github.com/VanKyle00/trading-models/pull/24">#24</a> <a href="https://github.com/VanKyle00/trading-models/pull/29">#29</a>–<a href="https://github.com/VanKyle00/trading-models/pull/31">#31</a></span></p>
+  <h2>From script to service: the workbench</h2>
+  <p class="e-sub">A typed backtest service, a FastAPI + HTMX + Plotly front end, and a deliberately bounded assistant.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>Streamlit had hit its ceiling (entry 01), and both the GUI and the planned LLM assistant needed the same thing underneath: a <strong>service substrate</strong> — typed request in, validated run, JSON result out (<a href="https://github.com/VanKyle00/trading-models/pull/13">#13</a>). On top of it: the workbench — pick a model, run any window, see charts (<a href="https://github.com/VanKyle00/trading-models/pull/17">#17</a>, <a href="https://github.com/VanKyle00/trading-models/pull/24">#24</a>) — and a chat assistant whose tools are the service itself, so every answer is grounded in a real run (<a href="https://github.com/VanKyle00/trading-models/pull/21">#21</a>).</p>
+  </div>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>The first users (us) immediately found the seams: a ticker control that ignored per-model locks, per-model symbol groups producing 400s, and a date picker happily requesting windows a model couldn't backtest.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p>Three small PRs (<a href="https://github.com/VanKyle00/trading-models/pull/29">#29</a>–<a href="https://github.com/VanKyle00/trading-models/pull/31">#31</a>): honor the lock, collapse to a single symbol field, bound the picker to each model's backtestable window. The bounded-tools design proved itself — the assistant cannot cite a number that no tool returned.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E02 -->
+<article class="entry" id="e02">
+  <p class="e-no">Entry 02 · 2026-06-04 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/6">#6</a>–<a href="https://github.com/VanKyle00/trading-models/pull/12">#12</a></span></p>
+  <h2>Options engine, honest fills, a reading room</h2>
+  <p class="e-sub">A pricing core, two changes that made every backtest more honest, and the research site this page lives on.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>Three foundations in one day. An options pricing core with a delta-hedged seed model (<a href="https://github.com/VanKyle00/trading-models/pull/6">#6</a>) — the strategy that <em>should</em> lose money (realized vol below implied) and measurably did, a correctness check disguised as a model. Backtest accuracy (<a href="https://github.com/VanKyle00/trading-models/pull/11">#11</a>): <strong>next-open fills</strong>, because filling at the close of the signal bar is quiet lookahead, and the <strong>Deflated Sharpe Ratio</strong>, because trying many configurations and reporting the best Sharpe is multiple testing. And GitHub Pages hosting with the research hub (<a href="https://github.com/VanKyle00/trading-models/pull/7">#7</a>, <a href="https://github.com/VanKyle00/trading-models/pull/12">#12</a>) — every model gets a working paper, negative results included.</p>
+  </div>
+  <div class="c c-find"><span class="tag">Finding</span>
+    <p>The Deflated Sharpe introduced here is the same statistic that, eight days later, becomes the certification bar in entry 12 — and declines to certify anything. The tools for being honest compound.</p>
+  </div>
+</article>
+
+<!-- ============================================================ E01 -->
+<article class="entry neg" id="e01">
+  <p class="e-no">Entry 01 · 2026-05-29 <span class="pr">PRs <a href="https://github.com/VanKyle00/trading-models/pull/1">#1</a>–<a href="https://github.com/VanKyle00/trading-models/pull/5">#5</a></span></p>
+  <h2>Streamlit and the one-gigabyte wall</h2>
+  <p class="e-sub">The prototype era: a quick GUI, and the memory ceiling that shaped everything after.</p>
+  <div class="c c-why"><span class="tag">Why</span>
+    <p>The repo began as backtest scripts; the first GUI was a Streamlit app with per-model ticker switching (<a href="https://github.com/VanKyle00/trading-models/pull/1">#1</a>) so the models were explorable at all.</p>
+  </div>
+  <div class="c c-prob"><span class="tag">Problem</span>
+    <p>Streamlit Community Cloud caps memory around 1&nbsp;GB, and the microstructure model loads tick data. The app died with the platform's generic "Error running app" overlay — no traceback, no metric, nothing to debug against. The binding constraint was invisible.</p>
+  </div>
+  <div class="c c-fix"><span class="tag">Solution</span>
+    <p>Stream the tick aggregation instead of materializing it (<a href="https://github.com/VanKyle00/trading-models/pull/5">#5</a>), and harden the sidebar against unresolvable ticker configs (<a href="https://github.com/VanKyle00/trading-models/pull/2">#2</a>). The deeper lesson outlived the fix: a platform whose failure mode is a blank overlay is the wrong host for memory-hungry research — the seed of entry 03's self-hosted workbench.</p>
+  </div>
+</article>
+
+</div><!-- /log -->
+
+<hr class="sep"/>
+
+<!-- ============================================================ ledger -->
+<section id="ledger" style="padding-top:40px">
+  <p class="e-no" style="color:var(--amber)">Appendix · full PR ledger</p>
+  <h2 style="font-size:23px">Every merged PR, grouped by entry</h2>
+  <p class="e-sub">79 merges. Era rows link back to the entries above; PR numbers link to GitHub.</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>PR</th><th>merged</th><th>title</th></tr></thead>
+    <tbody>
+      <tr class="era"><td colspan="3"><a href="#e12">Entry 12 — replay + plans A–E</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/80">#80</a></td><td class="dt">06-12</td><td>feat(scanner): pooled cross-sectional setup certification — watch-to-ticket promotion path</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/79">#79</a></td><td class="dt">06-12</td><td>feat(replay): --family-mode archived — per-night FA families from archived reports</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/78">#78</a></td><td class="dt">06-12</td><td>feat(scanner): regime overlay — meanrev-against-trend gate (ships dark) + replay A/B</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/77">#77</a></td><td class="dt">06-12</td><td>feat(scanner): entry windows, re-issue cooldown, score-floor plumbing</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/76">#76</a></td><td class="dt">06-12</td><td>feat(scanner): short setup detectors in the watch path</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/75">#75</a></td><td class="dt">06-12</td><td>feat(scanner): no-lookahead historical replay of the technical funnel</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e11">Entry 11 — sentiment + production lessons</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/74">#74</a></td><td class="dt">06-11</td><td>fix(tournaments): guard None avg_r in tier strip — first-night ledger 500</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/73">#73</a></td><td class="dt">06-11</td><td>feat(sentiment): bluesky cashtag search joins the viral tier</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/71">#71</a></td><td class="dt">06-11</td><td>docs(readme): ticker sentiment section (three-tier read)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/70">#70</a></td><td class="dt">06-11</td><td>fix(tests): skip model smoke test on Google Trends rate limiting</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/69">#69</a></td><td class="dt">06-11</td><td>feat(sentiment): /sentiment page — three-tier ticker read (official / forums / viral)</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e10">Entry 10 — options planner</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/72">#72</a></td><td class="dt">06-11</td><td>feat(planner): after-hours options via CBOE delayed-quotes fallback</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/68">#68</a></td><td class="dt">06-11</td><td>feat(planner): page-level sizing settings + NaN-bar loader fix (reland #67)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/67">#67</a></td><td class="dt">06-11</td><td>feat(planner): page-level sizing settings + NaN-bar loader fix</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/66">#66</a></td><td class="dt">06-11</td><td>feat(planner): propose level scenarios with chart card + event warnings</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/65">#65</a></td><td class="dt">06-11</td><td>feat(planner): re-land #64 — candidate strike ladder + computed exit plan on chat tickets</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/64">#64</a></td><td class="dt">06-11</td><td>feat(planner): candidate strike ladder + computed exit plan on chat tickets</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/63">#63</a></td><td class="dt">06-11</td><td>feat(planner): options-only tickets + neutral stance (iron condor / iron butterfly)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/62">#62</a></td><td class="dt">06-10</td><td>feat(webapp): /planner page — dedicated options-simplifier tab with ticket cards</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/57">#57</a></td><td class="dt">06-10</td><td>feat(assistant): options planner — conversational hypothesis to options ticket</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e09">Entry 09 — pipeline hardening</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/61">#61</a></td><td class="dt">06-10</td><td>feat(tournament): setup detectors become walk-forward-validated strategies (hardening B)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/60">#60</a></td><td class="dt">06-10</td><td>feat(tournament): ML model path — ridge_momentum + adding-a-model guide (hardening D)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/59">#59</a></td><td class="dt">06-10</td><td>feat(scanner): nightly FDR + ticket/watchlist tiers + tiered ledger (hardening C)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/56">#56</a></td><td class="dt">06-10</td><td>test(pipeline): metrics golden lock-down + strategy conformance harness (hardening A)</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e08">Entry 08 — Russell 1000 tournament era</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/55">#55</a></td><td class="dt">06-10</td><td>feat(tournaments): /tournaments pages + forward ticket-performance ledger</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/54">#54</a></td><td class="dt">06-10</td><td>feat(scan): nightly cron wiring, tickets rendering, /models page (sub-project D)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/53">#53</a></td><td class="dt">06-10</td><td>feat(strategist): ticket playbook — tournament winners to trade tickets</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/52">#52</a></td><td class="dt">06-10</td><td>feat(tournament): per-ticker walk-forward strategy tournament</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/51">#51</a></td><td class="dt">06-10</td><td>feat(scanner): Russell 1000 universe + two-sided FA gate</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e07">Entry 07 — the swing scanner</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/50">#50</a></td><td class="dt">06-09</td><td>docs(readme): nightly swing-scanner section with live screenshot and FA-gate walkthrough</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/48">#48</a></td><td class="dt">06-09</td><td>fix(deploy): reload the data Volume before serving /scans</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/47">#47</a></td><td class="dt">06-09</td><td>feat(scanner): S&amp;P 500 swing-setup scanner with FA gate and LLM document briefs</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/46">#46</a></td><td class="dt">06-09</td><td>docs(concepts): CON-02 Jane Street key-concepts survey</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e06">Entry 06 — earnings straddle</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/49">#49</a></td><td class="dt">06-09</td><td>Earnings straddle Phase 2: real option-chain data (DoltHub + yfinance snapshots)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/45">#45</a></td><td class="dt">06-09</td><td>Feat/earnings straddle thorough backtest</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/44">#44</a></td><td class="dt">06-09</td><td>docs(03-earnings-straddle): thorough backtest — no significant edge, viability 3/10</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/43">#43</a></td><td class="dt">06-09</td><td>fix(03-earnings-straddle): scan the requested window for earnings, not hardcoded 2023-2024</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/42">#42</a></td><td class="dt">06-08</td><td>feat(workbench): surface the earnings-straddle filtered-vs-unfiltered report</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/41">#41</a></td><td class="dt">06-08</td><td>fix(workbench): earnings-straddle empty-calendar note + restore OPT-02 hub card</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/40">#40</a></td><td class="dt">06-08</td><td>feat(options): earnings event-vol straddle model (03) + bootstrap/FDR validation</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e05">Entry 05 — validation + frictions</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/39">#39</a></td><td class="dt">06-08</td><td>style: clear ruff format/lint failures (SP1 validation harness + modal deploy)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/38">#38</a></td><td class="dt">06-08</td><td>Realistic options frictions: synthetic vol surface + bid/ask spread</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/37">#37</a></td><td class="dt">06-07</td><td>feat: validation &amp; overfitting harness (SP1) + next-open fill default</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e04">Entry 04 — fine-tuning the assistant</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/36">#36</a></td><td class="dt">06-07</td><td>feat(modal): serve the fine-tuned assistant on a dedicated GPU service</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/35">#35</a></td><td class="dt">06-06</td><td>docs: assistant fine-tuning build log (HTML)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/34">#34</a></td><td class="dt">06-06</td><td>feat(dataset): curate methodology gold answers + ship n21 adapter</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/33">#33</a></td><td class="dt">06-06</td><td>feat(train): epoch-sweep checkpoint selection + ship epoch-3 n20 adapter</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/32">#32</a></td><td class="dt">06-06</td><td>feat: Step A — dataset/trainer/eval fixes + assistant model switch</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/28">#28</a></td><td class="dt">06-05</td><td>Merge pull request #26 from VanKyle00/feat/llm-assistant-training</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/27">#27</a></td><td class="dt">06-05</td><td>feat(eval): LLM assistant eval harness (sub-project 3)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/26">#26</a></td><td class="dt">06-05</td><td>feat(training): QLoRA training pipeline (sub-project 2)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/25">#25</a></td><td class="dt">06-05</td><td>feat(dataset): LLM assistant data harness (sub-project 1)</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e03">Entry 03 — service substrate + workbench</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/31">#31</a></td><td class="dt">06-05</td><td>fix(webapp): bound date picker to each model's backtestable window</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/30">#30</a></td><td class="dt">06-05</td><td>fix(webapp): single symbol field — per-model groups caused 400s</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/29">#29</a></td><td class="dt">06-05</td><td>fix(webapp): make ticker control honor per-model lock</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/24">#24</a></td><td class="dt">06-04</td><td>Feat/webapp gui</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/21">#21</a></td><td class="dt">06-04</td><td>LLM assistant (Plan 3): bounded counterfactual agent + /api/v1/chat</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/18">#18</a></td><td class="dt">06-04</td><td>Feat/backtest service substrate</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/17">#17</a></td><td class="dt">06-04</td><td>Web GUI (Plan 2): FastAPI + HTMX + Plotly workbench on the backtest service</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/13">#13</a></td><td class="dt">06-04</td><td>Backtest service substrate (Plan 1 of 4): typed request → validated run → JSON result</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e02">Entry 02 — options engine + research hub</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/23">#23</a></td><td class="dt">06-04</td><td>docs: inline filter chips on the research hub</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/22">#22</a></td><td class="dt">06-04</td><td>docs: restore filter &amp; sort access on the hub</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/20">#20</a></td><td class="dt">06-04</td><td>docs: hub polish — family-code IDs, legend, and restored filter access</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/19">#19</a></td><td class="dt">06-04</td><td>docs: fix nested link in concept card (the three-mismatched-links bug)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/16">#16</a></td><td class="dt">06-04</td><td>docs: make hub track columns visually consistent</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/15">#15</a></td><td class="dt">06-04</td><td>docs: tidy concept-track entry points</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/14">#14</a></td><td class="dt">06-04</td><td>docs: tidy concept-track entry points + point links at GitHub Pages</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/12">#12</a></td><td class="dt">06-04</td><td>docs: research hub + concept-writeups track (order flow &amp; liquidity)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/11">#11</a></td><td class="dt">06-04</td><td>Options backtest engine + backtest accuracy (next-open fills, Deflated Sharpe)</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/10">#10</a></td><td class="dt">06-04</td><td>feat(docs): tag filtering, sorting, and compact view on catalogue index</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/9">#9</a></td><td class="dt">06-04</td><td>docs: link README model table to rendered working papers</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/8">#8</a></td><td class="dt">06-04</td><td>docs: link working-papers site at top of README</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/7">#7</a></td><td class="dt">06-04</td><td>docs(options): Paper V research write-up + GitHub Pages hosting</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/6">#6</a></td><td class="dt">06-04</td><td>Options backtest &amp; simulation: pricing core + delta-hedged seed model</td></tr>
+
+      <tr class="era"><td colspan="3"><a href="#e01">Entry 01 — streamlit era</a></td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/5">#5</a></td><td class="dt">05-29</td><td>Stream microstructure aggregation to fix Cloud OOM</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/4">#4</a></td><td class="dt">05-29</td><td>adding research docs</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/3">#3</a></td><td class="dt">05-29</td><td>Fix malformed live-demo link in README</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/2">#2</a></td><td class="dt">05-29</td><td>Harden GUI against unresolvable model ticker config</td></tr>
+      <tr><td class="num"><a href="https://github.com/VanKyle00/trading-models/pull/1">#1</a></td><td class="dt">05-29</td><td>Add per-model ticker switching to the Streamlit app</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>
+  <p>trading-models · engineering devlog · compiled 2026-06-12. New entries are added when a major change lands — one entry per arc, written as: why we needed it, what broke, what fixed it. Numbers in charts come from the PRs and replay studies they describe.</p>
+  <p><a href="index.html">research hub</a> · <a href="training-journey.html">fine-tuning build log</a> · <a href="https://github.com/VanKyle00/trading-models">repository</a></p>
+</footer>
+
+</div>
+</body>
+</html>
