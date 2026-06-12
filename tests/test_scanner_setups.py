@@ -11,6 +11,7 @@ from tradinglib.scanner.setups import (
     detect_base_breakdown,
     detect_base_breakout,
     detect_ma_pullback,
+    detect_ma_rally_fade,
     detect_pead,
 )
 
@@ -71,6 +72,21 @@ def _pullback_bars() -> pd.DataFrame:
         step = -0.014 if i % 2 == 0 else 0.008
         pull.append(pull[-1] * (1 + step))
     close = np.concatenate([gentle, leg, np.array(pull[1:])])
+    volume = np.concatenate([np.full(276, 1_000_000.0), np.full(24, 800_000.0)])
+    return _bars(close, volume)
+
+
+def _rally_fade_bars() -> pd.DataFrame:
+    # Mirror of _pullback_bars: gentle downtrend, a steep 56-bar down-leg,
+    # then a 24-bar orderly rally (alternating +1.4% / -0.8%) into the
+    # declining 50-day MA.
+    gentle = 100.0 * 0.998 ** np.arange(220)
+    leg = gentle[-1] * 0.994 ** np.arange(1, 57)
+    rally = [leg[-1]]
+    for i in range(24):
+        step = 0.014 if i % 2 == 0 else -0.008
+        rally.append(rally[-1] * (1 + step))
+    close = np.concatenate([gentle, leg, np.array(rally[1:])])
     volume = np.concatenate([np.full(276, 1_000_000.0), np.full(24, 800_000.0)])
     return _bars(close, volume)
 
@@ -182,3 +198,15 @@ def test_detect_all_empty_for_quiet_stock() -> None:
     volume = np.full(300, 1_000_000.0)
 
     assert detect_all(_bars(close, volume)) == []
+
+
+def test_ma_rally_fade_detected() -> None:
+    signal = detect_ma_rally_fade(_rally_fade_bars())
+
+    assert isinstance(signal, SetupSignal)
+    assert signal.setup_type == "ma_rally_fade"
+    assert signal.trigger_level < signal.stop_level
+
+
+def test_ma_rally_fade_rejects_uptrend() -> None:
+    assert detect_ma_rally_fade(_pullback_bars()) is None

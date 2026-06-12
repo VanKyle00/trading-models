@@ -231,6 +231,59 @@ def detect_ma_pullback(
     )
 
 
+def detect_ma_rally_fade(
+    bars: pd.DataFrame, *, benchmark_close: pd.Series | None = None
+) -> SetupSignal | None:
+    if len(bars) < _MIN_BARS:
+        return None
+    close, high, low, volume = bars["close"], bars["high"], bars["low"], bars["volume"]
+
+    sma50 = sma(close, 50).iloc[-1]
+    sma200 = sma(close, 200).iloc[-1]
+    if not (sma50 < sma200):
+        return None
+    if not (ma_slope(close, 50, 10).iloc[-1] < 0 and ma_slope(close, 200, 20).iloc[-1] < 0):
+        return None
+
+    leg = 1.0 - close.iloc[-60:].min() / close.iloc[-120:].max()
+    if not leg >= _LEG_MIN:
+        return None
+
+    low_60 = close.iloc[-60:].min()
+    rallied = close.iloc[-1] >= low_60 * 1.05
+    at_the_ma = abs(close.iloc[-1] / sma50 - 1.0) <= _PULLBACK_BAND
+    if not (rallied and at_the_ma):
+        return None
+
+    last_rsi = rsi(close, 14).iloc[-1]
+    if not (50.0 <= last_rsi <= 70.0):
+        return None
+
+    last_atr = atr(high, low, close, 14).iloc[-1]
+    vol_ratio_10 = volume_ratio(volume, 50).iloc[-10:].mean()
+    trend = _clip01((sma200 / sma50 - 1.0) * 10.0)
+    orderliness = _clip01(2.0 - vol_ratio_10) if vol_ratio_10 >= 1.0 else 1.0
+    score = _clip01(
+        0.4 * trend + 0.3 * orderliness + 0.3 * (1.0 - _rs_component(close, benchmark_close))
+    )
+    return SetupSignal(
+        ticker=_ticker(bars),
+        setup_type="ma_rally_fade",
+        score=score,
+        asof=_asof(bars),
+        trigger_level=float(sma(close, 20).iloc[-1]),
+        stop_level=float(max(high.iloc[-10:].max(), sma50 + 1.5 * last_atr)),
+        evidence={
+            "sma50": float(sma50),
+            "sma200": float(sma200),
+            "leg_drop": float(leg),
+            "rally_from_low": float(close.iloc[-1] / low_60 - 1.0),
+            "rsi": float(last_rsi),
+            "volume_ratio_10d": float(vol_ratio_10),
+        },
+    )
+
+
 def detect_pead(
     bars: pd.DataFrame, earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex
 ) -> SetupSignal | None:
