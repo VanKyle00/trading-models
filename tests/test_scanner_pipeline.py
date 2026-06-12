@@ -1008,3 +1008,152 @@ def test_regime_gate_off_by_default(fdr_pipeline, monkeypatch) -> None:
     # a stuck-on gate would suppress these; default-off must not
     assert "DRIFT" in {t["ticker"] for t in result["tickets"]["long"]}
     assert not any(s["reason"].startswith("meanrev") for s in result["suppressed"])
+
+
+# ---------------------------------------------------------------------------
+# Pooled-certified promotion tests
+#
+# A pooled-certified setup TYPE promotes its sub-threshold watch rows to ticket
+# tier. The fixture below makes DRIFT a long candidate whose tournament entry
+# has NO survivors and NO winner (but a verdict with DSR=0.95): that drops DRIFT
+# into build_watchlist's sub-threshold candidates path, producing a watch row
+# with strategy "setup:pead" + simulate-able levels — exactly the row the
+# promotion code keys on (key "pead:long").
+# ---------------------------------------------------------------------------
+
+
+def _no_survivor_result(stance: str):
+    """A tournament result with a high-DSR verdict but no survivor / no winner."""
+    from tradinglib.tournament.run import StrategyVerdict, TournamentResult
+
+    verdict = StrategyVerdict(
+        key="sma_cross",
+        survived=False,
+        reasons=["did not survive"],
+        params={"fast": 10, "slow": 50},
+        metrics={"deflated_sharpe": 0.95, "sharpe": 1.2},
+        n_trades=20,
+        param_stability={"fast": 0.0, "slow": 0.0},
+        n_windows=6,
+    )
+    return TournamentResult(
+        stance=stance, verdicts=[verdict], winner=None, winner_levels=None, n_trials=18
+    )
+
+
+@pytest.fixture
+def setup_watch_pipeline(patched_pipeline, monkeypatch):
+    """patched_pipeline where DRIFT lands as a setup:pead watch row (no winner)."""
+    monkeypatch.setattr(
+        patched_pipeline,
+        "run_tournament",
+        lambda bars, stance, registry=None, config=None: _no_survivor_result(stance),
+    )
+    return patched_pipeline
+
+
+_PEAD_CERT = {
+    "verdicts": {
+        "pead:long": {"certified": True, "pooled_dsr": 0.95, "n_dates": 24, "total_r": 12.0}
+    }
+}
+
+
+def test_pooled_certified_promotion(setup_watch_pipeline) -> None:
+    result = setup_watch_pipeline.run_scan(
+        ScanConfig(fa_keep=3, skip_llm=True), certification=_PEAD_CERT
+    )
+
+    promoted = [t for t in result["tickets"]["long"] if t["ticker"] == "DRIFT"]
+    assert len(promoted) == 1, "certified setup:pead row must be promoted to a ticket"
+    row = promoted[0]
+    assert row["tier"] == "ticket"
+    assert row["tier_reason"] == "pooled-certified"
+    assert row["strategy"] == "setup:pead"  # original strategy preserved
+    assert row["pooled_evidence"] == {"pooled_dsr": 0.95, "n_dates": 24, "total_r": 12.0}
+
+    # promoted out of the watchlist
+    assert "DRIFT" not in {r["ticker"] for r in result["watchlist"]["long"]}
+    assert result["funnel"]["pooled_promoted"] == 1
+
+    # an UNcertified verdict for the same type leaves the row on the watchlist
+    uncertified = {
+        "verdicts": {
+            "pead:long": {"certified": False, "pooled_dsr": 0.40, "n_dates": 3, "total_r": 0.5}
+        }
+    }
+    plain = setup_watch_pipeline.run_scan(
+        ScanConfig(fa_keep=3, skip_llm=True), certification=uncertified
+    )
+    assert "DRIFT" not in {t["ticker"] for t in plain["tickets"]["long"]}
+    assert "DRIFT" in {r["ticker"] for r in plain["watchlist"]["long"]}
+    assert plain["funnel"]["pooled_promoted"] == 0
+
+
+def test_pooled_promotion_respects_cooldown(setup_watch_pipeline) -> None:
+    # An open campaign on the promoted identity (strategy stays "setup:pead",
+    # tier becomes "ticket") must suppress the promotion — B's cooldown and
+    # C's regime gate apply to promoted rows too.
+    recent = {
+        "tickets": [
+            {
+                "ticker": "DRIFT",
+                "stance": "long",
+                "strategy": "setup:pead",
+                "tier": "ticket",
+                "status": "open",
+            }
+        ]
+    }
+    result = setup_watch_pipeline.run_scan(
+        ScanConfig(fa_keep=3, skip_llm=True), certification=_PEAD_CERT, recent_ledger=recent
+    )
+
+    assert "DRIFT" not in {t["ticker"] for t in result["tickets"]["long"]}
+    assert any(
+        s["ticker"] == "DRIFT"
+        and s["tier"] == "ticket"
+        and s["strategy"] == "setup:pead"
+        and s["reason"] == "open campaign"
+        for s in result["suppressed"]
+    ), f"expected DRIFT promoted-ticket suppression, got: {result['suppressed']}"
+    # pre-suppression semantics: the counter still records the promotion
+    assert result["funnel"]["pooled_promoted"] == 1
+
+
+def test_pooled_promotion_off_when_disabled(setup_watch_pipeline) -> None:
+    result = setup_watch_pipeline.run_scan(
+        ScanConfig(fa_keep=3, skip_llm=True, pooled_certification=False),
+        certification=_PEAD_CERT,
+    )
+
+    assert "DRIFT" not in {t["ticker"] for t in result["tickets"]["long"]}
+    assert "DRIFT" in {r["ticker"] for r in result["watchlist"]["long"]}
+    assert result["funnel"]["pooled_promoted"] == 0
+
+
+def test_pooled_promotion_precedes_watch_suppression(setup_watch_pipeline) -> None:
+    # A WATCH-tier open campaign on DRIFT's identity must NOT block the ticket-tier
+    # promotion: the (ticker, stance, strategy, tier) key is tier-specific, and
+    # promotion runs BEFORE the watch-suppression pass. If someone reordered them,
+    # the watch pass would eat DRIFT's watch row first and the promotion would find
+    # nothing to promote — this test would then fail.
+    recent = {
+        "tickets": [
+            {
+                "ticker": "DRIFT",
+                "stance": "long",
+                "strategy": "setup:pead",
+                "tier": "watch",  # watch, not ticket — cannot suppress a ticket-tier row
+                "status": "open",
+            }
+        ]
+    }
+    result = setup_watch_pipeline.run_scan(
+        ScanConfig(fa_keep=3, skip_llm=True), certification=_PEAD_CERT, recent_ledger=recent
+    )
+
+    promoted = [t for t in result["tickets"]["long"] if t["ticker"] == "DRIFT"]
+    assert len(promoted) == 1, "watch-tier campaign must not suppress the ticket-tier promotion"
+    assert promoted[0]["tier_reason"] == "pooled-certified"
+    assert result["funnel"]["pooled_promoted"] == 1

@@ -130,7 +130,14 @@ def main(argv: list[str] | None = None) -> int:
     print(f"tickets: {result['funnel']['tickets']}")
     for stance in ("long", "short"):
         for t in result["tickets"][stance]:
-            rec = next(s for s in t["structures"] if s["recommended"])
+            structures = t.get("structures")
+            if not structures:  # evidence-only ticket (pooled-certified promotion)
+                print(
+                    f"  {t['ticker']:<6} {stance:<5} {t['strategy']:<10} -> "
+                    f"{t.get('tier_reason', '-')}"
+                )
+                continue
+            rec = next(s for s in structures if s["recommended"])
             qty = rec["quantity"] if rec["quantity"] else "UNSIZED"
             print(f"  {t['ticker']:<6} {stance:<5} {t['strategy']:<10} -> {rec['label']} x{qty}")
     print(f"report: {json_path}")

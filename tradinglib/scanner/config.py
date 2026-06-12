@@ -28,6 +28,10 @@ class ScanConfig:
     tuning (see the umbrella plan).
     ``regime_gate`` gates meanrev-against-trend issuance; OFF until replay + live
     evidence (regime is always reported regardless).
+    ``pooled_certification`` promotes watch rows of pooled-certified setup types
+    to ticket tier from the weekly certification sidecar; ``pooled_min_dates`` /
+    ``pooled_lookback_days`` / ``pooled_step_sessions`` shape the pooled sweep
+    (entry-date observations required, calendar lookback, grid stride).
     """
 
     fa_keep: int = 40
@@ -48,3 +52,7 @@ class ScanConfig:
     watch_dsr_floor: float = 0.5
     setup_score_floors: dict[str, float] = field(default_factory=dict)
     regime_gate: bool = False
+    pooled_certification: bool = True
+    pooled_min_dates: int = 20
+    pooled_lookback_days: int = 750
+    pooled_step_sessions: int = 5

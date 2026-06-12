@@ -722,6 +722,42 @@ def test_day_view_watchlist_and_fdr_keys() -> None:
     assert day2["n_watch"] == 0
 
 
+def _promoted_ticket() -> dict:
+    """A pooled-certified promoted ticket: NONE of build_ticket's fields."""
+    return {
+        "ticker": "PEAD",
+        "stance": "long",
+        "strategy": "setup:pead",
+        "tier": "ticket",
+        "tier_reason": "pooled-certified",
+        "entry_window": 7,
+        "deflated_sharpe": 0.74,
+        "levels": {
+            "entry": 120.0,
+            "entry_type": "stop",
+            "stop": 110.0,
+            "target": 140.0,
+        },
+        "pooled_evidence": {"pooled_dsr": 0.965, "n_dates": 24, "total_r": 6.1},
+    }
+
+
+def test_day_page_renders_promoted_pooled_ticket(tournaments_dir: Path) -> None:
+    """The /tournaments day page renders a structures-less promoted ticket, not 500."""
+    report = _report("2026-06-05")
+    report["tickets"]["long"].append(_promoted_ticket())
+    (tournaments_dir / "2026-06-05").mkdir()
+    (tournaments_dir / "2026-06-05" / "report.json").write_text(
+        json.dumps(report), encoding="utf-8"
+    )
+    resp = TestClient(create_app()).get("/tournaments/2026-06-05")
+    assert resp.status_code == 200
+    html = resp.text
+    assert "PEAD" in html
+    assert "pooled-certified" in html
+    assert "120.00" in html  # levels still render
+
+
 def test_catalog_row_has_watchlist_key() -> None:
     """catalog rows gain 'watchlist' key from funnel; None when absent."""
     scan = {

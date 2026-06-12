@@ -285,8 +285,9 @@
             <div class="card-head">
               <span class="tkr">{{ t.ticker }}</span>
               <span class="chip {{ 'favorable' if stance == 'long' else 'flag' }}">{{ stance }}</span>
-              <span class="nm">{{ t.strategy }} · {{ t.style | replace("_", " ") }}</span>
-              {% if t.evidence.winner_changed %}<span class="chip warn">winner changed</span>{% endif %}
+              <span class="nm">{{ t.strategy }}{% if t.style is defined %} · {{ t.style | replace("_", " ") }}{% endif %}</span>
+              {% if t.tier_reason %}<span class="chip">{{ t.tier_reason }}</span>{% endif %}
+              {% if t.evidence is defined and t.evidence.winner_changed %}<span class="chip warn">winner changed</span>{% endif %}
             </div>
             <div class="card-body">
               <div class="setup">
@@ -295,6 +296,7 @@
                 · target {{ '%.2f' | format(t.levels.target) }}</span>
                 <div class="evidence">{{ t.levels.condition }}</div>
               </div>
+              {% if t.structures is defined %}
               <div class="scores">
                 DSR {{ '%.3f' | format(t.evidence.deflated_sharpe) }}
                 · Sharpe {{ '%.2f' | format(t.evidence.sharpe) }}
@@ -315,6 +317,13 @@
                 </tr>
                 {% endfor %}
               </table>
+              {% else %}
+              {# evidence-only ticket (pooled-certified promotion): no structures built #}
+              <div class="scores">
+                {% if t.pooled_evidence %}DSR {{ '%.3f' | format(t.pooled_evidence.pooled_dsr) }}
+                · {{ t.pooled_evidence.n_dates }} dates · {{ '%+.2f' | format(t.pooled_evidence.total_r) }}R total{% endif %}
+              </div>
+              {% endif %}
               {% if t.outcome %}
                 <div class="outcome">
                   <span class="chip st-{{ t.outcome.status }}">{{ t.outcome.status }}</span>
@@ -330,7 +339,7 @@
               {% else %}
                 <div class="evidence">no evaluation yet — the ledger updates after the next nightly scan</div>
               {% endif %}
-              {% for w in t.warnings %}<div class="evidence">⚠ {{ w }}</div>{% endfor %}
+              {% for w in t.warnings or [] %}<div class="evidence">⚠ {{ w }}</div>{% endfor %}
             </div>
           </div>
         {% endfor %}
