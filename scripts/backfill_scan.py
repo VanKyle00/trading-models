@@ -4,6 +4,7 @@ Examples:
     uv run python scripts/backfill_scan.py --smoke          # one night, timed
     uv run python scripts/backfill_scan.py                  # full replay
     uv run python scripts/backfill_scan.py --days 300 --step 5
+    uv run python scripts/backfill_scan.py --days 300 --step 5 --regime-gate   # gated A/B arm
 
 Replays setups -> tournament -> FDR -> tiers as-of past nights using the same
 pipeline functions the nightly cron runs, then forward-scores every issued
@@ -367,6 +368,9 @@ def main(argv: list[str] | None = None) -> int:
                 "caveats": [
                     "FA family frozen to the latest real report (selection-layer survivorship)",
                     "earnings flags from today's fetch (thinner at the oldest nights)",
+                    "regime_blocked attribution differs from prod: replay gates before the "
+                    "cooldown (prod: after, so doubly-blocked rows read 'open campaign') and "
+                    "never sees report-only watch rows prod would gate; issued set unaffected",
                 ],
                 "nights": funnels,
                 "records": records,
