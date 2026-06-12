@@ -23,7 +23,7 @@ from pathlib import Path
 import pandas as pd
 
 from tradinglib.loaders.equities.yfinance import load_daily
-from tradinglib.strategist.evaluate import simulate_ticket
+from tradinglib.strategist.evaluate import ENTRY_WINDOW, simulate_ticket
 
 LEDGER_FILENAME = "ledger.json"
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -124,7 +124,10 @@ def build_ledger(base: Path, *, asof: str, loader: Loader = load_daily) -> dict:
             record["levels"] = {
                 k: ticket["levels"][k] for k in ("entry", "entry_type", "stop", "target")
             }
-            record.update(simulate_ticket(ticket, bars, asof=date))
+            record["entry_window"] = int(ticket.get("entry_window", ENTRY_WINDOW))
+            record.update(
+                simulate_ticket(ticket, bars, asof=date, entry_window=record["entry_window"])
+            )
         except Exception as exc:
             record.update(status="error", error=str(exc))
         records.append(record)

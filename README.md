@@ -214,10 +214,10 @@ page: each night's pipeline story (universe → FA gate → tournament verdicts 
 tickets) is cataloged by date, and every ticket ever issued is re-scored
 nightly by paper-trading its entry/stop/target levels against subsequent
 daily bars — status, R-multiple, and price path vs levels, plus a cumulative
-hit rate and total R. Entries fill per their trigger type within a 5-session
-window; stop-style triggers and protective stops gap-fill at the open, never
-better than the plan; a bar that touches both stop and target counts as
-stopped. Rebuild it locally with `uv run python scripts/evaluate_tickets.py`.
+hit rate and total R. Entries fill per their trigger type within the row's entry window — 5 sessions
+for most setups, 15 for the PEAD pair; stop-style triggers and protective stops
+gap-fill at the open, never better than the plan; a bar that touches both stop
+and target counts as stopped. Rebuild it locally with `uv run python scripts/evaluate_tickets.py`.
 
 Run it yourself (`--limit` for a quick smoke run, `--skip-llm` to stop after
 setup detection):

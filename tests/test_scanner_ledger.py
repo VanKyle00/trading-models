@@ -403,3 +403,38 @@ def test_combined_stats_unchanged_shape(tmp_path: Path) -> None:
         "avg_r",
     }
     assert required_keys <= set(ledger["stats"])
+
+
+def test_ledger_respects_row_entry_window(tmp_path: Path) -> None:
+    # 6 post-issue sessions, entry never triggered: the default window (5)
+    # would expire the row; entry_window=15 keeps it waiting.
+    report = {
+        "tickets": {"long": [], "short": []},
+        "watchlist": {
+            "long": [
+                {
+                    "ticker": "WIN",
+                    "stance": "long",
+                    "strategy": "setup:pead",
+                    "tier": "watch",
+                    "entry_window": 15,
+                    "levels": {
+                        "entry": 200.0,
+                        "entry_type": "stop",
+                        "stop": 90.0,
+                        "target": 420.0,
+                    },
+                }
+            ],
+            "short": [],
+        },
+    }
+    (tmp_path / "2026-06-01").mkdir()
+    (tmp_path / "2026-06-01" / "report.json").write_text(json.dumps(report), encoding="utf-8")
+    idx = pd.date_range("2026-06-02", periods=6, freq="B", tz="UTC")
+    bars = pd.DataFrame(
+        {"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1e6}, index=idx
+    )
+    ledger = build_ledger(tmp_path, asof="2026-06-10", loader=lambda t, **kw: bars)
+    assert ledger["tickets"][0]["status"] == "waiting"
+    assert ledger["tickets"][0]["entry_window"] == 15
