@@ -98,7 +98,11 @@ def load_archived_families(base: Path) -> list[tuple[str, dict[str, list[str]]]]
 def family_for_night(
     families: list[tuple[str, dict[str, list[str]]]], night: pd.Timestamp
 ) -> tuple[dict[str, list[str]], str]:
-    """Newest archived family dated <= night; oldest family + 'fallback' before coverage."""
+    """Newest archived family dated <= night; oldest family + 'fallback' before coverage.
+
+    Assumes non-empty ``families`` — the caller aborts before resolving when no
+    archived reports exist.
+    """
     night_str = night.strftime("%Y-%m-%d")
     chosen = None
     for date, fam in families:
