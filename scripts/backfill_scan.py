@@ -300,6 +300,8 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.family_mode == "archived":
+        if args.report is not None:
+            print("--report is ignored in archived mode (families come from archived reports)")
         report_path = None
         families = load_archived_families(processed_dir("scans"))
         if not families:
@@ -381,6 +383,8 @@ def main(argv: list[str] | None = None) -> int:
         funnel["watch"] -= sum(1 for r in suppressed if r["tier"] == "watch")
         for row in issued:
             record = dict(row)
+            if args.family_mode == "archived":
+                record["family_source"] = family_source
             try:
                 record.update(
                     simulate_ticket(
