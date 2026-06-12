@@ -988,13 +988,23 @@ def test_regime_gate_suppresses_meanrev_ticket_in_downtrend(
         for s in suppressed
     ), f"expected DRIFT ticket suppression, got: {suppressed}"
     assert result["regime"]["trend"] == "down"
+    # the watch-pass copy of the gate: QUIET's demoted watch row is suppressed too
+    assert "QUIET" not in {r["ticker"] for r in result["watchlist"]["long"]}
+    assert any(
+        s["ticker"] == "QUIET" and s["tier"] == "watch" and s["reason"].startswith("meanrev long")
+        for s in result["suppressed"]
+    )
 
 
-def test_regime_gate_off_by_default(fdr_pipeline) -> None:
-    """regime_gate defaults to False: regime is always reported, issuance unchanged."""
+def test_regime_gate_off_by_default(fdr_pipeline, monkeypatch) -> None:
+    """Same adverse regime as the gate-on test, default config: nothing may be gated."""
+    import tradinglib.scanner.regime as regime_module
+
+    monkeypatch.setitem(regime_module.STRATEGY_STYLES, "sma_cross", "meanrev")
+    monkeypatch.setattr(fdr_pipeline, "regime_state", lambda close: {"trend": "down"})
     result = fdr_pipeline.run_scan(ScanConfig(fa_keep=2, short_keep=0, skip_llm=True))
-
-    assert "regime" in result
-    # Gate is off — DRIFT must still get a ticket
-    issued = {(t["ticker"], t["stance"]) for t in result["tickets"]["long"]}
-    assert ("DRIFT", "long") in issued
+    assert result["regime"] == {"trend": "down"}  # always reported, even when not gating
+    assert result["config"]["regime_gate"] is False
+    # a stuck-on gate would suppress these; default-off must not
+    assert "DRIFT" in {t["ticker"] for t in result["tickets"]["long"]}
+    assert not any(s["reason"].startswith("meanrev") for s in result["suppressed"])
