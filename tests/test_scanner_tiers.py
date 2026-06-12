@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradinglib.scanner.tiers import apply_fdr, build_watchlist
+from tradinglib.scanner.tiers import ENTRY_WINDOWS, apply_fdr, build_watchlist
 
 
 def _entry(ticker, stance, dsrs, survivors=(), winner_levels=None):
@@ -285,3 +285,146 @@ def test_build_watchlist_short_cohort_needs_short_tournament() -> None:
     ]
     watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
     assert watchlist == {"long": [], "short": []}
+
+
+def test_watch_row_carries_setup_entry_window() -> None:
+    assert ENTRY_WINDOWS["pead"] == 15
+    assert ENTRY_WINDOWS["pead_down"] == 15
+    tournament = {
+        "long": [
+            {
+                "ticker": "DRFT",
+                "stance": "long",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.7}],
+            }
+        ],
+        "short": [],
+    }
+    candidates = [
+        {
+            "ticker": "DRFT",
+            "cohort": "long",
+            "setups": [
+                {"setup_type": "pead", "score": 0.9, "trigger_level": 100.0, "stop_level": 95.0}
+            ],
+        }
+    ]
+    watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
+    assert watchlist["long"][0]["entry_window"] == 15
+
+
+def test_watch_row_default_entry_window_is_five() -> None:
+    tournament = {
+        "long": [
+            {
+                "ticker": "BASE",
+                "stance": "long",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.7}],
+            }
+        ],
+        "short": [],
+    }
+    candidates = [
+        {
+            "ticker": "BASE",
+            "cohort": "long",
+            "setups": [
+                {
+                    "setup_type": "base_breakout",
+                    "score": 0.9,
+                    "trigger_level": 100.0,
+                    "stop_level": 95.0,
+                }
+            ],
+        }
+    ]
+    watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
+    assert watchlist["long"][0]["entry_window"] == 5
+
+
+def test_setup_score_floor_filters_low_score_setups() -> None:
+    tournament = {
+        "long": [
+            {
+                "ticker": "NOIS",
+                "stance": "long",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.7}],
+            }
+        ],
+        "short": [],
+    }
+    candidates = [
+        {
+            "ticker": "NOIS",
+            "cohort": "long",
+            "setups": [
+                {
+                    "setup_type": "base_breakout",
+                    "score": 0.4,
+                    "trigger_level": 100.0,
+                    "stop_level": 95.0,
+                },
+                {
+                    "setup_type": "pead",
+                    "score": 0.3,
+                    "trigger_level": 100.0,
+                    "stop_level": 95.0,
+                },
+            ],
+        }
+    ]
+    floored = build_watchlist(
+        tournament,
+        candidates,
+        {},
+        watch_dsr_floor=0.5,
+        setup_score_floors={"base_breakout": 0.6},
+    )
+    # base_breakout (0.4 < 0.6) is floored out; pead (no floor) remains eligible
+    assert floored["long"][0]["strategy"] == "setup:pead"
+
+    all_floored = build_watchlist(
+        tournament,
+        candidates,
+        {},
+        watch_dsr_floor=0.5,
+        setup_score_floors={"base_breakout": 0.6, "pead": 0.6},
+    )
+    assert all_floored["long"] == []
+
+
+def test_setup_score_floors_default_empty_is_identity() -> None:
+    tournament = {
+        "long": [
+            {
+                "ticker": "SAME",
+                "stance": "long",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.7}],
+            }
+        ],
+        "short": [],
+    }
+    candidates = [
+        {
+            "ticker": "SAME",
+            "cohort": "long",
+            "setups": [
+                {
+                    "setup_type": "base_breakout",
+                    "score": 0.05,
+                    "trigger_level": 100.0,
+                    "stop_level": 95.0,
+                }
+            ],
+        }
+    ]
+    default = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
+    assert default["long"][0]["strategy"] == "setup:base_breakout"

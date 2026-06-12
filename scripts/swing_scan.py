@@ -17,6 +17,7 @@ from pathlib import Path
 
 from tradinglib.data.paths import processed_dir
 from tradinglib.scanner.config import ScanConfig
+from tradinglib.scanner.ledger import load_ledger
 from tradinglib.scanner.pipeline import run_scan
 from tradinglib.scanner.report import load_latest_report, write_report
 
@@ -92,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
     base = args.out_dir if args.out_dir is not None else processed_dir("scans")
     previous = load_latest_report(base, before=datetime.now(UTC).strftime("%Y-%m-%d"))
-    result = run_scan(config, provider, previous_report=previous)
+    result = run_scan(config, provider, previous_report=previous, recent_ledger=load_ledger(base))
 
     json_path, md_path = write_report(result, base / result["asof"])
 

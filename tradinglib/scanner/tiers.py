@@ -14,9 +14,15 @@ no actionable entry tonight) are report-only: there is nothing to simulate.
 from __future__ import annotations
 
 from tradinglib.backtest.metrics import benjamini_hochberg_fdr
+from tradinglib.strategist.evaluate import ENTRY_WINDOW as _DEFAULT_ENTRY_WINDOW
 
 TIER_TICKET = "ticket"
 TIER_WATCH = "watch"
+
+# Per-setup entry windows (sessions). The PEAD pair gets the drift's own
+# persistence window (the detector accepts 3-15 days since the reaction bar,
+# so a 5-session stale-trigger rule cuts the setup's thesis short).
+ENTRY_WINDOWS: dict[str, int] = {"pead": 15, "pead_down": 15}
 
 
 def best_dsr(entry: dict) -> float | None:
@@ -64,6 +70,7 @@ def build_watchlist(
     fdr_passed: dict[tuple[str, str], bool],
     *,
     watch_dsr_floor: float,
+    setup_score_floors: dict[str, float] | None = None,
 ) -> dict[str, list[dict]]:
     """The watch tier, with the demotion reason recorded per row."""
     watchlist: dict[str, list[dict]] = {"long": [], "short": []}
@@ -110,6 +117,7 @@ def build_watchlist(
         for stance in ("long", "short")
         for e in tournament.get(stance) or []
     }
+    floors = setup_score_floors or {}
     for cand in candidates:
         stance = cand.get("cohort") or "long"
         if stance not in watchlist:
@@ -120,9 +128,12 @@ def build_watchlist(
         d = dsr_by_key.get(key)
         if d is None or d < watch_dsr_floor:
             continue
-        if not cand.get("setups"):
+        eligible = [
+            s for s in cand.get("setups") or [] if s["score"] >= floors.get(s["setup_type"], 0.0)
+        ]
+        if not eligible:
             continue
-        setup = max(cand["setups"], key=lambda s: s["score"])
+        setup = max(eligible, key=lambda s: s["score"])
         watchlist[stance].append(
             {
                 "ticker": cand["ticker"],
@@ -130,6 +141,7 @@ def build_watchlist(
                 "strategy": f"setup:{setup['setup_type']}",
                 "tier": TIER_WATCH,
                 "tier_reason": "sub-threshold evidence",
+                "entry_window": ENTRY_WINDOWS.get(setup["setup_type"], _DEFAULT_ENTRY_WINDOW),
                 "deflated_sharpe": d,
                 "levels": _setup_watch_levels(setup, stance),
             }

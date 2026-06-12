@@ -44,6 +44,7 @@ Thumbs.db
 # Data — large files stay out of git
 data/raw/
 data/processed/
+data/*.json
 *.parquet
 *.feather
 # ...except deliberately frozen test fixtures

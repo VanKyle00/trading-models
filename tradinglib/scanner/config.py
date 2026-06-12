@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -23,6 +23,9 @@ class ScanConfig:
     survivors that fail it demote to the watchlist, never silently dropped.
     ``watch_dsr_floor`` is the minimum best-verdict DSR for a setup-fired ticker
     to make the watchlist.
+    ``setup_score_floors`` maps setup_type to a minimum score for the sub-threshold
+    watch path; EMPTY by default — a floor requires live-ledger evidence, not replay
+    tuning (see the umbrella plan).
     """
 
     fa_keep: int = 40
@@ -41,3 +44,4 @@ class ScanConfig:
     risk_per_trade_pct: float = 0.01
     fdr_alpha: float = 0.10
     watch_dsr_floor: float = 0.5
+    setup_score_floors: dict[str, float] = field(default_factory=dict)

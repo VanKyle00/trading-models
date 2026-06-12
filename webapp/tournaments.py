@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from tradinglib.data.paths import processed_dir
 from tradinglib.scanner import ledger as _ledger
+from tradinglib.strategist.evaluate import ENTRY_WINDOW
 from webapp.scans import SOURCE, load_scan
 
 _SPARK_W, _SPARK_H, _SPARK_PAD = 160, 40, 2
@@ -33,6 +34,7 @@ def _normalized(rec: dict) -> dict:
         "error": None,
         "tier": "ticket",
         "tier_reason": None,
+        "entry_window": ENTRY_WINDOW,
         **rec,
     }
 
