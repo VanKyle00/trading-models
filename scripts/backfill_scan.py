@@ -104,7 +104,6 @@ def _earnings_flags(index: pd.DatetimeIndex, dts: pd.DatetimeIndex) -> pd.Series
 def _promote_certified(
     watchlist: dict[str, list[dict]],
     certification: dict,
-    config: ScanConfig,
     date: str,
 ) -> tuple[dict[str, list[dict]], list[dict]]:
     """Promote pooled-certified setup watch rows to ticket tier (replays the pipeline).
@@ -112,6 +111,10 @@ def _promote_certified(
     Mirrors tradinglib.scanner.pipeline: a setup:* watch row with levels whose
     (setup_type, stance) verdict is certified leaves the watchlist and becomes a
     ticket-tier issued row. Returns (watchlist sans promoted, promoted issued rows).
+
+    Shape divergence from prod (deliberate): the replay row drops
+    ``pooled_evidence`` and ``deflated_sharpe``; the artifact scores from
+    ``tier_reason`` + simulated R rather than replaying option-chain/evidence fields.
     """
     verdicts = certification.get("verdicts", {})
     promoted: list[dict] = []
@@ -243,7 +246,7 @@ def run_night(
     # doubly-blocked attribution differs (see the artifact's regime_blocked caveat).
     promoted: list[dict] = []
     if certification and config.pooled_certification:
-        watchlist, promoted = _promote_certified(watchlist, certification, config, date)
+        watchlist, promoted = _promote_certified(watchlist, certification, date)
 
     issued: list[dict] = []
     for stance in ("long", "short"):
@@ -291,6 +294,7 @@ def run_night(
         "fdr_passed": sum(1 for v in fdr_passed.values() if v),
         "tickets": sum(1 for r in issued if r["tier"] == "ticket"),
         "watch": sum(1 for r in issued if r["tier"] == "watch"),
+        # promotions at issuance (pre-suppression) — mirrors prod's funnel semantics
         "pooled_promoted": pooled_promoted,
         "regime_trend": regime["trend"],
         "regime_blocked": len(regime_blocked),

@@ -737,7 +737,6 @@ def _promoted_ticket() -> dict:
             "entry_type": "stop",
             "stop": 110.0,
             "target": 140.0,
-            "condition": "enter on PEAD drift continuation",
         },
         "pooled_evidence": {"pooled_dsr": 0.965, "n_dates": 24, "total_r": 6.1},
     }

@@ -8,8 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from tradinglib.scanner.config import ScanConfig
-
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "backfill_scan.py"
 
 
@@ -66,13 +64,25 @@ def test_promote_certified_promotes_certified_pead(backfill) -> None:
         "long": [_watch_row("PEAD", "setup:pead", levels=levels)],
         "short": [],
     }
+    input_long = watchlist["long"]
+    input_len = len(input_long)
     kept, promoted = backfill._promote_certified(
-        watchlist, _certification(pead_certified=True), ScanConfig(), "2026-01-30"
+        watchlist, _certification(pead_certified=True), "2026-01-30"
     )
 
     assert kept["long"] == []  # promoted row left the watchlist
     assert len(promoted) == 1
     row = promoted[0]
+    assert set(row) == {
+        "date",
+        "ticker",
+        "stance",
+        "strategy",
+        "tier",
+        "tier_reason",
+        "entry_window",
+        "levels",
+    }
     assert row["ticker"] == "PEAD"
     assert row["tier"] == "ticket"
     assert row["tier_reason"] == "pooled-certified"
@@ -80,6 +90,9 @@ def test_promote_certified_promotes_certified_pead(backfill) -> None:
     assert row["strategy"] == "setup:pead"
     assert row["levels"] == levels
     assert row["date"] == "2026-01-30"
+    # non-mutation: the original list object and its length are unchanged
+    assert watchlist["long"] is input_long
+    assert len(input_long) == input_len
 
 
 def test_promote_certified_keeps_uncertified(backfill) -> None:
@@ -89,7 +102,7 @@ def test_promote_certified_keeps_uncertified(backfill) -> None:
         "short": [],
     }
     kept, promoted = backfill._promote_certified(
-        watchlist, _certification(pead_certified=True), ScanConfig(), "2026-01-30"
+        watchlist, _certification(pead_certified=True), "2026-01-30"
     )
 
     assert promoted == []
@@ -103,7 +116,7 @@ def test_promote_certified_keeps_levels_less_rows(backfill) -> None:
         "short": [],
     }
     kept, promoted = backfill._promote_certified(
-        watchlist, _certification(pead_certified=True), ScanConfig(), "2026-01-30"
+        watchlist, _certification(pead_certified=True), "2026-01-30"
     )
 
     assert promoted == []
@@ -118,7 +131,7 @@ def test_promote_certified_ignores_non_setup_rows(backfill) -> None:
         "short": [],
     }
     kept, promoted = backfill._promote_certified(
-        watchlist, _certification(pead_certified=True), ScanConfig(), "2026-01-30"
+        watchlist, _certification(pead_certified=True), "2026-01-30"
     )
 
     assert promoted == []
