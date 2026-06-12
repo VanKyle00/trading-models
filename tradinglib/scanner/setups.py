@@ -426,11 +426,13 @@ def detect_all(
         ]
         if earnings_datetimes is not None:
             signals.append(detect_pead(bars, earnings_datetimes))
-    else:
+    elif stance == "short":
         signals = [
             detect_base_breakdown(bars, benchmark_close=benchmark_close),
             detect_ma_rally_fade(bars, benchmark_close=benchmark_close),
         ]
         if earnings_datetimes is not None:
             signals.append(detect_pead_down(bars, earnings_datetimes))
+    else:
+        raise ValueError(f"stance must be 'long' or 'short', got {stance!r}")
     return [s for s in signals if s is not None]

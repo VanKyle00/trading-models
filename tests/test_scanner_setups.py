@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from tradinglib.scanner.setups import (
     SetupSignal,
@@ -259,3 +260,9 @@ def test_detect_all_default_stance_is_long() -> None:
     types = {s.setup_type for s in detect_all(bars, earnings_datetimes=[earnings_ts])}
     assert "pead" in types
     assert "pead_down" not in types
+
+
+def test_detect_all_rejects_unknown_stance() -> None:
+    bars, earnings_ts = _pead_bars()
+    with pytest.raises(ValueError, match="stance"):
+        detect_all(bars, stance="neutral", earnings_datetimes=[earnings_ts])
