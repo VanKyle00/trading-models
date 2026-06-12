@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tradinglib.scanner.tiers import apply_fdr, build_watchlist
 
 
@@ -197,3 +199,89 @@ def test_build_watchlist_sub_threshold_short_cohort() -> None:
     assert row["strategy"] == "setup:base_breakdown"
     assert row["stance"] == "short"
     assert row["levels"]["target"] == 40.0
+
+
+def test_setup_watch_levels_short_unattainable_target_is_none() -> None:
+    from tradinglib.scanner.tiers import _setup_watch_levels
+
+    # risk (1.6) > trigger/2 (1.5): the 2R target would be a negative price
+    assert _setup_watch_levels({"trigger_level": 3.0, "stop_level": 4.6}, "short") is None
+
+
+def test_build_watchlist_short_unattainable_target_is_report_only() -> None:
+    tournament = {
+        "long": [],
+        "short": [
+            {
+                "ticker": "PENY",
+                "stance": "short",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.7}],
+            }
+        ],
+    }
+    candidates = [
+        {
+            "ticker": "PENY",
+            "cohort": "short",
+            "setups": [
+                {
+                    "setup_type": "base_breakdown",
+                    "score": 0.8,
+                    "trigger_level": 3.0,
+                    "stop_level": 4.6,
+                }
+            ],
+        }
+    ]
+    watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
+    assert len(watchlist["short"]) == 1
+    assert watchlist["short"][0]["levels"] is None  # report-only: no attainable 2R plan
+
+
+def test_build_watchlist_rejects_unknown_cohort() -> None:
+    candidates = [
+        {
+            "ticker": "TYPO",
+            "cohort": "shrot",
+            "setups": [
+                {"setup_type": "pead", "score": 0.5, "trigger_level": 10.0, "stop_level": 11.0}
+            ],
+        }
+    ]
+    with pytest.raises(ValueError, match="cohort"):
+        build_watchlist({"long": [], "short": []}, candidates, {}, watch_dsr_floor=0.0)
+
+
+def test_build_watchlist_short_cohort_needs_short_tournament() -> None:
+    # join-miss regression: a short-cohort candidate whose ticker ran only a
+    # LONG tournament must produce no short watch row (and no long row either)
+    tournament = {
+        "long": [
+            {
+                "ticker": "ONLY",
+                "stance": "long",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.9}],
+            }
+        ],
+        "short": [],
+    }
+    candidates = [
+        {
+            "ticker": "ONLY",
+            "cohort": "short",
+            "setups": [
+                {
+                    "setup_type": "base_breakdown",
+                    "score": 0.8,
+                    "trigger_level": 50.0,
+                    "stop_level": 55.0,
+                }
+            ],
+        }
+    ]
+    watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
+    assert watchlist == {"long": [], "short": []}
