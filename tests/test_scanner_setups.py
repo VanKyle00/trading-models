@@ -141,6 +141,7 @@ def test_base_breakdown_detected() -> None:
 
     assert isinstance(signal, SetupSignal)
     assert signal.setup_type == "base_breakdown"
+    assert signal.ticker == "TEST"
     assert 0.0 <= signal.score <= 1.0
     assert signal.trigger_level < signal.stop_level  # short: stop ABOVE trigger
 
@@ -148,6 +149,11 @@ def test_base_breakdown_detected() -> None:
 def test_base_breakdown_rejects_stock_near_its_high() -> None:
     # The long-side breakout fixture sits near its 52-week HIGH: not breakdown material.
     assert detect_base_breakdown(_breakout_bars()) is None
+
+
+def test_base_breakdown_requires_history() -> None:
+    short = _breakdown_bars().iloc[-100:]
+    assert detect_base_breakdown(short) is None
 
 
 def test_base_breakout_requires_history() -> None:
@@ -218,6 +224,7 @@ def test_ma_rally_fade_detected() -> None:
 
     assert isinstance(signal, SetupSignal)
     assert signal.setup_type == "ma_rally_fade"
+    assert 0.0 <= signal.score <= 1.0
     assert signal.trigger_level < signal.stop_level
 
 
@@ -231,9 +238,24 @@ def test_pead_down_detected() -> None:
 
     assert isinstance(signal, SetupSignal)
     assert signal.setup_type == "pead_down"
+    assert signal.stop_level == 95.0
+    assert 0.0 <= signal.score <= 1.0
     assert signal.stop_level > signal.trigger_level
 
 
 def test_pead_down_rejects_up_gap() -> None:
     bars, earnings_ts = _pead_bars()
     assert detect_pead_down(bars, [earnings_ts]) is None
+
+
+def test_detect_all_short_stance_runs_short_detectors() -> None:
+    bars, earnings_ts = _pead_down_bars()
+    signals = detect_all(bars, stance="short", earnings_datetimes=[earnings_ts])
+    assert [s.setup_type for s in signals] == ["pead_down"]
+
+
+def test_detect_all_default_stance_is_long() -> None:
+    bars, earnings_ts = _pead_bars()
+    types = {s.setup_type for s in detect_all(bars, earnings_datetimes=[earnings_ts])}
+    assert "pead" in types
+    assert "pead_down" not in types

@@ -3,12 +3,16 @@
 Each detector inspects the LAST bar of a daily OHLCV frame (the
 ``load_daily`` canonical schema: lowercase columns plus ``symbol``) and
 returns a :class:`SetupSignal` when the setup is forming now, else ``None``.
-Three setups for v1:
+Three long/short detector pairs:
 
-- ``base_breakout``: tight consolidation near the 52-week high on drying-up
-  volume — entry is the breakout over the base high.
-- ``ma_pullback``: orderly pullback to a rising 50-day MA inside an uptrend.
-- ``pead``: post-earnings-announcement drift after a big up-gap on volume.
+- ``base_breakout`` / ``base_breakdown``: tight consolidation near the
+  52-week high (low) on drying-up volume — entry on the break of the base.
+- ``ma_pullback`` / ``ma_rally_fade``: orderly counter-trend move into a
+  rising (declining) 50-day MA inside an uptrend (downtrend).
+- ``pead`` / ``pead_down``: post-earnings-announcement drift after a big
+  gap on volume.
+
+``detect_all`` dispatches the trio for the requested stance.
 """
 
 from __future__ import annotations
@@ -209,6 +213,10 @@ def detect_ma_pullback(
         return None
 
     last_atr = atr(high, low, close, 14).iloc[-1]
+    trigger = float(sma(close, 20).iloc[-1])
+    stop = float(min(low.iloc[-10:].min(), sma50 - 1.5 * last_atr))
+    if not stop < trigger:
+        return None  # squeeze-spike tape can strand SMA20 below both stop arms
     vol_ratio_10 = volume_ratio(volume, 50).iloc[-10:].mean()
     trend = _clip01((sma50 / sma200 - 1.0) * 10.0)
     orderliness = _clip01(2.0 - vol_ratio_10) if vol_ratio_10 >= 1.0 else 1.0
@@ -218,8 +226,8 @@ def detect_ma_pullback(
         setup_type="ma_pullback",
         score=score,
         asof=_asof(bars),
-        trigger_level=float(sma(close, 20).iloc[-1]),
-        stop_level=float(min(low.iloc[-10:].min(), sma50 - 1.5 * last_atr)),
+        trigger_level=trigger,
+        stop_level=stop,
         evidence={
             "sma50": float(sma50),
             "sma200": float(sma200),
@@ -260,9 +268,14 @@ def detect_ma_rally_fade(
         return None
 
     last_atr = atr(high, low, close, 14).iloc[-1]
+    trigger = float(sma(close, 20).iloc[-1])
+    stop = float(max(high.iloc[-10:].max(), sma50 + 1.5 * last_atr))
+    if not stop > trigger:
+        return None  # squeeze-spike tape can strand SMA20 above both stop arms
     vol_ratio_10 = volume_ratio(volume, 50).iloc[-10:].mean()
     trend = _clip01((sma200 / sma50 - 1.0) * 10.0)
     orderliness = _clip01(2.0 - vol_ratio_10) if vol_ratio_10 >= 1.0 else 1.0
+    # weak relative strength is the FAVORABLE condition for a short
     score = _clip01(
         0.4 * trend + 0.3 * orderliness + 0.3 * (1.0 - _rs_component(close, benchmark_close))
     )
@@ -271,8 +284,8 @@ def detect_ma_rally_fade(
         setup_type="ma_rally_fade",
         score=score,
         asof=_asof(bars),
-        trigger_level=float(sma(close, 20).iloc[-1]),
-        stop_level=float(max(high.iloc[-10:].max(), sma50 + 1.5 * last_atr)),
+        trigger_level=trigger,
+        stop_level=stop,
         evidence={
             "sma50": float(sma50),
             "sma200": float(sma200),
@@ -352,6 +365,7 @@ def detect_pead_down(
     past = [ts for ts in pd.DatetimeIndex(earnings_datetimes) if ts <= index[-1]]
     if not past:
         return None
+    # the reaction bar is the first session on/after the most recent earnings
     reaction_pos = int(index.searchsorted(max(past)))
     if reaction_pos >= len(index):
         return None
@@ -400,14 +414,23 @@ def detect_pead_down(
 def detect_all(
     bars: pd.DataFrame,
     *,
+    stance: str = "long",
     benchmark_close: pd.Series | None = None,
     earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex | None = None,
 ) -> list[SetupSignal]:
-    """Run every detector on one ticker's bars; return all matches."""
-    signals = [
-        detect_base_breakout(bars, benchmark_close=benchmark_close),
-        detect_ma_pullback(bars, benchmark_close=benchmark_close),
-    ]
-    if earnings_datetimes is not None:
-        signals.append(detect_pead(bars, earnings_datetimes))
+    """Run every detector for one stance on one ticker's bars; return all matches."""
+    if stance == "long":
+        signals = [
+            detect_base_breakout(bars, benchmark_close=benchmark_close),
+            detect_ma_pullback(bars, benchmark_close=benchmark_close),
+        ]
+        if earnings_datetimes is not None:
+            signals.append(detect_pead(bars, earnings_datetimes))
+    else:
+        signals = [
+            detect_base_breakdown(bars, benchmark_close=benchmark_close),
+            detect_ma_rally_fade(bars, benchmark_close=benchmark_close),
+        ]
+        if earnings_datetimes is not None:
+            signals.append(detect_pead_down(bars, earnings_datetimes))
     return [s for s in signals if s is not None]
