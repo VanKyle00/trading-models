@@ -16,9 +16,10 @@ from __future__ import annotations
 import pandas as pd
 
 from tradinglib.backtest.metrics import benjamini_hochberg_fdr, compute_metrics
+from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.setups import detect_all
 from tradinglib.scanner.tiers import ENTRY_WINDOWS, _setup_watch_levels
-from tradinglib.strategist.evaluate import ENTRY_WINDOW
+from tradinglib.strategist.evaluate import ENTRY_WINDOW, simulate_ticket
 
 
 def _naive(frame: pd.DataFrame) -> pd.DataFrame:
@@ -145,3 +146,64 @@ def certify(
         # invariant: blocking reasons must NOT start with "failed" — that prefix marks informational-only
         v["certified"] = passed and not [r for r in v["reasons"] if not r.startswith("failed")]
     return verdicts
+
+
+SETUP_TYPES: dict[str, tuple[str, ...]] = {
+    "long": ("base_breakout", "ma_pullback", "pead"),
+    "short": ("base_breakdown", "ma_rally_fade", "pead_down"),
+}
+
+
+def build_certification(
+    bars_by_ticker: dict[str, pd.DataFrame],
+    earnings_by_ticker: dict[str, pd.DatetimeIndex],
+    *,
+    asof: pd.Timestamp,
+    config: ScanConfig,
+) -> dict:
+    """The weekly certification sidecar: every setup type x stance, pooled and judged."""
+    series_by_key: dict[tuple[str, str], pd.Series] = {}
+    n_trials = sum(len(v) for v in SETUP_TYPES.values())
+    for stance, types in SETUP_TYPES.items():
+        firings = sweep_firings(
+            bars_by_ticker,
+            setup_types=types,
+            stance=stance,
+            asof=asof,
+            lookback_days=config.pooled_lookback_days,
+            step_sessions=config.pooled_step_sessions,
+            earnings_by_ticker=earnings_by_ticker,
+        )
+        scored = []
+        for row in firings:
+            if not row.get("levels"):
+                continue  # unattainable 2R target: report-only, nothing to simulate
+            try:
+                scored.append(
+                    {
+                        **row,
+                        **simulate_ticket(
+                            row,
+                            bars_by_ticker[row["ticker"]],
+                            asof=row["date"],
+                            entry_window=row["entry_window"],
+                        ),
+                    }
+                )
+            except Exception:
+                continue
+        for setup_type in types:
+            series_by_key[(setup_type, stance)] = pooled_r_series(
+                [s for s in scored if s["setup_type"] == setup_type]
+            )
+    verdicts = certify(
+        series_by_key,
+        n_trials=n_trials,
+        min_dates=config.pooled_min_dates,
+        fdr_alpha=config.fdr_alpha,
+    )
+    return {
+        "built_asof": asof.strftime("%Y-%m-%d"),
+        "lookback_days": config.pooled_lookback_days,
+        "verdicts": {f"{t}:{s}": v for (t, s), v in verdicts.items()},
+    }
