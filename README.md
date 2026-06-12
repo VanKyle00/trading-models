@@ -158,12 +158,13 @@ stages — the first two are the **fundamental (FA) gate**:
    `0.7 · fa_score + 0.3 · edgar_score`; the re-ranked top 40 pass the gate.
    Tickers EDGAR has no data for keep their unblended score rather than being
    penalized for missing facts.
-3. **Setup detection.** Three daily-bar detectors look for setups *forming
-   now*: `base_breakout` (tight consolidation near the 52-week high on
-   drying-up volume), `ma_pullback` (orderly pullback to a rising 50-day MA
-   inside an uptrend), and `pead` (post-earnings-announcement drift after a
-   big up-gap on volume). Each emits a 0–1 score plus concrete trigger and
-   stop levels.
+3. **Setup detection.** Three long/short detector pairs run over both FA
+   cohorts (top-40 longs, bottom-40 shorts): `base_breakout`/`base_breakdown`
+   (tight consolidation near the 52-week high or low on drying-up volume),
+   `ma_pullback`/`ma_rally_fade` (orderly pullback to a rising 50-day MA or
+   rally fade to a falling 50-day MA), and `pead`/`pead_down`
+   (post-earnings-announcement drift after a big up- or down-gap on volume).
+   Each emits a 0–1 score plus concrete trigger and stop levels.
 4. **LLM document briefs + ranking.** Every finalist gets a bounded doc pack —
    the latest 8-K excerpt, the 10-Q/10-K MD&A opening, recent headlines, its
    FA metrics and the detected setup — and one LLM call returns strict JSON

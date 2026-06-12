@@ -178,7 +178,10 @@ def render_markdown(result: dict) -> str:
         "",
         f"Funnel: {funnel.get('universe', '?')} universe → "
         f"{funnel.get('fa_shortlist', '?')} past FA gate → "
-        f"{funnel.get('with_setups', '?')} with setups forming",
+        + (
+            f"{funnel.get('with_setups', '?')} with setups forming"
+            + (f" ({funnel['with_setups_short']} short)" if funnel.get("with_setups_short") else "")
+        ),
         "",
     ]
     if "tournament_candidates" in funnel:

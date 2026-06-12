@@ -134,7 +134,7 @@
       <div class="funnel">
         <div class="metric"><div class="m-label">Universe</div><div class="m-value">{{ scan.funnel.universe }}</div></div>
         <div class="metric"><div class="m-label">Past FA gate</div><div class="m-value">{{ scan.funnel.fa_shortlist }}</div></div>
-        <div class="metric"><div class="m-label">Setups forming</div><div class="m-value">{{ scan.funnel.with_setups }}</div></div>
+        <div class="metric"><div class="m-label">Setups forming</div><div class="m-value">{{ scan.funnel.with_setups }}{% if scan.funnel.with_setups_short %} ({{ scan.funnel.with_setups_short }} short){% endif %}</div></div>
       </div>
 
       {% if scan.funnel.tournament_candidates is defined %}

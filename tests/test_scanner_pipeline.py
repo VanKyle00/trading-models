@@ -708,10 +708,9 @@ def test_fdr_skip_strategies_zeroes_out(patched_pipeline) -> None:
 def test_candidates_carry_cohort_for_both_slates(patched_pipeline) -> None:
     # short slate exercised end-to-end in test_scanner_tiers.py;
     # here we just prove every candidate dict has a "cohort" key and it is "long"
-    # (short_keep=0 is the default, so no short candidates are requested;
-    # BROKEN is the short FA pick but bars loading raises, so it never reaches
-    # the candidates list even when short_keep is set — the fixture universe
-    # is entirely absorbed by the long gate at fa_keep=3).
+    # (BROKEN is the short FA pick but bars loading raises, so it never reaches
+    # the candidates list — the fixture universe is entirely absorbed by the
+    # long gate at fa_keep=3).
     result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))
     assert result["candidates"], "fixture should produce at least one candidate"
     assert all("cohort" in c for c in result["candidates"])
