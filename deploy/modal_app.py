@@ -185,7 +185,7 @@ def fastapi_app():
     timeout=7200,
 )
 def scheduled_swing_scan() -> None:
-    from datetime import UTC, datetime
+    from datetime import UTC, datetime, timedelta
 
     from tradinglib.assistant.provider import ClaudeProvider
     from tradinglib.data.paths import processed_dir
@@ -197,12 +197,72 @@ def scheduled_swing_scan() -> None:
     base = processed_dir("scans")
     # without last night's report every winner_changed stays null forever
     previous = load_latest_report(base, before=datetime.now(UTC).strftime("%Y-%m-%d"))
+
+    certification = None
+    cert_path = base / "certification.json"
+    try:
+        import json
+
+        import pandas as pd
+
+        from tradinglib.loaders.equities.yfinance import load_daily
+        from tradinglib.loaders.events.earnings import get_earnings_dates
+        from tradinglib.scanner.pooled import build_certification
+
+        if cert_path.exists():
+            certification = json.loads(cert_path.read_text(encoding="utf-8"))
+        built = (certification or {}).get("built_asof")
+        stale = (
+            built is None
+            or (datetime.now(UTC) - datetime.strptime(built, "%Y-%m-%d").replace(tzinfo=UTC)).days
+            >= 7
+        )
+        if stale and previous:
+            # certification family = last night's archived gate output; bars deep
+            # enough for the sweep's oldest night (lookback + setup window)
+            config = ScanConfig()
+            tickers = sorted(
+                {r["ticker"] for st in ("long", "short") for r in previous["fa_candidates"][st]}
+            )
+            start = (
+                datetime.now(UTC) - timedelta(days=config.pooled_lookback_days + 450)
+            ).strftime("%Y-%m-%d")
+            bars_by_ticker: dict = {}
+            earnings_by_ticker: dict = {}
+            for ticker in tickers:
+                try:
+                    bars_by_ticker[ticker] = load_daily(ticker, start=start)
+                    earnings = get_earnings_dates([ticker])
+                    dts = pd.DatetimeIndex(earnings["earnings_datetime"])
+                    if dts.tz is None:
+                        dts = dts.tz_localize("UTC")
+                    # tz-naive to match the sweep's internally naive-ized bars
+                    # (detect_pead compares these against the bars index directly)
+                    earnings_by_ticker[ticker] = dts.tz_convert("UTC").tz_localize(None)
+                except Exception:
+                    earnings_by_ticker.setdefault(ticker, pd.DatetimeIndex([]))
+            certification = build_certification(
+                bars_by_ticker,
+                earnings_by_ticker,
+                asof=pd.Timestamp(datetime.now(UTC).strftime("%Y-%m-%d")),
+                config=config,
+            )
+            cert_path.write_text(json.dumps(certification, indent=2), encoding="utf-8")
+            print(
+                f"certification rebuilt: {sum(1 for v in certification['verdicts'].values() if v['certified'])}"
+                f"/{len(certification['verdicts'])} certified, sim_errors={certification['sim_errors']}"
+            )
+    except Exception as exc:
+        # must never cost the night's report; a prior (possibly stale) sidecar still applies
+        print(f"certification refresh failed (scan proceeds): {exc}")
+
     result = run_scan(
         ScanConfig(),
         ClaudeProvider(),
         previous_report=previous,
         # yesterday's rebuild: a campaign that exited TODAY still suppresses tonight (deliberate one-night lag; report must never wait on ledger work)
         recent_ledger=load_ledger(base),
+        certification=certification,
     )
     json_path, _ = write_report(result, base / result["asof"])
     try:

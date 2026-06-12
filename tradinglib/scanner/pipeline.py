@@ -86,6 +86,7 @@ def run_scan(
     provider: LLMProvider | None = None,
     previous_report: dict | None = None,
     recent_ledger: dict | None = None,
+    certification: dict | None = None,
 ) -> dict:
     """Run the full funnel and return the report-ready result dict."""
     asof = _now()
@@ -287,6 +288,11 @@ def run_scan(
     fdr: dict | None = None
     fdr_passed: dict[tuple[str, str], bool] = {}
     watchlist: dict[str, list[dict]] = {"long": [], "short": []}
+    # tickets is initialized here (before the strategy block) so the pooled
+    # promotion can append into it; it stays correct for skip_strategies since
+    # nothing else touches it until the winner-ticket loop below.
+    tickets: dict[str, list[dict]] = {"long": [], "short": []}
+    pooled_promoted = 0  # always referenced by the funnel, even when skipped
     if not config.skip_strategies:
         fdr_passed, fdr_threshold, fdr_family = apply_fdr(tournament, config.fdr_alpha)
         fdr = {"alpha": config.fdr_alpha, "threshold": fdr_threshold, "family": fdr_family}
@@ -297,6 +303,33 @@ def run_scan(
             watch_dsr_floor=config.watch_dsr_floor,
             setup_score_floors=config.setup_score_floors,
         )
+        if certification and config.pooled_certification:
+            verdicts = certification.get("verdicts", {})
+            for stance in ("long", "short"):
+                kept = []
+                for row in watchlist[stance]:
+                    key = f"{row['strategy'].removeprefix('setup:')}:{stance}"
+                    verdict = verdicts.get(key)
+                    if (
+                        row["strategy"].startswith("setup:")
+                        and row.get("levels")
+                        and verdict
+                        and verdict.get("certified")
+                    ):
+                        tickets[stance].append(
+                            {
+                                **row,
+                                "tier": "ticket",
+                                "tier_reason": "pooled-certified",
+                                "pooled_evidence": {
+                                    k: verdict[k] for k in ("pooled_dsr", "n_dates", "total_r")
+                                },
+                            }
+                        )
+                        pooled_promoted += 1
+                    else:
+                        kept.append(row)
+                watchlist[stance] = kept
         for stance in ("long", "short"):
             kept = []
             for row in watchlist[stance]:
@@ -326,8 +359,39 @@ def run_scan(
                             continue
                     kept.append(row)
             watchlist[stance] = kept
+        # B's cooldown + C's regime gate apply to promoted rows too, with their
+        # NEW ticket tier. At this point tickets holds ONLY promoted rows; the
+        # winner tickets are built later with their own inline checks.
+        for stance in ("long", "short"):
+            kept = []
+            for row in tickets[stance]:
+                if (row["ticker"], stance, row["strategy"], "ticket") in active:
+                    suppressed.append(
+                        {
+                            "ticker": row["ticker"],
+                            "stance": stance,
+                            "strategy": row["strategy"],
+                            "tier": "ticket",
+                            "reason": "open campaign",
+                        }
+                    )
+                    continue
+                if config.regime_gate:
+                    reason = gate_reason(row["strategy"], stance, regime)
+                    if reason is not None:
+                        suppressed.append(
+                            {
+                                "ticker": row["ticker"],
+                                "stance": stance,
+                                "strategy": row["strategy"],
+                                "tier": "ticket",
+                                "reason": reason,
+                            }
+                        )
+                        continue
+                kept.append(row)
+            tickets[stance] = kept
 
-    tickets: dict[str, list[dict]] = {"long": [], "short": []}
     fa_by_key = {
         (stance, c["ticker"]): c for stance in ("long", "short") for c in fa_candidates[stance]
     }
@@ -428,6 +492,10 @@ def run_scan(
             "watch_dsr_floor": config.watch_dsr_floor,
             "setup_score_floors": config.setup_score_floors,
             "regime_gate": config.regime_gate,
+            "pooled_certification": config.pooled_certification,
+            "pooled_min_dates": config.pooled_min_dates,
+            "pooled_lookback_days": config.pooled_lookback_days,
+            "pooled_step_sessions": config.pooled_step_sessions,
         },
         "funnel": {
             "universe": len(universe),
@@ -447,6 +515,7 @@ def run_scan(
             "fdr_passed": sum(1 for v in fdr_passed.values() if v) if fdr else 0,
             "watchlist": sum(len(v) for v in watchlist.values()),
             "suppressed": len(suppressed),
+            "pooled_promoted": pooled_promoted,
         },
         "fa_candidates": fa_candidates,
         "tournament": tournament,
