@@ -84,6 +84,37 @@ def _family(report_path: Path) -> dict[str, list[str]]:
     return {stance: [row["ticker"] for row in fa[stance]] for stance in ("long", "short")}
 
 
+def load_archived_families(base: Path) -> list[tuple[str, dict[str, list[str]]]]:
+    """(date, family) per real report, oldest first."""
+    out: list[tuple[str, dict[str, list[str]]]] = []
+    if not base.exists():
+        return out
+    for d in sorted(p.name for p in base.iterdir() if (p / "report.json").exists()):
+        try:
+            out.append((d, _family(base / d / "report.json")))
+        except (KeyError, json.JSONDecodeError):
+            continue  # pre-FA-format or corrupt report: skip
+    return out
+
+
+def family_for_night(
+    families: list[tuple[str, dict[str, list[str]]]], night: pd.Timestamp
+) -> tuple[dict[str, list[str]], str]:
+    """Newest archived family dated <= night; oldest family + 'fallback' before coverage.
+
+    Assumes non-empty ``families`` — the caller aborts before resolving when no
+    archived reports exist.
+    """
+    night_str = night.strftime("%Y-%m-%d")
+    chosen = None
+    for date, fam in families:
+        if date <= night_str:
+            chosen = (fam, date)
+    if chosen is not None:
+        return chosen
+    return families[0][1], "fallback"
+
+
 def _slice(bars: pd.DataFrame, asof: pd.Timestamp, window_days: int) -> pd.DataFrame:
     """Bars in (asof - window_days, asof] — the no-lookahead view of one night."""
     out = bars.loc[(bars.index >= asof - pd.Timedelta(days=window_days)) & (bars.index <= asof)]
@@ -320,6 +351,12 @@ def main(argv: list[str] | None = None) -> int:
         help="apply the meanrev-against-trend gate at issuance (A/B arm)",
     )
     parser.add_argument(
+        "--family-mode",
+        choices=("frozen", "archived"),
+        default="frozen",
+        help="frozen: one family from --report; archived: per-night family from archived reports",
+    )
+    parser.add_argument(
         "--pooled",
         action="store_true",
         help="apply pooled-certified promotion from a per-night as-of certification (A/B arm)",
@@ -333,15 +370,33 @@ def main(argv: list[str] | None = None) -> int:
         "%Y-%m-%d"
     )
 
-    report_path = args.report
-    if report_path is None:
-        dates = sorted(
-            p.name for p in processed_dir("scans").iterdir() if (p / "report.json").exists()
+    if args.family_mode == "archived":
+        if args.report is not None:
+            print("--report is ignored in archived mode (families come from archived reports)")
+        report_path = None
+        families = load_archived_families(processed_dir("scans"))
+        if not families:
+            print("no archived FA reports under data/processed/scans -- nothing to replay")
+            return 1
+        tickers = sorted(
+            {t for _, fam in families for stance in ("long", "short") for t in fam[stance]}
         )
-        report_path = processed_dir("scans") / dates[-1] / "report.json"
-    family = _family(report_path)
-    tickers = sorted(set(family["long"]) | set(family["short"]))
-    print(f"family: {len(family['long'])} long / {len(family['short'])} short from {report_path}")
+        print(
+            f"families: {len(families)} archived reports "
+            f"({families[0][0]} .. {families[-1][0]}), union {len(tickers)} tickers"
+        )
+    else:
+        report_path = args.report
+        if report_path is None:
+            dates = sorted(
+                p.name for p in processed_dir("scans").iterdir() if (p / "report.json").exists()
+            )
+            report_path = processed_dir("scans") / dates[-1] / "report.json"
+        family = _family(report_path)
+        tickers = sorted(set(family["long"]) | set(family["short"]))
+        print(
+            f"family: {len(family['long'])} long / {len(family['short'])} short from {report_path}"
+        )
 
     bars_by_ticker: dict[str, pd.DataFrame] = {}
     earnings_by_ticker: dict[str, pd.DatetimeIndex] = {}
@@ -375,8 +430,13 @@ def main(argv: list[str] | None = None) -> int:
     cert_cache: dict[str, dict] = {}
     for i, asof in enumerate(nights, 1):
         t0 = time.monotonic()
+        family_suffix = ""
+        if args.family_mode == "archived":
+            family, family_source = family_for_night(families, asof)
         certification = None
         if args.pooled:
+            # archived mode: the cert pools over the union of all archived
+            # families (superset evidence); prod uses last night's family
             week = f"{asof.isocalendar().year}-{asof.isocalendar().week:02d}"
             if week not in cert_cache:
                 t_cert = time.monotonic()
@@ -399,6 +459,9 @@ def main(argv: list[str] | None = None) -> int:
         funnel, issued, errors = run_night(
             asof, family, bars_by_ticker, earnings_by_ticker, config, certification=certification
         )
+        if args.family_mode == "archived":
+            funnel["family_source"] = family_source
+            family_suffix = f" family={family_source}"
         # prod's re-issue cooldown, replayed: a campaign still waiting/open at
         # this night suppresses tonight's same (ticker, stance, strategy, tier)
         active = {
@@ -417,6 +480,8 @@ def main(argv: list[str] | None = None) -> int:
         funnel["watch"] -= sum(1 for r in suppressed if r["tier"] == "watch")
         for row in issued:
             record = dict(row)
+            if args.family_mode == "archived":
+                record["family_source"] = family_source
             try:
                 record.update(
                     simulate_ticket(
@@ -439,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{pooled_suffix}"
             f"regime_blocked={funnel['regime_blocked']} "
             f"best_dsr={funnel['best_dsr'] or 0:.3f} "
-            f"errors={funnel['errors']} ({time.monotonic() - t0:.0f}s)",
+            f"errors={funnel['errors']}{family_suffix} ({time.monotonic() - t0:.0f}s)",
             flush=True,
         )
 
@@ -458,16 +523,23 @@ def main(argv: list[str] | None = None) -> int:
         / f"replay_{nights[0].strftime('%Y%m%d')}_{nights[-1].strftime('%Y%m%d')}.json"
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    family_caveat = (
+        "FA families resolved per-night from archived reports; nights before coverage reuse "
+        "the oldest report (family_source='fallback')"
+        if args.family_mode == "archived"
+        else "FA family frozen to the latest real report (selection-layer survivorship)"
+    )
     out_path.write_text(
         json.dumps(
             {
                 "generated_asof": today.strftime("%Y-%m-%d"),
-                "family_report": str(report_path),
+                "family_report": str(report_path) if report_path is not None else None,
+                "family_mode": args.family_mode,
                 "step_sessions": args.step,
                 "regime_gate": args.regime_gate,
                 "pooled": args.pooled,
                 "caveats": [
-                    "FA family frozen to the latest real report (selection-layer survivorship)",
+                    family_caveat,
                     "earnings flags from today's fetch (thinner at the oldest nights)",
                     "regime_blocked attribution differs from prod: replay gates before the "
                     "cooldown (prod: after, so doubly-blocked rows read 'open campaign') and "
@@ -499,6 +571,9 @@ def main(argv: list[str] | None = None) -> int:
             f" expired={ts['expired']} open={ts['open']} waiting={ts['waiting']}"
             f" total_r={ts['total_r']:+.2f}"
         )
+    if args.family_mode == "archived":
+        honest = [f for f in funnels if f.get("family_source", "fallback") != "fallback"]
+        print(f"nights with archived (point-in-time) families: {len(honest)}/{len(funnels)}")
     return 0
 
 
