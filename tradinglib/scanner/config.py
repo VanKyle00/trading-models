@@ -26,6 +26,8 @@ class ScanConfig:
     ``setup_score_floors`` maps setup_type to a minimum score for the sub-threshold
     watch path; EMPTY by default — a floor requires live-ledger evidence, not replay
     tuning (see the umbrella plan).
+    ``regime_gate`` gates meanrev-against-trend issuance; OFF until replay + live
+    evidence (regime is always reported regardless).
     """
 
     fa_keep: int = 40
@@ -45,3 +47,4 @@ class ScanConfig:
     fdr_alpha: float = 0.10
     watch_dsr_floor: float = 0.5
     setup_score_floors: dict[str, float] = field(default_factory=dict)
+    regime_gate: bool = False
