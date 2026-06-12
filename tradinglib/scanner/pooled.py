@@ -161,9 +161,15 @@ def build_certification(
     asof: pd.Timestamp,
     config: ScanConfig,
 ) -> dict:
-    """The weekly certification sidecar: every setup type x stance, pooled and judged."""
+    """The weekly certification sidecar: every setup type x stance, pooled and judged.
+
+    Simulation walks bars beyond each firing date with no upper bound: the
+    caller must pre-slice ``bars_by_ticker`` to ``<= asof`` for a no-lookahead
+    replay (the weekly prod sidecar relies on bars simply ending at asof).
+    """
     series_by_key: dict[tuple[str, str], pd.Series] = {}
     n_trials = sum(len(v) for v in SETUP_TYPES.values())
+    sim_errors = 0
     for stance, types in SETUP_TYPES.items():
         firings = sweep_firings(
             bars_by_ticker,
@@ -191,6 +197,7 @@ def build_certification(
                     }
                 )
             except Exception:
+                sim_errors += 1
                 continue
         for setup_type in types:
             series_by_key[(setup_type, stance)] = pooled_r_series(
@@ -205,5 +212,6 @@ def build_certification(
     return {
         "built_asof": asof.strftime("%Y-%m-%d"),
         "lookback_days": config.pooled_lookback_days,
+        "sim_errors": sim_errors,
         "verdicts": {f"{t}:{s}": v for (t, s), v in verdicts.items()},
     }

@@ -151,14 +151,20 @@ def test_build_certification_shape() -> None:
     from tradinglib.scanner.config import ScanConfig
     from tradinglib.scanner.pooled import build_certification
 
-    bars = {"AAA": _trending_bars("AAA"), "BBB": _trending_bars("BBB", drift=-0.001)}
+    bars = {
+        "AAA": _trending_bars("AAA"),
+        "BBB": _trending_bars("BBB", drift=-0.001),
+        "BAIT": _bait_breakout_bars(),
+    }
     sidecar = build_certification(bars, {}, asof=pd.Timestamp("2026-01-30"), config=ScanConfig())
     assert sidecar["built_asof"] == "2026-01-30"
     assert sidecar["lookback_days"] == 750
+    assert sidecar["sim_errors"] == 0
     assert "pead:long" in sidecar["verdicts"]
     assert "base_breakdown:short" in sidecar["verdicts"]
     assert all(
-        {"certified", "pooled_dsr", "n_dates", "reasons"} <= set(v)
+        {"certified", "pooled_dsr", "n_dates", "total_r", "reasons"} <= set(v)
         for v in sidecar["verdicts"].values()
     )
     assert len(sidecar["verdicts"]) == 6  # whole menu: 3 long types + 3 short types
+    assert sidecar["verdicts"]["base_breakout:long"]["n_dates"] > 0  # bait drives a real series
