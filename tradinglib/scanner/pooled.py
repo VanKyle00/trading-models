@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from tradinglib.backtest.metrics import benjamini_hochberg_fdr, compute_metrics
 from tradinglib.scanner.setups import detect_all
 from tradinglib.scanner.tiers import ENTRY_WINDOWS, _setup_watch_levels
 from tradinglib.strategist.evaluate import ENTRY_WINDOW
@@ -96,3 +97,50 @@ def pooled_r_series(scored: list[dict]) -> pd.Series:
     series = frame.groupby("date")["r"].mean()
     series.index = pd.to_datetime(series.index)
     return series.sort_index()
+
+
+def _deflated_sharpe(series: pd.Series, n_trials: int) -> float:
+    """The tournament's deflation convention (compute_metrics) on a pooled R series.
+
+    compute_metrics needs an equity curve only for max_drawdown, which
+    certification ignores; a cumulative-R curve keeps the call well-formed.
+    """
+    equity = 1.0 + series.cumsum()
+    return float(compute_metrics(series, equity, n_trials=n_trials)["deflated_sharpe"])
+
+
+def certify(
+    series_by_key: dict[tuple[str, str], pd.Series],
+    *,
+    n_trials: int,
+    min_dates: int,
+    fdr_alpha: float,
+    dsr_threshold: float = 0.90,
+) -> dict[tuple[str, str], dict]:
+    """Certification verdict per (setup_type, stance) over pooled R series."""
+    verdicts: dict[tuple[str, str], dict] = {}
+    pvalues: list[float] = []
+    keys: list[tuple[str, str]] = []
+    for key, series in series_by_key.items():
+        reasons: list[str] = []
+        dsr = _deflated_sharpe(series, n_trials) if len(series) >= 2 else 0.0
+        if len(series) < min_dates:
+            reasons.append(f"n_dates {len(series)} < {min_dates}")
+        if dsr < dsr_threshold:
+            reasons.append(f"pooled_dsr {dsr:.2f} < {dsr_threshold:.2f}")
+        verdicts[key] = {
+            "pooled_dsr": dsr,
+            "n_dates": len(series),
+            "total_r": float(series.sum()),
+            "reasons": reasons,
+            "certified": False,
+        }
+        keys.append(key)
+        pvalues.append(1.0 - dsr)
+    rejected, _threshold = benjamini_hochberg_fdr(pvalues, fdr_alpha)
+    for key, passed in zip(keys, rejected, strict=True):
+        v = verdicts[key]
+        if not passed and not v["reasons"]:
+            v["reasons"].append("failed pooled FDR")
+        v["certified"] = passed and not [r for r in v["reasons"] if not r.startswith("failed")]
+    return verdicts

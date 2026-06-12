@@ -97,3 +97,27 @@ def test_pooled_r_series_aggregates_same_date() -> None:
     series = pooled_r_series(scored)
     assert list(series.index.strftime("%Y-%m-%d")) == ["2025-01-06", "2025-02-03"]
     assert series.iloc[0] == 0.5  # mean of the two same-date trades
+
+
+def test_certify_requires_min_dates_and_dsr() -> None:
+    from tradinglib.scanner.pooled import certify
+
+    # Seeded normal series: mean≈0.49, std≈0.16 → per-obs SR≈3 → DSR≈1.0 with n_trials=6.
+    # The plan's alternating [0.8, 0.6] series is bimodal (excess_kurt≈-2.17), which makes
+    # the Lo/BLdP sr_var go negative → compute_metrics short-circuits to DSR 0.0.
+    # Using a seeded normal series preserves the intent (strongly positive, 25 dates).
+    rng = np.random.default_rng(42)
+    strong = pd.Series(
+        0.5 + 0.2 * rng.standard_normal(25),
+        index=pd.date_range("2025-01-01", periods=25, freq="W"),
+    )
+    thin = strong.iloc[:5]
+    verdicts = certify(
+        {("pead", "long"): strong, ("base_breakout", "long"): thin},
+        n_trials=6,
+        min_dates=20,
+        fdr_alpha=0.10,
+    )
+    assert verdicts[("pead", "long")]["certified"] is True
+    assert verdicts[("base_breakout", "long")]["certified"] is False
+    assert "n_dates 5 < 20" in verdicts[("base_breakout", "long")]["reasons"]
