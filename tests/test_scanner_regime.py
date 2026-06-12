@@ -45,3 +45,22 @@ def test_every_registered_strategy_has_a_style() -> None:
     from tradinglib.tournament.strategies import STRATEGIES
 
     assert set(STRATEGIES) <= set(STRATEGY_STYLES)
+    # Pin the gate's input taxonomy: a future "sync" with StrategyDef.style must fail loudly.
+    assert STRATEGY_STYLES["rsi2"] == "meanrev"
+    assert STRATEGY_STYLES["bollinger"] == "meanrev"
+    assert STRATEGY_STYLES["ma_pullback"] == "trend"  # deliberate divergence from registry style
+    assert STRATEGY_STYLES["pead"] == "event"
+
+
+def test_regime_state_drops_nan_closes() -> None:
+    values = np.linspace(80.0, 120.0, 300)
+    values[10] = np.nan  # a stray NaN must not poison the SMA into gating "down"
+    state = regime_state(_close(values))
+    assert state["trend"] == "up"
+
+
+def test_regime_state_nan_heavy_series_is_neutral() -> None:
+    values = np.linspace(80.0, 120.0, 300)
+    values[100:] = np.nan  # only 100 valid closes remain
+    state = regime_state(_close(values))
+    assert state["trend"] == "neutral"

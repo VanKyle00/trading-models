@@ -18,6 +18,9 @@ STRATEGY_STYLES: dict[str, str] = {
     "macd": "trend",
     "ridge_momentum": "trend",
     "base_breakout": "trend",
+    # Deliberately "trend" despite the registry's mean_reversion bucket: the rule
+    # requires an existing uptrend and exits on trend failure; the replay failure
+    # mode was rsi2/bollinger dip-buys only.
     "ma_pullback": "trend",
     "rsi2": "meanrev",
     "bollinger": "meanrev",
@@ -32,14 +35,19 @@ STRATEGY_STYLES: dict[str, str] = {
 
 
 def regime_state(benchmark_close: pd.Series | None) -> dict:
-    """The night's regime from benchmark closes; neutral when unknowable."""
+    """The night's regime from benchmark closes; neutral when unknowable.
+
+    NaN closes are dropped; the 220-bar history floor counts valid bars only.
+    """
+    if benchmark_close is not None:
+        benchmark_close = benchmark_close.dropna()
     if benchmark_close is None or len(benchmark_close) < 220:
         return {"trend": "neutral", "close": None, "sma200": None, "vol_pctile": None}
     close = float(benchmark_close.iloc[-1])
     sma200 = float(benchmark_close.rolling(200).mean().iloc[-1])
     rets = benchmark_close.pct_change()
     vol20 = rets.rolling(20).std()
-    vol_pctile = float((vol20.iloc[-252:] <= vol20.iloc[-1]).mean())
+    vol_pctile = float((vol20.iloc[-252:].dropna() <= vol20.iloc[-1]).mean())
     return {
         "trend": "up" if close > sma200 else "down",
         "close": close,
