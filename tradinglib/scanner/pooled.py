@@ -16,7 +16,16 @@ from __future__ import annotations
 import pandas as pd
 
 from tradinglib.scanner.setups import detect_all
-from tradinglib.scanner.tiers import _setup_watch_levels
+from tradinglib.scanner.tiers import ENTRY_WINDOWS, _setup_watch_levels
+from tradinglib.strategist.evaluate import ENTRY_WINDOW
+
+
+def _naive(frame: pd.DataFrame) -> pd.DataFrame:
+    """Bars on a tz-naive UTC index (mirrors the replay harness's normalization)."""
+    idx = frame.index
+    if getattr(idx, "tz", None) is not None:
+        frame = frame.set_axis(idx.tz_convert("UTC").tz_localize(None))
+    return frame
 
 
 def sweep_firings(
@@ -30,7 +39,13 @@ def sweep_firings(
     earnings_by_ticker: dict[str, pd.DatetimeIndex],
     setup_window_days: int = 450,
 ) -> list[dict]:
-    """Every firing of the given setup types on a step-grid of past nights <= asof."""
+    """Every firing of the given setup types on a step-grid of past nights <= asof.
+
+    tz-aware inputs are normalized to tz-naive UTC internally.
+    """
+    bars_by_ticker = {t: _naive(b) for t, b in bars_by_ticker.items()}
+    if asof.tz is not None:
+        asof = asof.tz_convert("UTC").tz_localize(None)
     calendars = [b.index for b in bars_by_ticker.values() if len(b)]
     if not calendars:
         return []
@@ -58,6 +73,7 @@ def sweep_firings(
                         "ticker": ticker,
                         "stance": stance,
                         "setup_type": s.setup_type,
+                        "entry_window": ENTRY_WINDOWS.get(s.setup_type, ENTRY_WINDOW),
                         "levels": _setup_watch_levels(
                             {"trigger_level": s.trigger_level, "stop_level": s.stop_level},
                             stance,
