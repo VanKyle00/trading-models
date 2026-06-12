@@ -82,6 +82,33 @@ def _family(report_path: Path) -> dict[str, list[str]]:
     return {stance: [row["ticker"] for row in fa[stance]] for stance in ("long", "short")}
 
 
+def load_archived_families(base: Path) -> list[tuple[str, dict[str, list[str]]]]:
+    """(date, family) per real report, oldest first."""
+    out: list[tuple[str, dict[str, list[str]]]] = []
+    if not base.exists():
+        return out
+    for d in sorted(p.name for p in base.iterdir() if (p / "report.json").exists()):
+        try:
+            out.append((d, _family(base / d / "report.json")))
+        except (KeyError, json.JSONDecodeError):
+            continue  # pre-FA-format or corrupt report: skip
+    return out
+
+
+def family_for_night(
+    families: list[tuple[str, dict[str, list[str]]]], night: pd.Timestamp
+) -> tuple[dict[str, list[str]], str]:
+    """Newest archived family dated <= night; oldest family + 'fallback' before coverage."""
+    night_str = night.strftime("%Y-%m-%d")
+    chosen = None
+    for date, fam in families:
+        if date <= night_str:
+            chosen = (fam, date)
+    if chosen is not None:
+        return chosen
+    return families[0][1], "fallback"
+
+
 def _slice(bars: pd.DataFrame, asof: pd.Timestamp, window_days: int) -> pd.DataFrame:
     """Bars in (asof - window_days, asof] — the no-lookahead view of one night."""
     out = bars.loc[(bars.index >= asof - pd.Timedelta(days=window_days)) & (bars.index <= asof)]
