@@ -18,6 +18,13 @@ from tradinglib.backtest.metrics import benjamini_hochberg_fdr
 TIER_TICKET = "ticket"
 TIER_WATCH = "watch"
 
+# Per-setup entry windows (sessions). Default 5 == strategist.evaluate.ENTRY_WINDOW;
+# the PEAD pair gets the drift's own persistence window (the detector accepts
+# 3-15 days since the reaction bar, so a 5-session stale-trigger rule cuts the
+# setup's thesis short).
+ENTRY_WINDOWS: dict[str, int] = {"pead": 15, "pead_down": 15}
+_DEFAULT_ENTRY_WINDOW = 5
+
 
 def best_dsr(entry: dict) -> float | None:
     """Highest deflated Sharpe among an entry's verdicts; None without verdicts."""
@@ -130,6 +137,7 @@ def build_watchlist(
                 "strategy": f"setup:{setup['setup_type']}",
                 "tier": TIER_WATCH,
                 "tier_reason": "sub-threshold evidence",
+                "entry_window": ENTRY_WINDOWS.get(setup["setup_type"], _DEFAULT_ENTRY_WINDOW),
                 "deflated_sharpe": d,
                 "levels": _setup_watch_levels(setup, stance),
             }

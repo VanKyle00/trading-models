@@ -285,3 +285,64 @@ def test_build_watchlist_short_cohort_needs_short_tournament() -> None:
     ]
     watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
     assert watchlist == {"long": [], "short": []}
+
+
+def test_watch_row_carries_setup_entry_window() -> None:
+    from tradinglib.scanner.tiers import ENTRY_WINDOWS
+
+    assert ENTRY_WINDOWS["pead"] == 15
+    assert ENTRY_WINDOWS["pead_down"] == 15
+    tournament = {
+        "long": [
+            {
+                "ticker": "DRFT",
+                "stance": "long",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.7}],
+            }
+        ],
+        "short": [],
+    }
+    candidates = [
+        {
+            "ticker": "DRFT",
+            "cohort": "long",
+            "setups": [
+                {"setup_type": "pead", "score": 0.9, "trigger_level": 100.0, "stop_level": 95.0}
+            ],
+        }
+    ]
+    watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
+    assert watchlist["long"][0]["entry_window"] == 15
+
+
+def test_watch_row_default_entry_window_is_five() -> None:
+    tournament = {
+        "long": [
+            {
+                "ticker": "BASE",
+                "stance": "long",
+                "winner": None,
+                "survivors": [],
+                "verdicts": [{"strategy": "sma_cross", "deflated_sharpe": 0.7}],
+            }
+        ],
+        "short": [],
+    }
+    candidates = [
+        {
+            "ticker": "BASE",
+            "cohort": "long",
+            "setups": [
+                {
+                    "setup_type": "base_breakout",
+                    "score": 0.9,
+                    "trigger_level": 100.0,
+                    "stop_level": 95.0,
+                }
+            ],
+        }
+    ]
+    watchlist = build_watchlist(tournament, candidates, {}, watch_dsr_floor=0.5)
+    assert watchlist["long"][0]["entry_window"] == 5
