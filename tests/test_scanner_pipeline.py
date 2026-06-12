@@ -1130,3 +1130,30 @@ def test_pooled_promotion_off_when_disabled(setup_watch_pipeline) -> None:
     assert "DRIFT" not in {t["ticker"] for t in result["tickets"]["long"]}
     assert "DRIFT" in {r["ticker"] for r in result["watchlist"]["long"]}
     assert result["funnel"]["pooled_promoted"] == 0
+
+
+def test_pooled_promotion_precedes_watch_suppression(setup_watch_pipeline) -> None:
+    # A WATCH-tier open campaign on DRIFT's identity must NOT block the ticket-tier
+    # promotion: the (ticker, stance, strategy, tier) key is tier-specific, and
+    # promotion runs BEFORE the watch-suppression pass. If someone reordered them,
+    # the watch pass would eat DRIFT's watch row first and the promotion would find
+    # nothing to promote — this test would then fail.
+    recent = {
+        "tickets": [
+            {
+                "ticker": "DRIFT",
+                "stance": "long",
+                "strategy": "setup:pead",
+                "tier": "watch",  # watch, not ticket — cannot suppress a ticket-tier row
+                "status": "open",
+            }
+        ]
+    }
+    result = setup_watch_pipeline.run_scan(
+        ScanConfig(fa_keep=3, skip_llm=True), certification=_PEAD_CERT, recent_ledger=recent
+    )
+
+    promoted = [t for t in result["tickets"]["long"] if t["ticker"] == "DRIFT"]
+    assert len(promoted) == 1, "watch-tier campaign must not suppress the ticket-tier promotion"
+    assert promoted[0]["tier_reason"] == "pooled-certified"
+    assert result["funnel"]["pooled_promoted"] == 1

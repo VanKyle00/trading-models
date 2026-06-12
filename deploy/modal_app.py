@@ -211,6 +211,13 @@ def scheduled_swing_scan() -> None:
 
         if cert_path.exists():
             certification = json.loads(cert_path.read_text(encoding="utf-8"))
+            # valid JSON, wrong shape (e.g. verdicts a list) would blow up inside
+            # run_scan, outside this try/except — treat malformed as missing so the
+            # stale-rebuild path below kicks in.
+            if not (
+                isinstance(certification, dict) and isinstance(certification.get("verdicts"), dict)
+            ):
+                certification = None
         built = (certification or {}).get("built_asof")
         stale = (
             built is None
@@ -241,6 +248,7 @@ def scheduled_swing_scan() -> None:
                     earnings_by_ticker[ticker] = dts.tz_convert("UTC").tz_localize(None)
                 except Exception:
                     earnings_by_ticker.setdefault(ticker, pd.DatetimeIndex([]))
+            print(f"certification bars: {len(bars_by_ticker)}/{len(tickers)} tickers loaded")
             certification = build_certification(
                 bars_by_ticker,
                 earnings_by_ticker,

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from tradinglib.scanner.rank import rank_candidates
-from tradinglib.scanner.report import load_latest_report, write_report
+from tradinglib.scanner.report import load_latest_report, render_markdown, write_report
 
 
 def _candidate(ticker: str, **overrides: object) -> dict:
@@ -254,6 +254,38 @@ def test_render_markdown_tickets_section(tmp_path: Path) -> None:
     assert "indicative" in md.lower()  # quotes framing survives into the report
     assert "42%" in md  # PoP rendered as a percent
     assert "borrow" in md.lower()  # short-side borrow-cost footnote
+
+
+def test_render_markdown_tolerates_pooled_certified_ticket(tmp_path: Path) -> None:
+    # A pooled-certified promotion produces a ticket-tier row with stock levels +
+    # pooled evidence but NONE of build_ticket's fields (no structures). The report
+    # must render it instead of dying on t["structures"] (KeyError kills the night).
+    result = _result()
+    result["tickets"] = {
+        "long": [
+            {
+                "ticker": "DRIFT",
+                "stance": "long",
+                "strategy": "setup:pead",
+                "tier": "ticket",
+                "tier_reason": "pooled-certified",
+                "entry_window": 15,
+                "deflated_sharpe": 0.95,
+                "levels": {"entry": 101.0, "entry_type": "stop", "stop": 97.0, "target": 109.0},
+                "pooled_evidence": {"pooled_dsr": 0.95, "n_dates": 24, "total_r": 12.0},
+            }
+        ],
+        "short": [],
+    }
+
+    md = render_markdown(result)  # must not raise
+    assert "DRIFT" in md
+    assert "pooled-certified" in md
+
+    # write_report also exercises render_markdown via the .md file
+    _, md_path = write_report(result, tmp_path)
+    md_file = md_path.read_text(encoding="utf-8")
+    assert "DRIFT" in md_file and "pooled-certified" in md_file
 
 
 def test_render_markdown_without_tickets_keys_is_unchanged(tmp_path: Path) -> None:

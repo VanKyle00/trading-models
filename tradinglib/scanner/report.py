@@ -112,10 +112,17 @@ def _ticket_table(tickets: list[dict]) -> list[str]:
     ]
     for t in tickets:
         lv = t["levels"]
-        rec = next((s for s in t["structures"] if s.get("recommended")), t["structures"][0])
+        structures = t.get("structures")
+        if structures:
+            rec = next((s for s in structures if s.get("recommended")), structures[0])
+            recommended, size = rec["label"], _size(rec)
+        else:
+            # evidence-only ticket (pooled-certified promotion): no option/stock
+            # structures were built, so the structure-specific cells fall back.
+            recommended, size = t.get("tier_reason", "—"), "—"
         lines.append(
             f"| {t['ticker']} | {t['strategy']} | {lv['entry']:.2f} | {lv['stop']:.2f} "
-            f"| {lv['target']:.2f} | {rec['label']} | {_size(rec)} | {_ticket_flags(t)} |"
+            f"| {lv['target']:.2f} | {recommended} | {size} | {_ticket_flags(t)} |"
         )
     return lines
 
@@ -124,6 +131,24 @@ def _ticket_sections(tickets: list[dict]) -> list[str]:
     lines: list[str] = []
     for t in tickets:
         lv, ev = t["levels"], t.get("evidence", {})
+        if not t.get("structures"):
+            # evidence-only ticket (pooled-certified promotion): no structures
+            # sub-table — a compact block with the stock levels + pooled evidence.
+            pe = t.get("pooled_evidence", {})
+            lines.append(f"#### {t['ticker']} — {t['strategy']} ({t['stance']})")
+            lines.append("")
+            lines.append(
+                f"Entry {lv['entry']:.2f} ({lv['entry_type']}) · stop {lv['stop']:.2f} "
+                f"· target {lv['target']:.2f}"
+            )
+            lines.append("")
+            lines.append(
+                f"Pooled evidence: DSR {_fmt(pe.get('pooled_dsr'), '{:.3f}')} · "
+                f"{pe.get('n_dates', '?')} dates · {_fmt(pe.get('total_r'))}R total "
+                f"— {t.get('tier_reason', '?')}"
+            )
+            lines.append("")
+            continue
         lines.append(f"#### {t['ticker']} — {t['strategy']} ({t['stance']})")
         lines.append("")
         lines.append(
