@@ -27,6 +27,7 @@ from tradinglib.scanner.briefs import brief_candidates
 from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.fa_gate import apply_edgar_trends, score_fundamentals
 from tradinglib.scanner.rank import rank_candidates
+from tradinglib.scanner.regime import gate_reason, regime_state
 from tradinglib.scanner.setups import detect_all
 from tradinglib.scanner.tiers import apply_fdr, build_watchlist
 from tradinglib.strategist import build_ticket
@@ -157,6 +158,7 @@ def run_scan(
         logger.warning("benchmark load failed: %s", exc)
         benchmark_close = None
         errors.append({"ticker": _BENCHMARK, "stage": "benchmark", "error": str(exc)})
+    regime = regime_state(benchmark_close)
 
     candidates: list[dict] = []
     cohorts = [("long", shortlist)]
@@ -309,6 +311,19 @@ def run_scan(
                         }
                     )
                 else:
+                    if config.regime_gate:
+                        reason = gate_reason(row["strategy"], stance, regime)
+                        if reason is not None:
+                            suppressed.append(
+                                {
+                                    "ticker": row["ticker"],
+                                    "stance": stance,
+                                    "strategy": row["strategy"],
+                                    "tier": row["tier"],
+                                    "reason": reason,
+                                }
+                            )
+                            continue
                     kept.append(row)
             watchlist[stance] = kept
 
@@ -334,6 +349,19 @@ def run_scan(
                     }
                 )
                 continue
+            if config.regime_gate:
+                reason = gate_reason(entry["winner"]["strategy"], stance, regime)
+                if reason is not None:
+                    suppressed.append(
+                        {
+                            "ticker": ticker,
+                            "stance": stance,
+                            "strategy": entry["winner"]["strategy"],
+                            "tier": "ticket",
+                            "reason": reason,
+                        }
+                    )
+                    continue
             try:
                 try:
                     chain = fetch_chain(ticker)
@@ -399,6 +427,7 @@ def run_scan(
             "fdr_alpha": config.fdr_alpha,
             "watch_dsr_floor": config.watch_dsr_floor,
             "setup_score_floors": config.setup_score_floors,
+            "regime_gate": config.regime_gate,
         },
         "funnel": {
             "universe": len(universe),
@@ -424,6 +453,7 @@ def run_scan(
         "tickets": tickets,
         "watchlist": watchlist,
         "fdr": fdr,
+        "regime": regime,
         "suppressed": suppressed,
         "candidates": rank_candidates(candidates, top=config.top),
         "errors": errors,

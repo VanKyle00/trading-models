@@ -962,3 +962,39 @@ def test_active_campaigns_tolerates_malformed_rows(fdr_pipeline) -> None:
     assert ("DRIFT", "long") not in issued, (
         "valid row must still suppress despite malformed sibling"
     )
+
+
+def test_regime_gate_suppresses_meanrev_ticket_in_downtrend(
+    fdr_pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """regime_gate=True + down-trend must suppress the would-be ticket."""
+    import tradinglib.scanner.regime as regime_module
+
+    # The fixture's winner strategy is sma_cross (trend), not meanrev.
+    # Reclassify it so gate_reason fires.
+    monkeypatch.setitem(regime_module.STRATEGY_STYLES, "sma_cross", "meanrev")
+    # Force a down-trend regardless of the fake SPY bars.
+    monkeypatch.setattr(fdr_pipeline, "regime_state", lambda close: {"trend": "down"})
+
+    result = fdr_pipeline.run_scan(
+        ScanConfig(fa_keep=2, short_keep=0, skip_llm=True, regime_gate=True)
+    )
+
+    # DRIFT ticket must be suppressed
+    assert ("DRIFT", "long") not in {(t["ticker"], t["stance"]) for t in result["tickets"]["long"]}
+    suppressed = result["suppressed"]
+    assert any(
+        s["ticker"] == "DRIFT" and s["tier"] == "ticket" and s["reason"].startswith("meanrev long")
+        for s in suppressed
+    ), f"expected DRIFT ticket suppression, got: {suppressed}"
+    assert result["regime"]["trend"] == "down"
+
+
+def test_regime_gate_off_by_default(fdr_pipeline) -> None:
+    """regime_gate defaults to False: regime is always reported, issuance unchanged."""
+    result = fdr_pipeline.run_scan(ScanConfig(fa_keep=2, short_keep=0, skip_llm=True))
+
+    assert "regime" in result
+    # Gate is off — DRIFT must still get a ticket
+    issued = {(t["ticker"], t["stance"]) for t in result["tickets"]["long"]}
+    assert ("DRIFT", "long") in issued
