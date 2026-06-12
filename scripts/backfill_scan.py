@@ -284,6 +284,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="apply the meanrev-against-trend gate at issuance (A/B arm)",
     )
+    parser.add_argument(
+        "--family-mode",
+        choices=("frozen", "archived"),
+        default="frozen",
+        help="frozen: one family from --report; archived: per-night family from archived reports",
+    )
     args = parser.parse_args(argv)
 
     config = ScanConfig(regime_gate=args.regime_gate)
@@ -293,15 +299,31 @@ def main(argv: list[str] | None = None) -> int:
         "%Y-%m-%d"
     )
 
-    report_path = args.report
-    if report_path is None:
-        dates = sorted(
-            p.name for p in processed_dir("scans").iterdir() if (p / "report.json").exists()
+    if args.family_mode == "archived":
+        report_path = None
+        families = load_archived_families(processed_dir("scans"))
+        if not families:
+            print("no archived FA reports under data/processed/scans -- nothing to replay")
+            return 1
+        tickers = sorted(
+            {t for _, fam in families for stance in ("long", "short") for t in fam[stance]}
         )
-        report_path = processed_dir("scans") / dates[-1] / "report.json"
-    family = _family(report_path)
-    tickers = sorted(set(family["long"]) | set(family["short"]))
-    print(f"family: {len(family['long'])} long / {len(family['short'])} short from {report_path}")
+        print(
+            f"families: {len(families)} archived reports "
+            f"({families[0][0]} .. {families[-1][0]}), union {len(tickers)} tickers"
+        )
+    else:
+        report_path = args.report
+        if report_path is None:
+            dates = sorted(
+                p.name for p in processed_dir("scans").iterdir() if (p / "report.json").exists()
+            )
+            report_path = processed_dir("scans") / dates[-1] / "report.json"
+        family = _family(report_path)
+        tickers = sorted(set(family["long"]) | set(family["short"]))
+        print(
+            f"family: {len(family['long'])} long / {len(family['short'])} short from {report_path}"
+        )
 
     bars_by_ticker: dict[str, pd.DataFrame] = {}
     earnings_by_ticker: dict[str, pd.DatetimeIndex] = {}
@@ -334,7 +356,13 @@ def main(argv: list[str] | None = None) -> int:
     all_errors: list[str] = []
     for i, asof in enumerate(nights, 1):
         t0 = time.monotonic()
+        family_suffix = ""
+        if args.family_mode == "archived":
+            family, family_source = family_for_night(families, asof)
         funnel, issued, errors = run_night(asof, family, bars_by_ticker, earnings_by_ticker, config)
+        if args.family_mode == "archived":
+            funnel["family_source"] = family_source
+            family_suffix = f" family={family_source}"
         # prod's re-issue cooldown, replayed: a campaign still waiting/open at
         # this night suppresses tonight's same (ticker, stance, strategy, tier)
         active = {
@@ -373,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
             f"watch={funnel['watch']} suppressed={funnel['suppressed']} "
             f"regime_blocked={funnel['regime_blocked']} "
             f"best_dsr={funnel['best_dsr'] or 0:.3f} "
-            f"errors={funnel['errors']} ({time.monotonic() - t0:.0f}s)",
+            f"errors={funnel['errors']}{family_suffix} ({time.monotonic() - t0:.0f}s)",
             flush=True,
         )
 
@@ -389,15 +417,22 @@ def main(argv: list[str] | None = None) -> int:
         / f"replay_{nights[0].strftime('%Y%m%d')}_{nights[-1].strftime('%Y%m%d')}.json"
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    family_caveat = (
+        "FA families resolved per-night from archived reports; nights before coverage reuse "
+        "the oldest report (family_source='fallback')"
+        if args.family_mode == "archived"
+        else "FA family frozen to the latest real report (selection-layer survivorship)"
+    )
     out_path.write_text(
         json.dumps(
             {
                 "generated_asof": today.strftime("%Y-%m-%d"),
-                "family_report": str(report_path),
+                "family_report": str(report_path) if report_path is not None else None,
+                "family_mode": args.family_mode,
                 "step_sessions": args.step,
                 "regime_gate": args.regime_gate,
                 "caveats": [
-                    "FA family frozen to the latest real report (selection-layer survivorship)",
+                    family_caveat,
                     "earnings flags from today's fetch (thinner at the oldest nights)",
                     "regime_blocked attribution differs from prod: replay gates before the "
                     "cooldown (prod: after, so doubly-blocked rows read 'open campaign') and "
@@ -427,6 +462,9 @@ def main(argv: list[str] | None = None) -> int:
             f" expired={ts['expired']} open={ts['open']} waiting={ts['waiting']}"
             f" total_r={ts['total_r']:+.2f}"
         )
+    if args.family_mode == "archived":
+        honest = [f for f in funnels if f.get("family_source", "fallback") != "fallback"]
+        print(f"nights with archived (point-in-time) families: {len(honest)}/{len(funnels)}")
     return 0
 
 
