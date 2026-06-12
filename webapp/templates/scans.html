@@ -154,6 +154,7 @@
           <div class="card-head">
             <span class="tkr">{{ loop.index }}. {{ c.ticker }}</span>
             <span class="nm">{{ c.name }} · {{ c.sector }}</span>
+            {% if c.cohort == 'short' %}<span class="chip flag">short</span>{% endif %}
             {% if c.stance %}<span class="chip {{ c.stance }}">{{ c.stance }}</span>{% endif %}
             {% if c.earnings_warning %}<span class="chip warn">earnings soon</span>{% endif %}
             {% for f in c.red_flags or [] %}<span class="chip flag">{{ f }}</span>{% endfor %}

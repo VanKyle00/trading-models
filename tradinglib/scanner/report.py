@@ -18,6 +18,8 @@ def _md_table(candidates: list[dict]) -> list[str]:
     ]
     for i, c in enumerate(candidates, start=1):
         setups = ", ".join(s["setup_type"] for s in c.get("setups", []))
+        if c.get("cohort") == "short":
+            setups = f"{setups} (short)"
         best = max(c.get("setups", []), key=lambda s: s["score"], default=None)
         trigger = f"{best['trigger_level']:.2f}" if best else "-"
         stop = f"{best['stop_level']:.2f}" if best else "-"

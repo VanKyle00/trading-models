@@ -283,6 +283,9 @@ def main(argv: list[str] | None = None) -> int:
     stats = {
         **_stats(records),
         "by_tier": {t: _stats([r for r in records if r["tier"] == t]) for t in ("ticket", "watch")},
+        "by_stance": {
+            s: _stats([r for r in records if r["stance"] == s]) for s in ("long", "short")
+        },
     }
     out_path = args.out or (
         processed_dir("backfill")

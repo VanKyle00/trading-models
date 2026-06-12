@@ -87,6 +87,22 @@ def test_doc_pack_contains_all_documents(patched_loaders) -> None:
     assert len(pack) <= briefs._PACK_MAX_CHARS
 
 
+def test_doc_pack_short_cohort_contains_direction_line(patched_loaders) -> None:
+    cand = _candidate()
+    cand["cohort"] = "short"
+    pack = briefs.build_doc_pack(cand, cik=320193)
+
+    assert "SHORT" in pack
+
+
+def test_doc_pack_long_cohort_contains_direction_line(patched_loaders) -> None:
+    cand = _candidate()
+    cand["cohort"] = "long"
+    pack = briefs.build_doc_pack(cand, cik=320193)
+
+    assert "LONG" in pack
+
+
 def test_write_brief_parses_strict_json(patched_loaders) -> None:
     payload = {
         "thesis": "Strong product cycle.",

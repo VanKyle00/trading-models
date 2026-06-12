@@ -144,7 +144,7 @@ def run_scan(
         errors.append({"ticker": _BENCHMARK, "stage": "benchmark", "error": str(exc)})
 
     candidates: list[dict] = []
-    cohorts = [("long", scored[scored["passed_gate"]])]
+    cohorts = [("long", shortlist)]
     if config.short_keep:
         cohorts.append(("short", scored[scored["passed_short_gate"]]))
     for cohort, slate in cohorts:
@@ -358,6 +358,7 @@ def run_scan(
             "fa_shortlist": len(shortlist),
             "fa_shortlist_short": int(scored["passed_short_gate"].sum()),
             "with_setups": len(candidates),
+            "with_setups_short": sum(1 for c in candidates if c.get("cohort") == "short"),
             "tournament_candidates": (
                 0
                 if config.skip_strategies

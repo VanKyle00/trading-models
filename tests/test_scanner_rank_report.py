@@ -105,6 +105,26 @@ def _result() -> dict:
     }
 
 
+def test_md_table_marks_short_rows(tmp_path: Path) -> None:
+    result = {
+        "asof": "2026-06-12",
+        "config": {"fa_keep": 1, "top": 15},
+        "funnel": {"universe": 3, "fa_shortlist": 1, "with_setups": 2},
+        "candidates": rank_candidates(
+            [
+                _candidate("LONG_PICK", fa_score=0.9),
+                _candidate("SHORT_PICK", fa_score=0.1, cohort="short"),
+            ]
+        ),
+        "errors": [],
+    }
+    _, md_path = write_report(result, tmp_path)
+    md = md_path.read_text(encoding="utf-8")
+
+    assert "(short)" in md  # short candidate marked in the table
+    assert "SHORT_PICK" in md
+
+
 def test_write_report_creates_json_and_md(tmp_path: Path) -> None:
     json_path, md_path = write_report(_result(), tmp_path)
 
