@@ -293,6 +293,53 @@ def test_scans_page_without_ticket_keys_still_renders(
     assert "Trade tickets" not in resp.text
 
 
+def _promoted_ticket() -> dict:
+    """A pooled-certified promoted ticket: NONE of build_ticket's fields.
+
+    Shape matches tradinglib.scanner.pipeline's promotion of a setup watch row:
+    no structures/evidence/style, just levels + pooled_evidence.
+    """
+    return {
+        "ticker": "PEAD",
+        "stance": "long",
+        "strategy": "setup:pead",
+        "tier": "ticket",
+        "tier_reason": "pooled-certified",
+        "entry_window": 7,
+        "deflated_sharpe": 0.74,
+        "levels": {
+            "entry": 120.0,
+            "entry_type": "stop",
+            "stop": 110.0,
+            "target": 140.0,
+            "condition": "enter on PEAD drift continuation",
+        },
+        "pooled_evidence": {"pooled_dsr": 0.965, "n_dates": 24, "total_r": 6.1},
+    }
+
+
+def test_scans_page_renders_promoted_pooled_ticket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pooled-certified promoted ticket (no structures/evidence) must render, not 500."""
+    monkeypatch.setattr(scans_module, "processed_dir", lambda source: tmp_path / source)
+    report = _result("2026-06-02")
+    report["tickets"]["long"].append(_promoted_ticket())
+    out = tmp_path / "scans" / "2026-06-02"
+    out.mkdir(parents=True)
+    (out / "report.json").write_text(json.dumps(report), encoding="utf-8")
+
+    client = TestClient(create_app())
+    resp = client.get("/scans/2026-06-02")
+
+    assert resp.status_code == 200
+    html = resp.text
+    assert "PEAD" in html
+    assert "pooled-certified" in html
+    assert "setup:pead" in html
+    assert "120.00" in html  # levels still render
+
+
 def test_index_links_to_scans(scan_dir: Path) -> None:
     client = TestClient(create_app())
     assert 'href="/scans"' in client.get("/").text
