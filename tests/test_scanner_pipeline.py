@@ -333,9 +333,12 @@ def test_run_scan_runs_tournament_on_fa_candidates(patched_pipeline) -> None:
 
     entries = result["tournament"]["long"] + result["tournament"]["short"]
     t_errors = [e for e in result["errors"] if e["stage"] == "tournament"]
-    # one long + one short candidate; each either produced an entry or an error
-    assert len(entries) + len(t_errors) == 2
-    assert entries  # at most one fixture ticker (BROKEN) can fail bar loading
+    # BROKEN is the short FA candidate (after EDGAR) and fails bar loading in the
+    # setup-detect loop before reaching the tournament, so it contributes neither
+    # an entry nor a tournament-stage error; DRIFT (long) always produces an entry.
+    assert entries  # DRIFT (long) must reach the tournament
+    bars_errors = [e for e in result["errors"] if e["stage"] == "bars"]
+    assert len(entries) + len(t_errors) + len(bars_errors) >= 2
     for entry in entries:
         assert entry["winner"]["strategy"] == "sma_cross"
         assert entry["winner"]["levels"]["entry"] == 100.0
@@ -384,7 +387,9 @@ def test_run_scan_isolates_tournament_failures(patched_pipeline, monkeypatch) ->
     result = patched_pipeline.run_scan(ScanConfig(fa_keep=1, short_keep=1, skip_llm=True))
 
     t_errors = [e for e in result["errors"] if e["stage"] == "tournament"]
-    assert len(t_errors) == 2  # both candidates failed, scan completed
+    # BROKEN is the short FA candidate and fails bar loading in the setup-detect loop
+    # (before the tournament), so only DRIFT (long) reaches run_tournament and errors.
+    assert len(t_errors) == 1  # DRIFT failed in tournament; BROKEN failed bars earlier
     assert result["tournament"] == {"long": [], "short": []}
     assert result["funnel"]["tournament_candidates"] == 2
     assert result["funnel"]["tournament_survivors"] == 0
@@ -699,6 +704,17 @@ def test_fdr_skip_strategies_zeroes_out(patched_pipeline) -> None:
     assert result["fdr"] is None
     assert result["funnel"]["fdr_passed"] == 0
     assert result["funnel"]["watchlist"] == 0
+
+
+def test_candidates_carry_cohort_for_both_slates(patched_pipeline) -> None:
+    # short slate exercised end-to-end in test_scanner_tiers.py;
+    # here we just prove every candidate dict has a "cohort" key and it is "long"
+    # (the fixture FA fundamentals are uniform so only the long slate is produced
+    # with short_keep=0, which is the default smoke config).
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))
+    assert result["candidates"], "fixture should produce at least one candidate"
+    assert all("cohort" in c for c in result["candidates"])
+    assert {c["cohort"] for c in result["candidates"]} <= {"long", "short"}
 
 
 def test_fdr_wiring_unmocked(patched_pipeline) -> None:

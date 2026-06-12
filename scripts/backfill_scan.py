@@ -122,36 +122,39 @@ def run_night(
         _slice(benchmark, asof, config.lookback_days)["close"] if benchmark is not None else None
     )
     candidates: list[dict] = []
-    for ticker in family["long"]:
-        bars = bars_by_ticker.get(ticker)
-        if bars is None:
-            continue
-        s_bars = _slice(bars, asof, config.lookback_days)
-        try:
-            # detect_pead self-filters to events <= the sliced last bar
-            setups = detect_all(
-                s_bars,
-                benchmark_close=bench_close,
-                earnings_datetimes=earnings_by_ticker.get(ticker, pd.DatetimeIndex([])),
-            )
-        except Exception as exc:
-            errors.append(f"{ticker} setups: {exc}")
-            continue
-        if setups:
-            candidates.append(
-                {
-                    "ticker": ticker,
-                    "setups": [
-                        {
-                            "setup_type": s.setup_type,
-                            "score": s.score,
-                            "trigger_level": s.trigger_level,
-                            "stop_level": s.stop_level,
-                        }
-                        for s in setups
-                    ],
-                }
-            )
+    for cohort, tickers in [("long", family["long"]), ("short", family["short"])]:
+        for ticker in tickers:
+            bars = bars_by_ticker.get(ticker)
+            if bars is None:
+                continue
+            s_bars = _slice(bars, asof, config.lookback_days)
+            try:
+                # detect_pead self-filters to events <= the sliced last bar
+                setups = detect_all(
+                    s_bars,
+                    stance=cohort,
+                    benchmark_close=bench_close,
+                    earnings_datetimes=earnings_by_ticker.get(ticker, pd.DatetimeIndex([])),
+                )
+            except Exception as exc:
+                errors.append(f"{ticker} setups: {exc}")
+                continue
+            if setups:
+                candidates.append(
+                    {
+                        "ticker": ticker,
+                        "cohort": cohort,
+                        "setups": [
+                            {
+                                "setup_type": s.setup_type,
+                                "score": s.score,
+                                "trigger_level": s.trigger_level,
+                                "stop_level": s.stop_level,
+                            }
+                            for s in setups
+                        ],
+                    }
+                )
 
     fdr_passed, _, fdr_family = apply_fdr(tournament, config.fdr_alpha)
     watchlist = build_watchlist(
