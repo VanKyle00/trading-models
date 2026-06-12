@@ -289,7 +289,11 @@ def run_scan(
         fdr_passed, fdr_threshold, fdr_family = apply_fdr(tournament, config.fdr_alpha)
         fdr = {"alpha": config.fdr_alpha, "threshold": fdr_threshold, "family": fdr_family}
         watchlist = build_watchlist(
-            tournament, candidates, fdr_passed, watch_dsr_floor=config.watch_dsr_floor
+            tournament,
+            candidates,
+            fdr_passed,
+            watch_dsr_floor=config.watch_dsr_floor,
+            setup_score_floors=config.setup_score_floors,
         )
         for stance in ("long", "short"):
             kept = []

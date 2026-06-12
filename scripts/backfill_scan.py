@@ -158,7 +158,11 @@ def run_night(
 
     fdr_passed, _, fdr_family = apply_fdr(tournament, config.fdr_alpha)
     watchlist = build_watchlist(
-        tournament, candidates, fdr_passed, watch_dsr_floor=config.watch_dsr_floor
+        tournament,
+        candidates,
+        fdr_passed,
+        watch_dsr_floor=config.watch_dsr_floor,
+        setup_score_floors=config.setup_score_floors,
     )
 
     date = asof.strftime("%Y-%m-%d")

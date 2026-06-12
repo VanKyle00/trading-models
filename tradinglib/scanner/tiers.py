@@ -70,6 +70,7 @@ def build_watchlist(
     fdr_passed: dict[tuple[str, str], bool],
     *,
     watch_dsr_floor: float,
+    setup_score_floors: dict[str, float] | None = None,
 ) -> dict[str, list[dict]]:
     """The watch tier, with the demotion reason recorded per row."""
     watchlist: dict[str, list[dict]] = {"long": [], "short": []}
@@ -116,6 +117,7 @@ def build_watchlist(
         for stance in ("long", "short")
         for e in tournament.get(stance) or []
     }
+    floors = setup_score_floors or {}
     for cand in candidates:
         stance = cand.get("cohort") or "long"
         if stance not in watchlist:
@@ -126,9 +128,12 @@ def build_watchlist(
         d = dsr_by_key.get(key)
         if d is None or d < watch_dsr_floor:
             continue
-        if not cand.get("setups"):
+        eligible = [
+            s for s in cand.get("setups") or [] if s["score"] >= floors.get(s["setup_type"], 0.0)
+        ]
+        if not eligible:
             continue
-        setup = max(cand["setups"], key=lambda s: s["score"])
+        setup = max(eligible, key=lambda s: s["score"])
         watchlist[stance].append(
             {
                 "ticker": cand["ticker"],
