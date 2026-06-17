@@ -168,7 +168,13 @@ def build_certification(
     replay (the weekly prod sidecar relies on bars simply ending at asof).
     """
     series_by_key: dict[tuple[str, str], pd.Series] = {}
-    n_trials = sum(len(v) for v in SETUP_TYPES.values())
+    # Each (setup_type, stance) key is a single pre-specified hypothesis: there is no
+    # parameter search inside a key (sweep_firings only detects firings), so the honest
+    # within-key trial count is 1 and the per-key statistic is the un-deflated PSR. The
+    # cross-key multiplicity across the 6 keys is controlled in exactly one place —
+    # certify()'s BH-FDR. Counting the 6 keys as n_trials here too would double-count
+    # that multiplicity and over-deflate every per-key DSR (audit A1).
+    n_trials = 1
     sim_errors = 0
     for stance, types in SETUP_TYPES.items():
         firings = sweep_firings(
