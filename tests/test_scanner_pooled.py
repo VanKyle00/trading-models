@@ -168,3 +168,45 @@ def test_build_certification_shape() -> None:
     )
     assert len(sidecar["verdicts"]) == 6  # whole menu: 3 long types + 3 short types
     assert sidecar["verdicts"]["base_breakout:long"]["n_dates"] > 0  # bait drives a real series
+
+
+def test_build_certification_scores_each_key_as_single_hypothesis(monkeypatch) -> None:
+    # No parameter search happens inside a (setup_type, stance) key (sweep_firings
+    # only detects; there is no grid_search), so the honest within-key trial count is
+    # 1. The cross-key (6-way) multiplicity is owned solely by the BH-FDR in certify();
+    # feeding the 6-key family size as n_trials double-counts that multiplicity and
+    # over-deflates every per-key DSR (audit A1).
+    import tradinglib.scanner.pooled as pooled_mod
+    from tradinglib.scanner.config import ScanConfig
+
+    seen: list[int] = []
+    real = pooled_mod.certify
+
+    def spy(series_by_key, **kwargs):
+        seen.append(kwargs.get("n_trials"))
+        return real(series_by_key, **kwargs)
+
+    monkeypatch.setattr(pooled_mod, "certify", spy)
+    bars = {
+        "AAA": _trending_bars("AAA"),
+        "BBB": _trending_bars("BBB", drift=-0.001),
+        "BAIT": _bait_breakout_bars(),
+    }
+    pooled_mod.build_certification(bars, {}, asof=pd.Timestamp("2026-01-30"), config=ScanConfig())
+    assert seen == [1]
+
+
+def test_build_certification_single_trial_does_not_flip_weak_keys() -> None:
+    # Scoring each key as a single hypothesis (n_trials=1) RAISES per-key DSRs, so the
+    # only theoretical risk is a key crossing the 0.90 gate. On representative weak/thin
+    # series no key reaches certification — the loosening changes no current verdict.
+    from tradinglib.scanner.config import ScanConfig
+    from tradinglib.scanner.pooled import build_certification
+
+    bars = {
+        "AAA": _trending_bars("AAA"),
+        "BBB": _trending_bars("BBB", drift=-0.001),
+        "BAIT": _bait_breakout_bars(),
+    }
+    sidecar = build_certification(bars, {}, asof=pd.Timestamp("2026-01-30"), config=ScanConfig())
+    assert all(not v["certified"] for v in sidecar["verdicts"].values())
