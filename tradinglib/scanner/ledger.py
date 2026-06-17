@@ -120,6 +120,24 @@ def _max_drawdown_r(records: list[dict]) -> float | None:
     return float(dd)
 
 
+_UNADJ_COLS = ("unadj_open", "unadj_high", "unadj_low", "unadj_close")
+
+
+def _unadjusted_scoring_bars(bars: pd.DataFrame) -> pd.DataFrame:
+    """Bars to score frozen dollar levels against. When the loader carries
+    unadjusted OHLC (audit #88), present them AS open/high/low/close so
+    simulate_ticket scores the price that actually traded on the issue-night tape —
+    correct across a split/dividend, superseding the A5b corp-action drop. Returns
+    the input unchanged when unadjusted columns are absent (membership check, never
+    a truthiness test — Arrow coerces None->NaN which is truthy)."""
+    if not set(_UNADJ_COLS).issubset(bars.columns):
+        return bars
+    swapped = bars.copy()
+    for adj_col, un_col in zip(("open", "high", "low", "close"), _UNADJ_COLS, strict=True):
+        swapped[adj_col] = bars[un_col]
+    return swapped
+
+
 def _frozen_closed(base: Path, *, force_rebuild: bool) -> dict[tuple, dict]:
     """Prior-build closed (target/stopped) records, keyed for carry-forward.
 
@@ -192,15 +210,24 @@ def build_ledger(
                 k: ticket["levels"][k] for k in ("entry", "entry_type", "stop", "target")
             }
             record["entry_window"] = int(ticket.get("entry_window", ENTRY_WINDOW))
+            scoring_bars = _unadjusted_scoring_bars(bars)
+            record["scored_unadjusted"] = scoring_bars is not bars
             record.update(
-                simulate_ticket(ticket, bars, asof=date, entry_window=record["entry_window"])
+                simulate_ticket(
+                    ticket, scoring_bars, asof=date, entry_window=record["entry_window"]
+                )
             )
         except Exception as exc:
             record.update(status="error", error=str(exc))
-        if actions_probe is not None and record.get("status") in _CLOSED_STATUSES:
-            # Flag a corp action in the holding window on the SAME build that first
-            # closes the ticket, BEFORE it is frozen, so a mis-scaled close is never
-            # cemented into the realized stats. Best-effort: never fail the build.
+        if (
+            not record.get("scored_unadjusted")
+            and actions_probe is not None
+            and record.get("status") in _CLOSED_STATUSES
+        ):
+            # FALLBACK only — when we could not score on the raw tape. Flag a corp
+            # action in the holding window on the SAME build that first closes the
+            # ticket, BEFORE it is frozen, so a mis-scaled close is never cemented
+            # into the realized stats. Best-effort: never fail the build.
             try:
                 if actions_probe(ticker, date, record["exit_date"]):
                     record["corp_action_since_issue"] = True

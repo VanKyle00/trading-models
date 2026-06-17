@@ -555,6 +555,46 @@ def test_freeze_does_not_freeze_waiting(tmp_path: Path) -> None:
     assert l2["tickets"][0]["status"] == "target"  # re-simulated (waiting is not frozen)
 
 
+def _split_bars() -> pd.DataFrame:
+    # A 2:1 split mid-hold: the ADJUSTED OHLC are halved (so a frozen raw-dollar
+    # ticket mis-scores against them), while unadj_* carry the raw issue-night tape
+    # the levels were actually set on (entry 100, stop 95, target 110).
+    idx = pd.date_range("2026-06-09", periods=2, freq="B", tz="UTC")
+    return pd.DataFrame(
+        {
+            "open": [50.0, 54.5],
+            "high": [50.5, 55.5],
+            "low": [49.5, 54.0],
+            "close": [50.0, 55.25],
+            "unadj_open": [100.0, 109.0],
+            "unadj_high": [101.0, 111.0],
+            "unadj_low": [99.0, 108.0],
+            "unadj_close": [100.0, 110.5],
+        },
+        index=idx,
+    )
+
+
+def test_ledger_scores_against_unadjusted_when_present(tmp_path: Path) -> None:
+    # audit #88: with unadjusted bars available, the ledger scores the frozen dollar
+    # levels on the raw tape (target hit, R correct) instead of dropping the ticket —
+    # even though a corp action occurred (actions_probe would say True). The A5b drop
+    # is the FALLBACK, not the default, once we can score correctly.
+    base = _single_ticket_base(tmp_path, _ticket("TST"))
+    ledger = build_ledger(
+        base,
+        asof="2026-06-11",
+        loader=_loader_with({"TST": _split_bars()}),
+        actions_probe=lambda ticker, start, end: True,
+    )
+    rec = ledger["tickets"][0]
+    assert rec["status"] == "target"
+    assert rec["r"] == pytest.approx(2.0)  # (110 - 100) / risk 5, on the raw tape
+    assert not rec.get("corp_action_since_issue")  # scored correctly -> not dropped
+    assert ledger["stats"]["total_r"] == pytest.approx(2.0)  # kept in realized
+    assert ledger["stats"]["corp_action_excluded"] == 0
+
+
 def test_corp_action_flag_excludes_closed_from_realized(tmp_path: Path) -> None:
     # A closed ticket whose holding window crossed a split/dividend is flagged and
     # dropped from realized stats — the auto_adjust rescale makes its frozen-level
