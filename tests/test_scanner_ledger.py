@@ -362,6 +362,38 @@ def test_watch_rows_simulate_like_tickets(tmp_path: Path) -> None:
     )
 
 
+def test_stats_excludes_open_mtm_from_realized_r() -> None:
+    """total_r/avg_r aggregate ONLY closed (target/stopped) trades; open marks
+    are reported separately as open_unrealized_r so an unrealized position can
+    never inflate the headline R used to compare models (audit A5)."""
+    from tradinglib.scanner.ledger import _stats
+
+    records = [
+        {"status": "target", "r": 2.0, "ticker": "A", "date": "2026-06-01"},
+        {"status": "stopped", "r": -1.0, "ticker": "B", "date": "2026-06-01"},
+        {"status": "open", "r": 0.5, "ticker": "C", "date": "2026-06-01"},
+        {"status": "waiting", "r": None, "ticker": "D", "date": "2026-06-01"},
+    ]
+    stats = _stats(records)
+    assert stats["total_r"] == pytest.approx(1.0)  # 2.0 + (-1.0), NOT + 0.5 open
+    assert stats["avg_r"] == pytest.approx(0.5)  # over the 2 closed trades only
+    assert stats["open_unrealized_r"] == pytest.approx(0.5)  # the open mark, segregated
+    assert stats["hit_rate"] == pytest.approx(0.5)  # already closed-only, unchanged
+
+
+def test_stats_open_unrealized_r_none_when_no_open() -> None:
+    """open_unrealized_r is None when no position is still open."""
+    from tradinglib.scanner.ledger import _stats
+
+    records = [
+        {"status": "target", "r": 2.0, "ticker": "A", "date": "2026-06-01"},
+        {"status": "waiting", "r": None, "ticker": "B", "date": "2026-06-01"},
+    ]
+    stats = _stats(records)
+    assert stats["total_r"] == pytest.approx(2.0)
+    assert stats["open_unrealized_r"] is None
+
+
 def test_max_drawdown_r_counts_losses_from_inception() -> None:
     """Peak starts at 0; two consecutive stops of -1 each → max DD == 2.0."""
     from tradinglib.scanner.ledger import _max_drawdown_r

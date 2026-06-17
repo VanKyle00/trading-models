@@ -97,6 +97,21 @@ def test_run_tournament_deflates_by_the_global_trial_count(monkeypatch) -> None:
     assert seen == [8, 8]  # both strategies re-scored against the full menu
 
 
+def _always_long_signal(train, test, params, stance):
+    # Holds a position through the entire OOS window: it never closes, so the
+    # only "trade" is the dangling open one.
+    return pd.Series(1.0, index=test.index)
+
+
+def test_n_trades_excludes_unclosed_oos_position() -> None:
+    # A strategy whose stitched OOS position never returns to flat has ZERO
+    # completed round-trips; the dangling open position must not be counted
+    # toward the min_trades survival gate (audit A3).
+    registry = {"always": _def("always", _always_long_signal, {"a": [1]})}
+    result = run_tournament(_uptrend_bars(), "long", registry=registry, config=CONFIG)
+    assert result.verdicts[0].n_trades == 0
+
+
 def test_run_tournament_no_survivors_no_winner() -> None:
     result = run_tournament(
         _uptrend_bars(), "long", registry={"flat": REGISTRY["flat"]}, config=CONFIG

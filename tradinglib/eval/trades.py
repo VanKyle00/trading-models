@@ -18,13 +18,21 @@ import pandas as pd
 COLUMNS = ["entry_time", "exit_time", "side", "entry_price", "exit_price", "pnl", "duration"]
 
 
-def trades_from_position(position: pd.Series, prices: pd.Series) -> pd.DataFrame:
+def trades_from_position(
+    position: pd.Series, prices: pd.Series, *, include_open: bool = True
+) -> pd.DataFrame:
     """Return a DataFrame of round-trip trades inferred from ``position``.
 
     ``position`` and ``prices`` are bar-indexed; ``prices`` is reindexed onto
     ``position``'s index. Each row: entry_time, exit_time, side
     ('long'/'short'), entry_price, exit_price, pnl, duration (bars between
     entry and exit, not counting the exit bar).
+
+    By default a position still open on the final bar is force-closed there and
+    counted as a round-trip (the trade-table/chart-marker behavior). Pass
+    ``include_open=False`` to drop that synthetic trade — required wherever the
+    count is used as a statistic (e.g. the tournament's ``min_trades`` survival
+    gate), so an unclosed position cannot pad the trade count.
 
     Raises ``ValueError`` if ``prices`` has no value for a bar in ``position``'s
     index — a silently NaN-filled price would corrupt the trade PnL.
@@ -51,7 +59,7 @@ def trades_from_position(position: pd.Series, prices: pd.Series) -> pd.DataFrame
             open_size = size
             entry_i = i if size != 0.0 else entry_i
 
-    if open_size != 0.0:
+    if open_size != 0.0 and include_open:
         rows.append(_close(position, prices, entry_i, len(position) - 1, open_size))
 
     return pd.DataFrame(rows, columns=COLUMNS)

@@ -115,6 +115,36 @@ def family_for_night(
     return families[0][1], "fallback"
 
 
+def point_in_time_status(family_mode: str, family_source: str | None) -> tuple[str, bool]:
+    """(label, leak) for a night's family provenance — a machine-enforced flag.
+
+    The replay's FA family is a SELECTION layer: which 40+40 names are scored.
+    - frozen   -> ("frozen", True): today's FA report back-projected onto every
+      night, chosen on current/restated fundamentals = selection-layer leak.
+    - archived served by a real report dated <= night -> ("archived", False):
+      point-in-time honest.
+    - archived before coverage (reuses the oldest report) -> ("fallback", True).
+
+    Downstream consumers must suppress or clearly segregate absolute per-tier R
+    when leak is True (it is a biased upper bound, not an expected edge).
+    """
+    if family_mode == "archived" and family_source not in (None, "fallback"):
+        return "archived", False
+    if family_mode == "archived" and family_source == "fallback":
+        return "fallback", True
+    return "frozen", True
+
+
+def honesty_summary(records: list[dict]) -> dict:
+    """Aggregate per-record leak flags into a machine-readable honesty block."""
+    leaked_records = sum(1 for r in records if r.get("leak"))
+    return {
+        "leaked": leaked_records > 0,
+        "leaked_records": leaked_records,
+        "honest_records": len(records) - leaked_records,
+    }
+
+
 def _slice(bars: pd.DataFrame, asof: pd.Timestamp, window_days: int) -> pd.DataFrame:
     """Bars in (asof - window_days, asof] — the no-lookahead view of one night."""
     out = bars.loc[(bars.index >= asof - pd.Timedelta(days=window_days)) & (bars.index <= asof)]
@@ -431,6 +461,7 @@ def main(argv: list[str] | None = None) -> int:
     for i, asof in enumerate(nights, 1):
         t0 = time.monotonic()
         family_suffix = ""
+        family_source = None
         if args.family_mode == "archived":
             family, family_source = family_for_night(families, asof)
         certification = None
@@ -459,6 +490,8 @@ def main(argv: list[str] | None = None) -> int:
         funnel, issued, errors = run_night(
             asof, family, bars_by_ticker, earnings_by_ticker, config, certification=certification
         )
+        night_pit, night_leak = point_in_time_status(args.family_mode, family_source)
+        funnel["point_in_time"], funnel["leak"] = night_pit, night_leak
         if args.family_mode == "archived":
             funnel["family_source"] = family_source
             family_suffix = f" family={family_source}"
@@ -480,6 +513,7 @@ def main(argv: list[str] | None = None) -> int:
         funnel["watch"] -= sum(1 for r in suppressed if r["tier"] == "watch")
         for row in issued:
             record = dict(row)
+            record["point_in_time"], record["leak"] = night_pit, night_leak
             if args.family_mode == "archived":
                 record["family_source"] = family_source
             try:
@@ -518,6 +552,11 @@ def main(argv: list[str] | None = None) -> int:
             [r for r in records if r.get("tier_reason") == "pooled-certified"]
         ),
     }
+    honesty = {
+        **honesty_summary(records),
+        "point_in_time_nights": sum(1 for f in funnels if not f["leak"]),
+        "total_nights": len(funnels),
+    }
     out_path = args.out or (
         processed_dir("backfill")
         / f"replay_{nights[0].strftime('%Y%m%d')}_{nights[-1].strftime('%Y%m%d')}.json"
@@ -547,6 +586,7 @@ def main(argv: list[str] | None = None) -> int:
                     "Pooled-certified promotions are gated before cooldown too (prod: after); "
                     "same independent-predicate argument, so the issued set is unaffected",
                 ],
+                "honesty": honesty,
                 "nights": funnels,
                 "records": records,
                 "stats": stats,
@@ -559,6 +599,16 @@ def main(argv: list[str] | None = None) -> int:
 
     closed = [r for r in records if r.get("status") in ("target", "stopped")]
     print(f"\nissued {stats['issued']} rows over {len(nights)} nights -> {out_path}")
+    print(
+        f"point-in-time-honest nights: {honesty['point_in_time_nights']}/{honesty['total_nights']}"
+        f" | leaked records: {honesty['leaked_records']}/{stats['issued']}"
+    )
+    if honesty["leaked"]:
+        print(
+            "  *** BIASED UPPER-BOUND DIAGNOSTIC — the absolute R/hit-rate below is "
+            "inflated by selection-layer survivorship (leak=True records). Trust only "
+            "RELATIVE A/B deltas; do NOT read these as an expected edge. ***"
+        )
     print(
         f"closed {len(closed)}: {stats['target']} target / {stats['stopped']} stopped"
         f" | hit_rate={stats['hit_rate']} total_r={stats['total_r']:+.2f}"
