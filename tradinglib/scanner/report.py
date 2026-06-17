@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from tradinglib.provenance import BIASED_UPPER_BOUND_BANNER
+
 
 def _md_table(candidates: list[dict]) -> list[str]:
     lines = [
@@ -147,6 +149,9 @@ def _ticket_sections(tickets: list[dict]) -> list[str]:
                 f"{pe.get('n_dates', '?')} dates · {_fmt(pe.get('total_r'))}R total "
                 f"— {t.get('tier_reason', '?')}"
             )
+            if t.get("leak"):
+                lines.append("")
+                lines.append(f"> ⚠️ {BIASED_UPPER_BOUND_BANNER}")
             lines.append("")
             continue
         lines.append(f"#### {t['ticker']} — {t['strategy']} ({t['stance']})")

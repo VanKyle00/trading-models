@@ -23,6 +23,13 @@ from tradinglib.loaders.fundamentals.yfinance import get_fundamental_snapshot
 from tradinglib.loaders.options.yf_chain import CHAIN_COLUMNS, fetch_chain
 from tradinglib.loaders.universe.russell1000 import get_russell1000_constituents
 from tradinglib.loaders.universe.sp500 import get_sp500_constituents
+from tradinglib.provenance import (
+    FUNDAMENTALS_RESTATED,
+    MEMBERSHIP_SURVIVORSHIP,
+    PRICE_RESTATED,
+    from_reasons,
+    merge,
+)
 from tradinglib.scanner.briefs import brief_candidates
 from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.fa_gate import apply_edgar_trends, score_fundamentals
@@ -101,6 +108,13 @@ def run_scan(
     else:
         raise ValueError(f"unknown universe {config.universe!r}")
     universe_snapshot = universe.attrs.get("snapshot")
+    # The run's evidence provenance (audit #89): the universe membership is
+    # survivor-biased, and today the FA gate / prices read non-PIT (restated)
+    # data — so absolute backtest/replay numbers are biased upper bounds. Captured
+    # before .head() (which may drop attrs). As the PIT arms land, the
+    # fundamentals/price reasons flip off; membership stays (no free PIT).
+    universe_prov = universe.attrs.get("provenance") or from_reasons(MEMBERSHIP_SURVIVORSHIP)
+    run_prov = merge(universe_prov, from_reasons(FUNDAMENTALS_RESTATED, PRICE_RESTATED))
     if config.limit is not None:
         universe = universe.head(config.limit)
 
@@ -324,6 +338,9 @@ def run_scan(
                                 "pooled_evidence": {
                                     k: verdict[k] for k in ("pooled_dsr", "n_dates", "total_r")
                                 },
+                                # #90: the certifying evidence is survivor-biased
+                                "leak": run_prov.leak,
+                                "reasons": list(run_prov.reasons),
                             }
                         )
                         pooled_promoted += 1
@@ -526,4 +543,7 @@ def run_scan(
         "suppressed": suppressed,
         "candidates": rank_candidates(candidates, top=config.top),
         "errors": errors,
+        # Machine-enforced honesty flag (audit #89): absolute R/hit-rate computed
+        # from this run's evidence are biased upper bounds; trust relative A/B only.
+        "honesty": {"leak": run_prov.leak, "reasons": list(run_prov.reasons)},
     }

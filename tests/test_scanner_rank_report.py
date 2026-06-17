@@ -349,3 +349,23 @@ def test_render_markdown_watchlist_section(tmp_path: Path) -> None:
     assert "DEMOTED" in md
     assert "failed nightly FDR" in md
     assert "sma_cross" in md
+
+
+def test_ticket_sections_banners_leaked_pooled_evidence() -> None:
+    # #90: a pooled-promoted ticket renders its survivor-biased-evidence caveat
+    # right where its absolute total_R is printed.
+    from tradinglib.provenance import MEMBERSHIP_SURVIVORSHIP
+    from tradinglib.scanner.report import _ticket_sections
+
+    ticket = {
+        "ticker": "DRIFT",
+        "strategy": "setup:pead",
+        "stance": "long",
+        "levels": {"entry": 100.0, "entry_type": "stop", "stop": 95.0, "target": 110.0},
+        "pooled_evidence": {"pooled_dsr": 0.95, "n_dates": 24, "total_r": 12.0},
+        "tier_reason": "pooled-certified",
+        "leak": True,
+        "reasons": [MEMBERSHIP_SURVIVORSHIP],
+    }
+    out = "\n".join(_ticket_sections([ticket]))
+    assert "BIASED UPPER-BOUND" in out
