@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from tradinglib.backtest.resting_engine import run_resting_backtest, simulate_resting
 from tradinglib.strategist.evaluate import simulate_ticket
@@ -121,6 +122,41 @@ def test_open_trade_at_end_is_not_counted_but_marks_to_close() -> None:
     result = run_resting_backtest(bars, orders, stance="long")
     assert result.n_completed_trades == 0  # the open trade is not a completed round-trip
     assert float(result.position.iloc[-1]) == 1.0  # still held at the end
+
+
+def test_each_round_trip_pays_full_entry_and_exit_turnover() -> None:
+    # Cost must be charged per actual trade leg, not from the {0, sign} position
+    # diff: when the order re-arms and re-enters on the bar right after an exit,
+    # the position stays at sign across the boundary and a diff-based turnover
+    # charges ZERO for that exit AND the next entry — silently undercharging the
+    # choppy strategies the engine exists to score and inflating their DSR.
+    bars = _bars(
+        opens=[100.0, 100.0, 100.0, 100.0],
+        highs=[101.0, 101.0, 101.0, 101.0],
+        lows=[94.0, 94.0, 94.0, 94.0],
+        closes=[96.0, 96.0, 96.0, 96.0],
+    )
+    orders = _orders(bars, entry=100.0, stop=95.0, target=120.0, entry_type="stop")
+    result = run_resting_backtest(bars, orders, stance="long")
+    # four back-to-back single-bar round trips
+    assert result.n_completed_trades == 4
+    # each round trip is two legs (enter + exit); the position diff would say 1.0
+    assert result.turnover.sum() == pytest.approx(2.0 * result.n_completed_trades)
+
+
+def test_single_round_trip_charges_two_legs_of_turnover() -> None:
+    # one clean multi-bar round trip = one entry leg + one exit leg = 2.0 turnover.
+    # bar2 gaps below the entry so the order cannot re-arm into a second trade.
+    bars = _bars(
+        opens=[100.0, 110.0, 90.0],
+        highs=[101.0, 116.0, 91.0],
+        lows=[99.0, 109.0, 89.0],
+        closes=[100.0, 115.0, 90.0],
+    )
+    orders = _orders(bars, entry=100.0, stop=95.0, target=115.0, entry_type="stop")
+    result = run_resting_backtest(bars, orders, stance="long")
+    assert result.n_completed_trades == 1
+    assert result.turnover.sum() == pytest.approx(2.0)
 
 
 def test_backtest_result_contract() -> None:

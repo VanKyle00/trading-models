@@ -112,6 +112,54 @@ def test_n_trades_excludes_unclosed_oos_position() -> None:
     assert result.verdicts[0].n_trades == 0
 
 
+def _verdict(result, key: str):
+    return next(v for v in result.verdicts if v.key == key)
+
+
+def test_resting_engine_dark_by_default_and_routes_only_resting_strategies() -> None:
+    # The flag ships dark: default off => the WHOLE tournament is byte-identical.
+    # On => only strategies that carry a resting_orders builder change; a
+    # position-only strategy stays bit-for-bit identical (audit A2 safety bar).
+    bars = _uptrend_bars()
+    reg = {"donchian": STRATEGIES["donchian"], "sma_cross": STRATEGIES["sma_cross"]}
+    cfg_off = TournamentConfig(initial_train=100, test_size=50)
+    cfg_on = TournamentConfig(initial_train=100, test_size=50, use_resting_engine=True)
+    assert cfg_off.use_resting_engine is False  # dark by default
+
+    off = run_tournament(bars, "long", registry=reg, config=cfg_off)
+    on = run_tournament(bars, "long", registry=reg, config=cfg_on)
+
+    # sma_cross has no resting_orders builder -> identical regardless of the flag
+    assert _verdict(off, "sma_cross").as_dict() == _verdict(on, "sma_cross").as_dict()
+    # donchian carries a builder -> the flag re-scores it on the resting engine
+    assert _verdict(off, "donchian").as_dict() != _verdict(on, "donchian").as_dict()
+
+
+def test_resting_path_uses_the_exact_completed_trade_count() -> None:
+    # On the resting path the survival n_trades is the engine's exact round-trip
+    # count (n_completed_trades), NOT trades_from_position (which merges adjacent
+    # re-armed trades and would undercount — audit A2 must-fix #2).
+    bars = _uptrend_bars()
+    sdef = STRATEGIES["donchian"]
+    cfg = TournamentConfig(initial_train=100, test_size=50, use_resting_engine=True)
+    res = run_tournament(bars, "long", registry={"donchian": sdef}, config=cfg)
+
+    wf = run_module.walk_forward(
+        bars,
+        make_orders=lambda tr, te, p: sdef.resting_orders(tr, te, p, "long"),
+        stance="long",
+        param_grid=sdef.param_grid,
+        mode="anchored",
+        initial_train=100,
+        test_size=50,
+        embargo=sdef.cv_embargo,
+        fee_bps=cfg.fee_bps,
+        slippage_bps=cfg.slippage_bps,
+    )
+    assert wf.oos_result.n_completed_trades is not None
+    assert _verdict(res, "donchian").n_trades == wf.oos_result.n_completed_trades
+
+
 def test_registered_strategies_default_cv_embargo_to_zero() -> None:
     # Every shipped strategy is causal / self-purging, so its CV embargo is 0 —
     # purged CV is available but introduces NO change to current results until a

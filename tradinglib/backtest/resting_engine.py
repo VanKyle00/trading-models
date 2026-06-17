@@ -85,7 +85,7 @@ def simulate_resting(bars: pd.DataFrame, orders: pd.DataFrame, stance: str) -> l
         trades.append(trade)
         if trade["exit_idx"] is None:
             break  # open at the slice end; nothing left to re-arm
-        i = trade["exit_idx"] + 1  # re-arm strictly after the exit bar
+        i = int(trade["exit_idx"]) + 1  # re-arm strictly after the exit bar
     return trades
 
 
@@ -120,6 +120,13 @@ def run_resting_backtest(
     n = len(bars)
     gross = np.zeros(n)
     position = np.zeros(n)
+    # Turnover is accumulated per actual trade LEG, not from position.diff(): an
+    # exit at bar j followed by a re-armed entry at bar j+1 keeps the position at
+    # sign across the boundary, so a diff-based turnover would charge zero for both
+    # legs and undercharge the choppy strategies this engine scores (it would
+    # inflate their Sharpe/DSR — the same merge that n_completed_trades dodges for
+    # the trade count). Each entry and each exit is one unit of turnover.
+    turnover_legs = np.zeros(n)
     completed = 0
 
     for t in simulate_resting(bars, orders, stance):
@@ -129,6 +136,9 @@ def run_resting_backtest(
         if x is not None:
             completed += 1
         position[e : last + 1] = sign
+        turnover_legs[e] += 1.0  # entry leg
+        if x is not None:
+            turnover_legs[x] += 1.0  # exit leg (a single-bar round trip charges both at e)
         ef = t["entry_fill"]
         if last == e:
             ref = t["exit_fill"] if x is not None else closes[e]
@@ -141,8 +151,7 @@ def run_resting_backtest(
             gross[last] = sign * (ref - closes[last - 1]) / closes[last - 1]
 
     position_s = pd.Series(position, index=bars.index)
-    turnover = position_s.diff().abs()
-    turnover.iloc[0] = abs(position[0])
+    turnover = pd.Series(turnover_legs, index=bars.index)
     cost = turnover * (fee_bps + slippage_bps) / 10_000.0
     net = pd.Series(gross, index=bars.index) - cost
     equity = (1.0 + net).cumprod() * initial_capital

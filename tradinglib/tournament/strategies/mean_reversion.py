@@ -5,12 +5,21 @@ from __future__ import annotations
 import pandas as pd
 
 from tradinglib.features.technical import atr, ma_slope, rsi, sma
-from tradinglib.tournament.levels import Levels, direction, protective_stop, two_r_target
+from tradinglib.tournament.levels import (
+    _ATR_MULT,
+    _ATR_WINDOW,
+    Levels,
+    direction,
+    protective_stop,
+    two_r_target,
+)
 from tradinglib.tournament.strategies._core import (
     StrategyDef,
     _full_history,
     _hold_between,
+    publish_levels,
     register,
+    score_orders,
 )
 
 # --- rsi2 --------------------------------------------------------------------
@@ -88,21 +97,47 @@ def _bollinger_signal(
     return pos.loc[test.index]
 
 
-def _bollinger_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None:
+def _bollinger_resting_levels(bars: pd.DataFrame, params: dict, stance: str) -> pd.DataFrame:
+    """Per-bar resting limit at the band, target at the mean, 2x ATR(14) stop
+    (through-today, UNshifted).
+
+    The stop mirrors ``protective_stop`` exactly (same ``_ATR_MULT`` / ``_ATR_WINDOW``)
+    so the published last-row order is byte-identical to the old ``levels``; a bar
+    with a degenerate (zero/NaN) ATR — the case the scalar ``protective_stop``
+    raised on — is simply not armed (``levels`` returns None there, the documented
+    "no actionable entry" answer).
+    """
     mid, lower, upper = _bollinger_bands(bars["close"], params["window"], params["num_std"])
     long_side = direction(stance) > 0
-    entry = float(lower.iloc[-1]) if long_side else float(upper.iloc[-1])
-    stop = protective_stop(bars, entry, stance)
-    return Levels(
-        entry=entry,
-        entry_type="limit",
-        stop=stop,
-        target=float(mid.iloc[-1]),
+    entry = lower if long_side else upper
+    last_atr = atr(bars["high"], bars["low"], bars["close"], _ATR_WINDOW)
+    stop = entry - direction(stance) * _ATR_MULT * last_atr
+    return pd.DataFrame(
+        {
+            "entry": entry,
+            "stop": stop,
+            "target": mid,
+            "entry_type": "limit",
+            "armed": (last_atr > 0.0) & entry.notna() & mid.notna(),
+        }
+    )
+
+
+def _bollinger_levels(bars: pd.DataFrame, params: dict, stance: str) -> Levels | None:
+    long_side = direction(stance) > 0
+    return publish_levels(
+        _bollinger_resting_levels(bars, params, stance),
         condition=(
             f"fade to the {'lower' if long_side else 'upper'} "
             f"Bollinger({params['window']}, {params['num_std']}) band; exit at the mean"
         ),
     )
+
+
+def _bollinger_resting_orders(
+    train: pd.DataFrame, test: pd.DataFrame, params: dict, stance: str
+) -> pd.DataFrame:
+    return score_orders(_bollinger_resting_levels(_full_history(train, test), params, stance), test)
 
 
 register(
@@ -117,6 +152,7 @@ register(
         param_grid={"window": [10, 20], "num_std": [2.0, 2.5]},
         make_signal=_bollinger_signal,
         levels=_bollinger_levels,
+        resting_orders=_bollinger_resting_orders,
     )
 )
 
