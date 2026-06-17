@@ -17,16 +17,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from tradinglib.data.paths import processed_dir
+from tradinglib.loaders.equities.yfinance import corp_actions_since
 from tradinglib.scanner.ledger import build_ledger, write_ledger
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rebuild the ticket-performance ledger.")
     parser.add_argument("--base", type=Path, default=None, help="scan reports directory")
+    parser.add_argument(
+        "--force-rebuild",
+        action="store_true",
+        help="re-score even closed (target/stopped) tickets instead of carrying the frozen record forward",
+    )
     args = parser.parse_args(argv)
 
     base = args.base if args.base is not None else processed_dir("scans")
-    ledger = build_ledger(base, asof=datetime.now(UTC).strftime("%Y-%m-%d"))
+    ledger = build_ledger(
+        base,
+        asof=datetime.now(UTC).strftime("%Y-%m-%d"),
+        actions_probe=corp_actions_since,
+        force_rebuild=args.force_rebuild,
+    )
     path = write_ledger(ledger, base)
 
     s = ledger["stats"]

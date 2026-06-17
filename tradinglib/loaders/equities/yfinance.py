@@ -65,6 +65,28 @@ def load_daily(
     return df
 
 
+def corp_actions_since(symbol: str, start: str, end: str) -> bool:
+    """True if a split or dividend ex-date falls in ``(start, end]``.
+
+    Used by the forward ledger to flag a ticket whose frozen price levels span a
+    corporate action: ``auto_adjust`` re-scales the whole price history, so such a
+    ticket's frozen-level scoring is unreliable. This is a live network call to
+    yfinance's corporate-actions feed; the caller treats any exception as
+    "unknown" and proceeds unflagged.
+    """
+    actions = yf.Ticker(symbol).actions
+    if actions is None or actions.empty:
+        return False
+    lo, hi = pd.Timestamp(start), pd.Timestamp(end)
+    for ts in actions.index:
+        ex = pd.Timestamp(ts)
+        if ex.tzinfo is not None:
+            ex = ex.tz_localize(None)
+        if lo < ex <= hi:
+            return True
+    return False
+
+
 def _download_daily(symbol: str) -> pd.DataFrame:
     """Hit yfinance and return a canonicalized DataFrame."""
     raw = yf.download(
