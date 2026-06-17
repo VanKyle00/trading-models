@@ -128,6 +128,7 @@ def run_tournament(
             mode="anchored",
             initial_train=config.initial_train,
             test_size=config.test_size,
+            embargo=sdef.cv_embargo,
             fee_bps=config.fee_bps,
             slippage_bps=config.slippage_bps,
         )

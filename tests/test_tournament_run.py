@@ -112,6 +112,40 @@ def test_n_trades_excludes_unclosed_oos_position() -> None:
     assert result.verdicts[0].n_trades == 0
 
 
+def test_registered_strategies_default_cv_embargo_to_zero() -> None:
+    # Every shipped strategy is causal / self-purging, so its CV embargo is 0 —
+    # purged CV is available but introduces NO change to current results until a
+    # future strategy declares a forward-looking label horizon (audit A4).
+    assert all(s.cv_embargo == 0 for s in STRATEGIES.values())
+
+
+def test_run_tournament_applies_strategy_cv_embargo(monkeypatch) -> None:
+    # A strategy that declares cv_embargo=N must have its walk-forward windows
+    # purged by N bars — the CV layer enforces the purge, not the strategy.
+    seen: list[int] = []
+    real = run_module.walk_forward
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs.get("embargo"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(run_module, "walk_forward", spy)
+    registry = {
+        "emb": StrategyDef(
+            key="emb",
+            name="emb",
+            style="trend",
+            description="emb",
+            param_grid={"a": [1]},
+            make_signal=_blocky_signal,
+            levels=_levels,
+            cv_embargo=4,
+        )
+    }
+    run_tournament(_uptrend_bars(), "long", registry=registry, config=CONFIG)
+    assert seen == [4]
+
+
 def test_run_tournament_no_survivors_no_winner() -> None:
     result = run_tournament(
         _uptrend_bars(), "long", registry={"flat": REGISTRY["flat"]}, config=CONFIG

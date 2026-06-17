@@ -37,6 +37,12 @@ class StrategyDef:
     param_grid: dict[str, list]
     make_signal: TournamentSignalFn
     levels: LevelsFn
+    # Purged-CV embargo: bars to drop from the end of each walk-forward train
+    # window so a label looking this many bars ahead cannot bleed across the
+    # train/test boundary. 0 = the strategy is causal / self-purging (every
+    # shipped strategy); a future model with a forward-looking H-bar label sets
+    # cv_embargo=H to have the CV layer enforce the purge automatically.
+    cv_embargo: int = 0
 
 
 STRATEGIES: dict[str, StrategyDef] = {}
