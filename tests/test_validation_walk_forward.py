@@ -100,6 +100,41 @@ def test_walk_forward_rolling_mode() -> None:
     assert (res.windows["param_long"] == True).all()  # noqa: E712
 
 
+def test_walk_forward_embargo_withholds_boundary_bars_from_the_signal() -> None:
+    # With embargo=H the signal builder must never be handed the H train bars
+    # immediately before a test window — that is the purge that stops a
+    # forward-looking training label from leaking across the boundary.
+    data = _data()
+    seen: list[tuple[pd.Timestamp, pd.Timestamp]] = []
+
+    def recording_signal(train, test, params):
+        if not test.index.equals(train.index):  # real OOS call, not in-sample scoring
+            seen.append((train.index.max(), test.index.min()))
+        return pd.Series(0.0, index=test.index)
+
+    walk_forward(
+        data,
+        recording_signal,
+        param_grid={"long": [True]},
+        mode="anchored",
+        initial_train=40,
+        test_size=20,
+        embargo=4,
+    )
+    assert seen  # at least one OOS window ran
+    for train_max, test_min in seen:
+        gap = data.index[(data.index > train_max) & (data.index < test_min)]
+        assert len(gap) == 4  # exactly the embargo is withheld from the model
+
+
+def test_walk_forward_embargo_zero_is_unchanged() -> None:
+    data = _data()
+    kw = dict(param_grid={"long": [True, False]}, mode="anchored", initial_train=40, test_size=20)
+    base = walk_forward(data, _make_signal, **kw)
+    emb0 = walk_forward(data, _make_signal, **kw, embargo=0)
+    pd.testing.assert_series_equal(base.oos_result.returns, emb0.oos_result.returns)
+
+
 def test_walk_forward_rejects_empty_search_space() -> None:
     data = _data()
     with pytest.raises(ValueError, match="empty search space"):

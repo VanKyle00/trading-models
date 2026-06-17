@@ -61,7 +61,21 @@ def _stats(records: list[dict]) -> dict:
     counts = Counter(r["status"] for r in records)
     wins, losses = counts.get("target", 0), counts.get("stopped", 0)
     closed = wins + losses
-    rs = [r["r"] for r in records if isinstance(r.get("r"), (int, float))]
+    # Realized R aggregates ONLY closed trades. An open position's r is a
+    # mark-to-last-close; folding it into total_r/avg_r would let an unrealized
+    # mark inflate the headline used to compare models, so it is reported
+    # separately as open_unrealized_r (hit_rate/max_drawdown_r are already
+    # closed-only).
+    realized = [
+        r["r"]
+        for r in records
+        if r.get("status") in ("target", "stopped") and isinstance(r.get("r"), (int, float))
+    ]
+    open_rs = [
+        r["r"]
+        for r in records
+        if r.get("status") == "open" and isinstance(r.get("r"), (int, float))
+    ]
     return {
         "issued": len(records),
         "waiting": counts.get("waiting", 0),
@@ -71,8 +85,9 @@ def _stats(records: list[dict]) -> dict:
         "target": wins,
         "errors": counts.get("error", 0),
         "hit_rate": wins / closed if closed else None,
-        "total_r": float(sum(rs)),
-        "avg_r": float(sum(rs) / len(rs)) if rs else None,
+        "total_r": float(sum(realized)),
+        "avg_r": float(sum(realized) / len(realized)) if realized else None,
+        "open_unrealized_r": float(sum(open_rs)) if open_rs else None,
         "max_drawdown_r": _max_drawdown_r(records),
     }
 

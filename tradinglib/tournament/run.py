@@ -128,6 +128,7 @@ def run_tournament(
             mode="anchored",
             initial_train=config.initial_train,
             test_size=config.test_size,
+            embargo=sdef.cv_embargo,
             fee_bps=config.fee_bps,
             slippage_bps=config.slippage_bps,
         )
@@ -136,7 +137,11 @@ def run_tournament(
         metrics = compute_metrics(
             wf.oos_result.returns, wf.oos_result.equity_curve, n_trials=n_trials
         )
-        n_trades = len(trades_from_position(wf.oos_result.position, bars["close"]))
+        # Count only completed round-trips — a position still open at the end of
+        # the OOS slice must not pad n_trades past the min_trades survival gate.
+        n_trades = len(
+            trades_from_position(wf.oos_result.position, bars["close"], include_open=False)
+        )
         last = wf.windows.iloc[-1]
         params = {k: _native(last[f"param_{k}"]) for k in sdef.param_grid}
         reasons = survival_reasons(metrics, n_trades, wf.param_stability, config)

@@ -65,6 +65,7 @@ def walk_forward(
     initial_train: int | None = None,
     train_size: int | None = None,
     step: int | None = None,
+    embargo: int = 0,
     price_col: str = "close",
     open_col: str = "open",
     fee_bps: float = 1.0,
@@ -77,11 +78,11 @@ def walk_forward(
     if mode == "anchored":
         if initial_train is None:
             raise ValueError("mode='anchored' requires initial_train")
-        windows = anchored_windows(data.index, initial_train, test_size, step)
+        windows = anchored_windows(data.index, initial_train, test_size, step, embargo=embargo)
     elif mode == "rolling":
         if train_size is None:
             raise ValueError("mode='rolling' requires train_size")
-        windows = rolling_windows(data.index, train_size, test_size, step)
+        windows = rolling_windows(data.index, train_size, test_size, step, embargo=embargo)
     else:
         raise ValueError(f"mode must be 'anchored' or 'rolling', got {mode!r}")
     if not windows:

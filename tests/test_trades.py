@@ -74,6 +74,28 @@ def test_long_to_short_flip_produces_two_trades():
     assert trades.iloc[1]["pnl"] == 2.0  # (9 - 11) * -1
 
 
+def test_include_open_false_excludes_dangling_position():
+    # An open position at the series end is force-closed by default (display
+    # behavior), but include_open=False drops that phantom round-trip so it
+    # cannot pad a trade count (audit A3).
+    idx = _idx(3)
+    position = pd.Series([0.0, 1.0, 1.0], index=idx)  # open at the end
+    prices = pd.Series([10.0, 10.0, 13.0], index=idx)
+    assert len(trades_from_position(position, prices)) == 1  # default unchanged
+    assert trades_from_position(position, prices, include_open=False).empty
+
+
+def test_include_open_false_keeps_closed_trades():
+    # A closed round-trip followed by a dangling open: include_open=False keeps
+    # only the closed one.
+    idx = _idx(6)
+    position = pd.Series([0.0, 1.0, 0.0, 0.0, 1.0, 1.0], index=idx)
+    prices = pd.Series([10.0, 10.0, 12.0, 12.0, 12.0, 14.0], index=idx)
+    closed = trades_from_position(position, prices, include_open=False)
+    assert len(closed) == 1
+    assert closed.iloc[0]["exit_time"] == idx[2]
+
+
 def test_missing_price_raises():
     idx = _idx(3)
     position = pd.Series([0.0, 1.0, 0.0], index=idx)
