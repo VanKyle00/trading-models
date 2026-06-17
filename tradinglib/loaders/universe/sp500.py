@@ -23,6 +23,7 @@ import httpx
 import pandas as pd
 
 from tradinglib.data.paths import processed_dir
+from tradinglib.provenance import MEMBERSHIP_SURVIVORSHIP, from_reasons
 
 SOURCE = "universe"
 _SUBDIR = "sp500"
@@ -82,12 +83,17 @@ def get_sp500_constituents(*, refresh: bool = False) -> pd.DataFrame:
     snapshot = pd.Timestamp.now("UTC").strftime("%Y-%m-%d")
     out = processed_dir(SOURCE) / _SUBDIR / f"{snapshot}.parquet"
     if out.exists() and not refresh:
-        return pd.read_parquet(out)
-    try:
-        df = _download()
-    except Exception:
-        logger.warning("S&P 500 scrape failed; using the vendored static list", exc_info=True)
-        return _static_fallback()
-    out.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(out)
+        df = pd.read_parquet(out)
+    else:
+        try:
+            df = _download()
+        except Exception:
+            logger.warning("S&P 500 scrape failed; using the vendored static list", exc_info=True)
+            df = _static_fallback()
+        else:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(out)
+    # Membership is today's Wikipedia table back-projected onto any as-of date:
+    # survivorship + inclusion look-ahead, unfixable on free data (audit #89).
+    df.attrs["provenance"] = from_reasons(MEMBERSHIP_SURVIVORSHIP)
     return df
