@@ -26,9 +26,13 @@ from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.strategist.evaluate import ENTRY_WINDOW, simulate_ticket
 
 LEDGER_FILENAME = "ledger.json"
+_LEDGER_SCHEMA_VERSION = 1  # bump to invalidate prior frozen records on a format change
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_CLOSED_STATUSES = ("target", "stopped")
 
 Loader = Callable[..., pd.DataFrame]
+# (ticker, issue_date, exit_date) -> True if a split/dividend ex-date falls in (issue, exit]
+ActionsProbe = Callable[[str, str, str], bool]
 
 
 def _issues(base: Path) -> list[tuple[str, dict]]:
@@ -57,20 +61,30 @@ def _issues(base: Path) -> list[tuple[str, dict]]:
     return out
 
 
+def _realized(records: list[dict]) -> list[dict]:
+    """Closed trades that count toward the yardstick: target/stopped with a numeric
+    R, EXCLUDING any whose holding window crossed a split/dividend. ``auto_adjust``
+    re-scales the refreshed bars, so a corp-action ticket's frozen-level score is
+    unreliable; it is dropped rather than trusted (audit A5b)."""
+    return [
+        r
+        for r in records
+        if r.get("status") in _CLOSED_STATUSES
+        and isinstance(r.get("r"), (int, float))
+        and not r.get("corp_action_since_issue")
+    ]
+
+
 def _stats(records: list[dict]) -> dict:
     counts = Counter(r["status"] for r in records)
-    wins, losses = counts.get("target", 0), counts.get("stopped", 0)
-    closed = wins + losses
-    # Realized R aggregates ONLY closed trades. An open position's r is a
-    # mark-to-last-close; folding it into total_r/avg_r would let an unrealized
-    # mark inflate the headline used to compare models, so it is reported
-    # separately as open_unrealized_r (hit_rate/max_drawdown_r are already
-    # closed-only).
-    realized = [
-        r["r"]
-        for r in records
-        if r.get("status") in ("target", "stopped") and isinstance(r.get("r"), (int, float))
-    ]
+    # Realized R aggregates ONLY closed (and non-corp-action) trades. An open
+    # position's r is a mark-to-last-close; folding it into total_r/avg_r would let
+    # an unrealized mark inflate the headline used to compare models, so it is
+    # reported separately as open_unrealized_r.
+    realized_records = _realized(records)
+    realized = [r["r"] for r in realized_records]
+    wins = sum(1 for r in realized_records if r["status"] == "target")
+    closed = len(realized_records)
     open_rs = [
         r["r"]
         for r in records
@@ -81,9 +95,10 @@ def _stats(records: list[dict]) -> dict:
         "waiting": counts.get("waiting", 0),
         "expired": counts.get("expired", 0),
         "open": counts.get("open", 0),
-        "stopped": losses,
-        "target": wins,
+        "stopped": counts.get("stopped", 0),
+        "target": counts.get("target", 0),
         "errors": counts.get("error", 0),
+        "corp_action_excluded": sum(1 for r in records if r.get("corp_action_since_issue")),
         "hit_rate": wins / closed if closed else None,
         "total_r": float(sum(realized)),
         "avg_r": float(sum(realized) / len(realized)) if realized else None,
@@ -93,11 +108,7 @@ def _stats(records: list[dict]) -> dict:
 
 
 def _max_drawdown_r(records: list[dict]) -> float | None:
-    closed = [
-        r
-        for r in records
-        if r.get("status") in ("target", "stopped") and isinstance(r.get("r"), (int, float))
-    ]
+    closed = _realized(records)
     if not closed:
         return None
     closed.sort(key=lambda r: (r.get("exit_date") or r["date"], r["ticker"]))
@@ -109,12 +120,53 @@ def _max_drawdown_r(records: list[dict]) -> float | None:
     return float(dd)
 
 
-def build_ledger(base: Path, *, asof: str, loader: Loader = load_daily) -> dict:
-    """Score every persisted ticket against daily bars. One loader call per ticker."""
+def _frozen_closed(base: Path, *, force_rebuild: bool) -> dict[tuple, dict]:
+    """Prior-build closed (target/stopped) records, keyed for carry-forward.
+
+    A closed ticket's status+R is frozen: once decided it must never change on a
+    later build, even though ``refresh=True`` re-downloads ``auto_adjust`` bars
+    that a split/dividend may have silently re-scaled (audit A5b). ``force_rebuild``
+    discards the prior ledger so a bad early close can be corrected.
+    """
+    if force_rebuild:
+        return {}
+    prior = load_ledger(base)
+    if not prior or prior.get("schema_version") != _LEDGER_SCHEMA_VERSION:
+        return {}
+    out: dict[tuple, dict] = {}
+    for r in prior.get("tickets", []):
+        if r.get("status") in _CLOSED_STATUSES:
+            key = (r["date"], r["ticker"], r["stance"], r["strategy"], r.get("tier", "ticket"))
+            out[key] = r
+    return out
+
+
+def build_ledger(
+    base: Path,
+    *,
+    asof: str,
+    loader: Loader = load_daily,
+    actions_probe: ActionsProbe | None = None,
+    force_rebuild: bool = False,
+) -> dict:
+    """Score every persisted ticket against daily bars. One loader call per ticker.
+
+    Closed (target/stopped) tickets are frozen from the prior build and carried
+    forward verbatim — their status/R never changes once decided (audit A5b); only
+    waiting/open/error rows are re-simulated. ``force_rebuild`` re-scores
+    everything. When ``actions_probe`` is supplied, a ticket whose holding window
+    crossed a split/dividend is flagged ``corp_action_since_issue`` and excluded
+    from realized stats (its frozen levels predate the ``auto_adjust`` rescale).
+    """
+    frozen = _frozen_closed(base, force_rebuild=force_rebuild)
     bars_by_ticker: dict[str, pd.DataFrame | Exception] = {}
     records: list[dict] = []
     for date, ticket in _issues(base):
         ticker = ticket["ticker"]
+        key = (date, ticker, ticket["stance"], ticket["strategy"], ticket.get("tier", "ticket"))
+        if key in frozen:
+            records.append(frozen[key])  # closed once -> immutable; no re-fetch, no re-score
+            continue
         record: dict = {
             "date": date,
             "ticker": ticker,
@@ -145,6 +197,15 @@ def build_ledger(base: Path, *, asof: str, loader: Loader = load_daily) -> dict:
             )
         except Exception as exc:
             record.update(status="error", error=str(exc))
+        if actions_probe is not None and record.get("status") in _CLOSED_STATUSES:
+            # Flag a corp action in the holding window on the SAME build that first
+            # closes the ticket, BEFORE it is frozen, so a mis-scaled close is never
+            # cemented into the realized stats. Best-effort: never fail the build.
+            try:
+                if actions_probe(ticker, date, record["exit_date"]):
+                    record["corp_action_since_issue"] = True
+            except Exception:
+                pass
         records.append(record)
     records.sort(
         key=lambda r: r["date"], reverse=True
@@ -153,7 +214,12 @@ def build_ledger(base: Path, *, asof: str, loader: Loader = load_daily) -> dict:
         **_stats(records),
         "by_tier": {t: _stats([r for r in records if r["tier"] == t]) for t in ("ticket", "watch")},
     }
-    return {"built_asof": asof, "stats": stats, "tickets": records}
+    return {
+        "built_asof": asof,
+        "schema_version": _LEDGER_SCHEMA_VERSION,
+        "stats": stats,
+        "tickets": records,
+    }
 
 
 def write_ledger(ledger: dict, base: Path) -> Path:

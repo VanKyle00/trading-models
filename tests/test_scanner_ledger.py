@@ -470,3 +470,161 @@ def test_ledger_respects_row_entry_window(tmp_path: Path) -> None:
     ledger = build_ledger(tmp_path, asof="2026-06-10", loader=lambda t, **kw: bars)
     assert ledger["tickets"][0]["status"] == "waiting"
     assert ledger["tickets"][0]["entry_window"] == 15
+
+
+# ---------------------------------------------------------------------------
+# Closed-ticket freeze + corporate-action flag (A5b)
+# ---------------------------------------------------------------------------
+
+
+def _single_ticket_base(tmp_path: Path, ticket: dict, *, date: str = "2026-06-08") -> Path:
+    base = tmp_path / "scans"
+    (base / date).mkdir(parents=True)
+    (base / date / "report.json").write_text(
+        json.dumps(_report(date, [ticket], [])), encoding="utf-8"
+    )
+    return base
+
+
+def _tst_stop_bars() -> pd.DataFrame:
+    # market entry fills at open 100; same bar low 94 <= stop 95 -> stopped, r=-1.0
+    idx = pd.date_range("2026-06-09", periods=2, freq="B", tz="UTC")
+    return pd.DataFrame(
+        {
+            "open": [100.0, 96.0],
+            "high": [101.0, 97.0],
+            "low": [94.0, 90.0],
+            "close": [95.0, 92.0],
+        },
+        index=idx,
+    )
+
+
+def _tst_trigger_bars() -> pd.DataFrame:
+    # for a stop-entry @200: bar0 high 205 triggers fill at 200; bar1 high 211 >= target 210
+    idx = pd.date_range("2026-06-09", periods=2, freq="B", tz="UTC")
+    return pd.DataFrame(
+        {
+            "open": [201.0, 209.0],
+            "high": [205.0, 211.0],
+            "low": [200.0, 208.0],
+            "close": [203.0, 210.5],
+        },
+        index=idx,
+    )
+
+
+def test_freeze_closed_ticket_immutable_across_builds(tmp_path: Path) -> None:
+    # A closed (target/stopped) ticket's status+R must never change on a later
+    # build, even if a split/dividend has silently re-scaled the refreshed bars.
+    base = _single_ticket_base(tmp_path, _ticket("TST"))
+    l1 = build_ledger(base, asof="2026-06-11", loader=_loader_with({"TST": _tst_bars()}))
+    write_ledger(l1, base)
+    assert l1["tickets"][0]["status"] == "target"
+    assert l1["tickets"][0]["r"] == pytest.approx(2.0)
+
+    # rebuild with bars that, if re-simulated, would flip it to stopped/-1.0
+    l2 = build_ledger(base, asof="2026-06-20", loader=_loader_with({"TST": _tst_stop_bars()}))
+    assert l2["tickets"][0]["status"] == "target"  # frozen, not re-scored
+    assert l2["tickets"][0]["r"] == pytest.approx(2.0)
+
+
+def test_freeze_force_rebuild_re_simulates(tmp_path: Path) -> None:
+    # The escape hatch: force_rebuild ignores the prior ledger so a bad early
+    # close can be corrected.
+    base = _single_ticket_base(tmp_path, _ticket("TST"))
+    l1 = build_ledger(base, asof="2026-06-11", loader=_loader_with({"TST": _tst_bars()}))
+    write_ledger(l1, base)
+    l2 = build_ledger(
+        base,
+        asof="2026-06-20",
+        loader=_loader_with({"TST": _tst_stop_bars()}),
+        force_rebuild=True,
+    )
+    assert l2["tickets"][0]["status"] == "stopped"  # re-simulated, not frozen
+
+
+def test_freeze_does_not_freeze_waiting(tmp_path: Path) -> None:
+    # Only target/stopped are frozen; a still-waiting ticket must keep re-simulating
+    # as new bars arrive (it can still resolve later).
+    base = _single_ticket_base(tmp_path, _ticket("TST", entry=200.0, entry_type="stop"))
+    l1 = build_ledger(base, asof="2026-06-11", loader=_loader_with({"TST": _tst_bars()}))
+    write_ledger(l1, base)
+    assert l1["tickets"][0]["status"] in ("waiting", "expired")
+    l2 = build_ledger(base, asof="2026-06-20", loader=_loader_with({"TST": _tst_trigger_bars()}))
+    assert l2["tickets"][0]["status"] == "target"  # re-simulated (waiting is not frozen)
+
+
+def test_corp_action_flag_excludes_closed_from_realized(tmp_path: Path) -> None:
+    # A closed ticket whose holding window crossed a split/dividend is flagged and
+    # dropped from realized stats — the auto_adjust rescale makes its frozen-level
+    # scoring unreliable, so we don't trust the win/loss (audit A5b).
+    base = _single_ticket_base(tmp_path, _ticket("TST"))
+    ledger = build_ledger(
+        base,
+        asof="2026-06-11",
+        loader=_loader_with({"TST": _tst_bars()}),
+        actions_probe=lambda ticker, start, end: True,
+    )
+    rec = ledger["tickets"][0]
+    assert rec["status"] == "target"  # still observed
+    assert rec["corp_action_since_issue"] is True
+    assert ledger["stats"]["total_r"] == pytest.approx(0.0)  # excluded from realized
+    assert ledger["stats"]["hit_rate"] is None
+    assert ledger["stats"]["corp_action_excluded"] == 1
+
+
+def test_corp_action_probe_failure_is_non_fatal(tmp_path: Path) -> None:
+    # A flaky actions feed must never fail the build; it degrades to flag-absent.
+    base = _single_ticket_base(tmp_path, _ticket("TST"))
+
+    def boom(ticker: str, start: str, end: str) -> bool:
+        raise RuntimeError("yfinance 429")
+
+    ledger = build_ledger(
+        base, asof="2026-06-11", loader=_loader_with({"TST": _tst_bars()}), actions_probe=boom
+    )
+    rec = ledger["tickets"][0]
+    assert rec["status"] == "target"
+    assert not rec.get("corp_action_since_issue")
+    assert ledger["stats"]["total_r"] == pytest.approx(2.0)  # counts normally
+
+
+def test_corp_action_flag_survives_freeze(tmp_path: Path) -> None:
+    # flag-then-freeze: a flagged close is frozen WITH its flag and stays excluded
+    # on later builds even when no probe runs.
+    base = _single_ticket_base(tmp_path, _ticket("TST"))
+    l1 = build_ledger(
+        base,
+        asof="2026-06-11",
+        loader=_loader_with({"TST": _tst_bars()}),
+        actions_probe=lambda ticker, start, end: True,
+    )
+    write_ledger(l1, base)
+    assert l1["tickets"][0]["corp_action_since_issue"] is True
+
+    l2 = build_ledger(base, asof="2026-06-20", loader=_loader_with({"TST": _tst_stop_bars()}))
+    rec = l2["tickets"][0]
+    assert rec["status"] == "target"  # frozen
+    assert rec["corp_action_since_issue"] is True  # flag carried forward
+    assert l2["stats"]["total_r"] == pytest.approx(0.0)  # still excluded
+
+
+def test_stats_excludes_corp_action_flagged_from_realized() -> None:
+    from tradinglib.scanner.ledger import _stats
+
+    records = [
+        {"status": "target", "r": 2.0, "ticker": "A", "date": "2026-06-01"},
+        {
+            "status": "stopped",
+            "r": -1.0,
+            "ticker": "B",
+            "date": "2026-06-01",
+            "corp_action_since_issue": True,
+        },
+    ]
+    stats = _stats(records)
+    assert stats["total_r"] == pytest.approx(2.0)  # B excluded
+    assert stats["avg_r"] == pytest.approx(2.0)  # over the one unflagged closed trade
+    assert stats["hit_rate"] == pytest.approx(1.0)  # 1 win / 1 realized closed
+    assert stats["corp_action_excluded"] == 1
