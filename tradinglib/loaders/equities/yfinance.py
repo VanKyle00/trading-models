@@ -88,17 +88,47 @@ def corp_actions_since(symbol: str, start: str, end: str) -> bool:
 
 
 def _download_daily(symbol: str) -> pd.DataFrame:
-    """Hit yfinance and return a canonicalized DataFrame."""
-    raw = yf.download(
-        symbol,
-        period="max",
-        interval="1d",
-        auto_adjust=True,
-        progress=False,
-    )
+    """Hit yfinance and return a canonicalized DataFrame.
+
+    Two fetches: ``auto_adjust=True`` for the canonical (back-adjusted) OHLCV the
+    indicators use, and ``auto_adjust=False`` for the UNADJUSTED OHLC the forward
+    ledger scores frozen dollar levels against (audit #88). The adjusted columns
+    keep coming from the auto_adjust=True fetch verbatim — yfinance applies its
+    repair passes before the adjust ratio, so reconstructing adjusted-from-raw is
+    NOT byte-identical, and the indicators must stay byte-identical.
+    """
+    raw = yf.download(symbol, period="max", interval="1d", auto_adjust=True, progress=False)
     if raw is None or raw.empty:
         raise ValueError(f"yfinance returned no data for {symbol!r}")
-    return _canonicalize(raw, symbol)
+    df = _canonicalize(raw, symbol)
+    try:
+        unadj = yf.download(
+            symbol, period="max", interval="1d", auto_adjust=False, actions=False, progress=False
+        )
+    except Exception:
+        unadj = None  # unadjusted is best-effort; the ledger falls back to the A5b path
+    return _attach_unadjusted(df, unadj)
+
+
+def _attach_unadjusted(df: pd.DataFrame, unadj: pd.DataFrame | None) -> pd.DataFrame:
+    """Add ``unadj_open/high/low/close`` (float64) from an auto_adjust=False frame,
+    aligned to ``df``'s index. All-or-nothing: if the raw OHLC is unavailable the
+    columns are simply absent, so the ledger degrades to the A5b corp-action path.
+    """
+    if unadj is None or unadj.empty:
+        return df
+    raw = unadj.copy()
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = raw.columns.get_level_values(0)
+    raw.columns = [str(c).lower() for c in raw.columns]
+    cols = ["open", "high", "low", "close"]
+    if not set(cols).issubset(raw.columns):
+        return df
+    raw.index = pd.DatetimeIndex(pd.to_datetime(raw.index, utc=True), name="timestamp")
+    aligned = raw[cols].astype("float64").reindex(df.index)
+    for col in cols:
+        df[f"unadj_{col}"] = aligned[col]
+    return df
 
 
 def _canonicalize(raw: pd.DataFrame, symbol: str) -> pd.DataFrame:

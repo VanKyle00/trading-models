@@ -32,6 +32,51 @@ def fake_yf_frame() -> pd.DataFrame:
     return df
 
 
+@pytest.fixture
+def fake_yf_unadjusted() -> pd.DataFrame:
+    """auto_adjust=False output: RAW (here 2x, as if pre a 2:1 split) OHLC plus a
+    separate 'Adj Close' column — what the second fetch returns."""
+    idx = pd.date_range("2024-01-01", periods=5, freq="D")
+    df = pd.DataFrame(
+        {
+            ("Open", "SPY"): [200.0, 202.0, 204.0, 206.0, 208.0],
+            ("High", "SPY"): [202.0, 204.0, 206.0, 208.0, 210.0],
+            ("Low", "SPY"): [198.0, 200.0, 202.0, 204.0, 206.0],
+            ("Close", "SPY"): [201.0, 203.0, 205.0, 207.0, 209.0],
+            ("Adj Close", "SPY"): [100.5, 101.5, 102.5, 103.5, 104.5],
+            ("Volume", "SPY"): [1_000_000, 1_100_000, 900_000, 1_200_000, 1_050_000],
+        },
+        index=idx,
+    )
+    df.index.name = "Date"
+    return df
+
+
+def test_load_daily_persists_unadjusted_alongside_adjusted(
+    fake_yf_frame: pd.DataFrame,
+    fake_yf_unadjusted: pd.DataFrame,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tradinglib.loaders.equities import yfinance as loader
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+
+    # first fetch = adjusted (auto_adjust=True), second = unadjusted (auto_adjust=False)
+    with patch.object(loader.yf, "download", side_effect=[fake_yf_frame, fake_yf_unadjusted]):
+        df = loader.load_daily("SPY")
+
+    assert {"unadj_open", "unadj_high", "unadj_low", "unadj_close"}.issubset(df.columns)
+    # adjusted columns are byte-identical to the auto_adjust=True canonicalization
+    assert df["close"].tolist() == [100.5, 101.5, 102.5, 103.5, 104.5]
+    # unadjusted columns carry the RAW (pre-split) prices the ticket actually traded
+    assert df["unadj_close"].tolist() == [201.0, 203.0, 205.0, 207.0, 209.0]
+    assert df["unadj_open"].iloc[0] == 200.0
+    # survives the parquet round-trip on the cache-hit read
+    cached = loader.load_daily("SPY")
+    assert cached["unadj_close"].tolist() == [201.0, 203.0, 205.0, 207.0, 209.0]
+
+
 def test_canonicalize_flattens_and_renames(fake_yf_frame: pd.DataFrame) -> None:
     from tradinglib.loaders.equities.yfinance import _canonicalize
 
@@ -68,9 +113,10 @@ def test_load_daily_uses_cache_on_second_call(
 
     with patch.object(loader.yf, "download", return_value=fake_yf_frame) as mock_dl:
         loader.load_daily("SPY")
+        after_first = mock_dl.call_count  # 2: the adjusted + unadjusted fetches
         loader.load_daily("SPY")
-        # Second call must hit the cache, not the network
-        assert mock_dl.call_count == 1
+        # Second call must hit the cache, not the network — no new download calls
+        assert mock_dl.call_count == after_first
 
 
 def test_load_daily_filters_by_date_range(
