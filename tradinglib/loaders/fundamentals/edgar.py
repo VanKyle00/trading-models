@@ -102,7 +102,14 @@ def _quarterly_values_asof(
                 continue
             if f > asof_n:  # not yet filed as of asof
                 continue
-            period = (e.year, (e.month - 1) // 3 + 1)
+            # Key by the quarter's MIDPOINT, not its end: a 52/53-week filer's
+            # quarter-end drifts a few days year over year and can cross a calendar
+            # boundary (a winter quarter ending Dec-28 one year, Jan-2 the next),
+            # which would scatter the same fiscal quarter across (Y,4) and (Y+1,1)
+            # and break the year-ago lookup. The midpoint of a ~91-day quarter is
+            # stable against that drift and matches the SEC frame's snapping.
+            mid = s + (e - s) / 2
+            period = (mid.year, (mid.month - 1) // 3 + 1)
             prev = chosen.get(period)
             if prev is None or f > prev[0]:  # latest filing on/before asof wins
                 chosen[period] = (f, float(entry["val"]))
@@ -172,8 +179,14 @@ def get_quarterly_trends(
     historical replay: values reflect only filings public on/before that date, and
     the cache is keyed by ``asof`` (immutable, so it can persist indefinitely).
     """
-    snapshot = (_naive(asof) if asof is not None else pd.Timestamp.now("UTC")).strftime("%Y-%m-%d")
-    out = processed_dir(SOURCE) / _SUBDIR / str(cik) / f"{snapshot}.parquet"
+    # As-of caches are namespaced ("asof-") apart from the asof=None daily cache:
+    # the same calendar date means different things on the two paths (units as-of
+    # vs frame today), so they must never share a parquet file.
+    if asof is not None:
+        fname = f"asof-{_naive(asof).strftime('%Y-%m-%d')}.parquet"
+    else:
+        fname = f"{pd.Timestamp.now('UTC').strftime('%Y-%m-%d')}.parquet"
+    out = processed_dir(SOURCE) / _SUBDIR / str(cik) / fname
     if out.exists() and not refresh:
         return pd.read_parquet(out).iloc[0].to_dict()
 

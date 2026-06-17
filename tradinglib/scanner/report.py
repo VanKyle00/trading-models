@@ -214,6 +214,8 @@ def render_markdown(result: dict) -> str:
         ),
         "",
     ]
+    if (result.get("honesty") or {}).get("leak"):
+        lines += [f"> ⚠️ {BIASED_UPPER_BOUND_BANNER}", ""]
     if "tournament_candidates" in funnel:
         lines += [
             f"Tournament: {funnel.get('tournament_candidates', '?')} candidates → "

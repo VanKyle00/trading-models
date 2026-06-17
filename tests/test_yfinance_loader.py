@@ -77,6 +77,40 @@ def test_load_daily_persists_unadjusted_alongside_adjusted(
     assert cached["unadj_close"].tolist() == [201.0, 203.0, 205.0, 207.0, 209.0]
 
 
+def test_attach_unadjusted_is_all_or_nothing_on_index_gaps() -> None:
+    # If the auto_adjust=False fetch misses a trading day the adjusted fetch has,
+    # reindex would punch NaN into unadj_*; the ledger then swaps that NaN into
+    # open/high/low/close and simulate_ticket's dropna silently drops the bar AND
+    # the scored_unadjusted=True suppresses the A5b fallback -> wrong R. So a gappy
+    # unadjusted fetch must attach NOTHING (fall back to the adjusted/A5b path).
+    from tradinglib.loaders.equities.yfinance import _attach_unadjusted, _canonicalize
+
+    idx = pd.date_range("2024-01-01", periods=3, freq="D")
+    adj = pd.DataFrame(
+        {
+            ("Open", "SPY"): [50.0, 51.0, 52.0],
+            ("High", "SPY"): [50.5, 51.5, 52.5],
+            ("Low", "SPY"): [49.5, 50.5, 51.5],
+            ("Close", "SPY"): [50.0, 51.0, 52.0],
+            ("Volume", "SPY"): [1, 2, 3],
+        },
+        index=idx,
+    )
+    base = _canonicalize(adj, "SPY")
+    gappy = pd.DataFrame(  # missing 2024-01-02
+        {
+            ("Open", "SPY"): [100.0, 104.0],
+            ("High", "SPY"): [101.0, 105.0],
+            ("Low", "SPY"): [99.0, 103.0],
+            ("Close", "SPY"): [100.0, 104.0],
+        },
+        index=pd.DatetimeIndex(["2024-01-01", "2024-01-03"]),
+    )
+    out = _attach_unadjusted(base.copy(), gappy)
+    assert "unadj_close" not in out.columns  # all-or-nothing: gap -> no attach
+    assert list(out.columns) == ["open", "high", "low", "close", "volume", "symbol"]
+
+
 def test_canonicalize_flattens_and_renames(fake_yf_frame: pd.DataFrame) -> None:
     from tradinglib.loaders.equities.yfinance import _canonicalize
 

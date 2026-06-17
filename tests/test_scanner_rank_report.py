@@ -369,3 +369,20 @@ def test_ticket_sections_banners_leaked_pooled_evidence() -> None:
     }
     out = "\n".join(_ticket_sections([ticket]))
     assert "BIASED UPPER-BOUND" in out
+
+
+def test_render_markdown_top_banner_when_run_is_leaked() -> None:
+    # #89: a leaked run surfaces the BIASED-UPPER-BOUND banner at the top of the
+    # report, not only on pooled-promoted tickets.
+    from tradinglib.scanner.report import render_markdown
+
+    leaked = {
+        "asof": "2026-06-17",
+        "funnel": {},
+        "candidates": [],
+        "tickets": {},
+        "honesty": {"leak": True, "reasons": ["membership-survivorship"]},
+    }
+    assert "BIASED UPPER-BOUND" in render_markdown(leaked)
+    clean = {**leaked, "honesty": {"leak": False, "reasons": []}}
+    assert "BIASED UPPER-BOUND" not in render_markdown(clean)

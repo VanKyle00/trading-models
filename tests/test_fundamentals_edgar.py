@@ -66,6 +66,43 @@ def test_asof_later_sees_the_restatement_that_was_filed_by_then() -> None:
     assert t["revenue_yoy"] == pytest.approx(130 / 100 - 1)  # restated Q1-2025 (as-of-known)
 
 
+def test_asof_yoy_survives_52_53_week_fiscal_drift() -> None:
+    from tradinglib.loaders.fundamentals import edgar as loader
+
+    def q(start: str, end: str, val: float, filed: str, accn: str) -> dict:
+        return {
+            "start": start,
+            "end": end,
+            "val": val,
+            "filed": filed,
+            "accn": accn,
+            "form": "10-Q",
+        }
+
+    # A 52/53-week filer (Apple/Costco-style): the same fiscal winter quarter ends
+    # 2024-12-28 one year and 2026-01-02 the next (drifted across the calendar-quarter
+    # boundary). End-date bucketing keys them to (2024,4) vs (2026,1) and the YoY
+    # base lands in an empty (2025,1) bucket -> NaN. Midpoint bucketing keeps both
+    # in the Q4 bucket so YoY resolves.
+    facts = {
+        "cik": _CIK,
+        "facts": {
+            "us-gaap": {
+                "Revenues": {
+                    "units": {
+                        "USD": [
+                            q("2024-09-29", "2024-12-28", 100e9, "2025-01-15", "y1"),
+                            q("2025-10-04", "2026-01-02", 130e9, "2026-01-20", "y2"),
+                        ]
+                    }
+                }
+            }
+        },
+    }
+    t = loader._trends_from_facts(facts, asof=pd.Timestamp("2026-03-01", tz="UTC"))
+    assert t["revenue_yoy"] == pytest.approx(130 / 100 - 1)  # not NaN despite the boundary drift
+
+
 def test_asof_get_quarterly_trends_caches_by_asof(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -82,8 +119,9 @@ def test_asof_get_quarterly_trends_caches_by_asof(
     asof = pd.Timestamp("2025-09-01", tz="UTC")
     t = loader.get_quarterly_trends(_CIK, asof=asof, client=client)
     assert t["revenue_yoy"] == pytest.approx(0.20)
-    # immutable as-of facts -> cache keyed by the asof date, not today
-    assert (tmp_path / "fundamentals" / "edgar" / str(_CIK) / "2025-09-01.parquet").exists()
+    # immutable as-of facts -> cache keyed by the asof date, namespaced apart from
+    # the asof=None daily cache (same date, different semantics) so they can't collide
+    assert (tmp_path / "fundamentals" / "edgar" / str(_CIK) / "asof-2025-09-01.parquet").exists()
 
 
 def _facts() -> dict:
