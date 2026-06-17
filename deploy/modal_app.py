@@ -189,6 +189,7 @@ def scheduled_swing_scan() -> None:
 
     from tradinglib.assistant.provider import ClaudeProvider
     from tradinglib.data.paths import processed_dir
+    from tradinglib.loaders.equities.yfinance import corp_actions_since
     from tradinglib.scanner.config import ScanConfig
     from tradinglib.scanner.ledger import build_ledger, load_ledger, write_ledger
     from tradinglib.scanner.pipeline import run_scan
@@ -275,7 +276,7 @@ def scheduled_swing_scan() -> None:
     json_path, _ = write_report(result, base / result["asof"])
     try:
         # forward ticket-performance ledger; must never cost the night's report
-        ledger = build_ledger(base, asof=result["asof"])
+        ledger = build_ledger(base, asof=result["asof"], actions_probe=corp_actions_since)
         write_ledger(ledger, base)
         print(f"ledger {result['asof']}: {ledger['stats']}")
     except Exception as exc:
