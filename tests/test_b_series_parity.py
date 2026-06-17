@@ -28,11 +28,21 @@ def _frame_facts() -> dict:
                 "Revenues": {
                     "units": {
                         "USD": [
+                            usd("CY2024Q4", "2024-12-28", 110e9),
                             usd("CY2025Q1", "2025-03-29", 120e9),
+                            usd("CY2025Q4", "2025-12-27", 121e9),
                             usd("CY2026Q1", "2026-03-28", 150e9),
                         ]
                     }
-                }
+                },
+                "EarningsPerShareDiluted": {
+                    "units": {
+                        "USD/shares": [
+                            usd("CY2025Q1", "2025-03-29", 1.0),
+                            usd("CY2026Q1", "2026-03-28", 1.5),
+                        ]
+                    }
+                },
             }
         },
     }
