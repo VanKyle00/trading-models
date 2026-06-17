@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from tradinglib.backtest.fills import _entry_fill, _exit_fill
+
 ENTRY_WINDOW = 5  # sessions; levels are "tomorrow's numbers" — a stale trigger is a different trade
 
 
@@ -33,40 +35,6 @@ def _sessions_after(bars: pd.DataFrame, asof: str) -> pd.DataFrame:
 
 def _date(ts: object) -> str:
     return pd.Timestamp(ts).strftime("%Y-%m-%d")
-
-
-def _entry_fill(row: pd.Series, entry: float, entry_type: str, stance: str) -> float | None:
-    """Fill price if this bar triggers the entry, else None."""
-    o, hi, lo = float(row["open"]), float(row["high"]), float(row["low"])
-    if entry_type == "market":
-        return o
-    if entry_type == "stop":  # long: buy as price rises to entry; short: sell as it falls
-        if stance == "long":
-            return max(o, entry) if hi >= entry else None
-        return min(o, entry) if lo <= entry else None
-    if entry_type == "limit":  # long: buy the dip to entry; short: sell the rip to entry
-        if stance == "long":
-            return min(o, entry) if lo <= entry else None
-        return max(o, entry) if hi >= entry else None
-    raise ValueError(f"unknown entry_type {entry_type!r}")
-
-
-def _exit_fill(
-    row: pd.Series, stop: float, target: float, stance: str
-) -> tuple[float | None, str, bool]:
-    """(fill, status, ambiguous) if this bar exits the trade, else (None, "", False)."""
-    o, hi, lo = float(row["open"]), float(row["high"]), float(row["low"])
-    if stance == "long":
-        stop_hit, target_hit = lo <= stop, hi >= target
-        stop_px, target_px = min(o, stop), max(o, target)
-    else:
-        stop_hit, target_hit = hi >= stop, lo <= target
-        stop_px, target_px = max(o, stop), min(o, target)
-    if stop_hit:  # worst case wins when both levels are touched intrabar
-        return stop_px, "stopped", target_hit
-    if target_hit:
-        return target_px, "target", False
-    return None, "", False
 
 
 def simulate_ticket(

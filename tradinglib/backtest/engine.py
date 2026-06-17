@@ -43,6 +43,11 @@ class BacktestResult:
     turnover: pd.Series
     metrics: dict
     config: dict = field(default_factory=dict)
+    # Exact completed round-trip count, set only by the intrabar resting-order
+    # engine (run_resting_backtest) where re-arming can place adjacent trades that
+    # trades_from_position would merge; None on the position-series path, which
+    # uses trades_from_position as before.
+    n_completed_trades: int | None = None
 
 
 def run_backtest(

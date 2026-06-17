@@ -79,6 +79,86 @@ def test_walk_forward_rejects_misindexed_in_sample_signal() -> None:
         )
 
 
+def _zig_data(n: int = 120) -> pd.DataFrame:
+    # alternating low/high closes with wide bars, so a resting buy-stop at 100
+    # fills and round-trips against a stop/target on nearly every armed bar.
+    close = np.tile([98.0, 103.0], (n + 1) // 2)[:n].astype(float)
+    idx = pd.date_range("2020-01-01", periods=n, freq="D")
+    return pd.DataFrame(
+        {"open": close, "high": close + 4.0, "low": close - 4.0, "close": close}, index=idx
+    )
+
+
+def _make_orders(train: pd.DataFrame, test: pd.DataFrame, params: dict) -> pd.DataFrame:
+    # constant resting buy-stop in force every test bar
+    return pd.DataFrame(
+        {
+            "entry": 100.0,
+            "stop": 95.0,
+            "target": 105.0,
+            "entry_type": "stop",
+            "armed": True,
+        },
+        index=test.index,
+    )
+
+
+def test_walk_forward_routes_resting_orders_and_counts_completed_trades() -> None:
+    data = _zig_data()
+    res = walk_forward(
+        data,
+        make_orders=_make_orders,
+        stance="long",
+        param_grid={"x": [1]},
+        mode="anchored",
+        initial_train=40,
+        test_size=20,
+    )
+    assert isinstance(res, WalkForwardResult)
+    # the OOS slice was scored by the intrabar resting engine, not run_backtest
+    assert res.oos_result.config["execution"] == "resting_intrabar"
+    # the exact completed-trade count is set (the survival gate's count); the
+    # zig fixture round-trips repeatedly so there is more than one
+    assert res.oos_result.n_completed_trades is not None
+    assert res.oos_result.n_completed_trades > 1
+    assert res.oos_result.config["n_trials"] == 1
+
+
+def test_walk_forward_requires_exactly_one_of_signal_or_orders() -> None:
+    data = _zig_data()
+    with pytest.raises(ValueError, match="exactly one"):
+        walk_forward(data, param_grid={"x": [1]}, mode="anchored", initial_train=40, test_size=20)
+    with pytest.raises(ValueError, match="exactly one"):
+        walk_forward(
+            data,
+            _make_signal,
+            make_orders=_make_orders,
+            param_grid={"x": [1]},
+            mode="anchored",
+            initial_train=40,
+            test_size=20,
+        )
+
+
+def test_walk_forward_resting_rejects_misindexed_orders() -> None:
+    data = _zig_data()
+
+    def bad_orders(train, test, params):
+        if test.index.equals(train.index):  # in-sample ok
+            return _make_orders(train, test, params)
+        return _make_orders(train, test, params).iloc[:-1]  # wrong only on real OOS
+
+    with pytest.raises(ValueError, match="indexed like test"):
+        walk_forward(
+            data,
+            make_orders=bad_orders,
+            param_grid={"x": [1]},
+            mode="anchored",
+            initial_train=40,
+            test_size=20,
+        )
+
+
 def test_walk_forward_requires_window_sizing() -> None:
     data = _data()
     with pytest.raises(ValueError, match="initial_train"):

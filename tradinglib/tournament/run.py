@@ -36,6 +36,13 @@ class TournamentConfig:
     max_param_change_rate: float = 0.5
     fee_bps: float = 1.0
     slippage_bps: float = 0.5
+    # Score strategies that carry a resting_orders builder (donchian/base_breakout/
+    # bollinger) on the intrabar resting engine instead of the {0, ±1} position
+    # series, so the certified backtest validates the SAME resting stop/limit order
+    # the ticket issues (cert==ticket, audit A2). Ships DARK: default False =>
+    # every strategy uses the position path => zero change to live tickets. When
+    # True, strategies WITHOUT a builder are still scored on the position path.
+    use_resting_engine: bool = False
 
 
 @dataclass
@@ -112,36 +119,66 @@ def run_tournament(
     result = TournamentResult(stance=stance, n_trials=n_trials)
 
     for sdef in registry.values():
+        use_resting = config.use_resting_engine and sdef.resting_orders is not None
+        if use_resting:
 
-        def signal_fn(
-            train: pd.DataFrame,
-            test: pd.DataFrame,
-            params: dict,
-            _sdef: StrategyDef = sdef,
-        ) -> pd.Series:
-            return _sdef.make_signal(train, test, params, stance)
+            def orders_fn(
+                train: pd.DataFrame,
+                test: pd.DataFrame,
+                params: dict,
+                _sdef: StrategyDef = sdef,
+            ) -> pd.DataFrame:
+                assert _sdef.resting_orders is not None  # use_resting gated on this
+                return _sdef.resting_orders(train, test, params, stance)
 
-        wf = walk_forward(
-            bars,
-            signal_fn,
-            param_grid=sdef.param_grid,
-            mode="anchored",
-            initial_train=config.initial_train,
-            test_size=config.test_size,
-            embargo=sdef.cv_embargo,
-            fee_bps=config.fee_bps,
-            slippage_bps=config.slippage_bps,
-        )
+            wf = walk_forward(
+                bars,
+                make_orders=orders_fn,
+                stance=stance,
+                param_grid=sdef.param_grid,
+                mode="anchored",
+                initial_train=config.initial_train,
+                test_size=config.test_size,
+                embargo=sdef.cv_embargo,
+                fee_bps=config.fee_bps,
+                slippage_bps=config.slippage_bps,
+            )
+        else:
+
+            def signal_fn(
+                train: pd.DataFrame,
+                test: pd.DataFrame,
+                params: dict,
+                _sdef: StrategyDef = sdef,
+            ) -> pd.Series:
+                return _sdef.make_signal(train, test, params, stance)
+
+            wf = walk_forward(
+                bars,
+                signal_fn,
+                param_grid=sdef.param_grid,
+                mode="anchored",
+                initial_train=config.initial_train,
+                test_size=config.test_size,
+                embargo=sdef.cv_embargo,
+                fee_bps=config.fee_bps,
+                slippage_bps=config.slippage_bps,
+            )
         # Re-score the stitched OOS slice deflated by the WHOLE menu's trial
         # count — walk_forward's own deflation only knows this strategy's grid.
         metrics = compute_metrics(
             wf.oos_result.returns, wf.oos_result.equity_curve, n_trials=n_trials
         )
-        # Count only completed round-trips — a position still open at the end of
-        # the OOS slice must not pad n_trades past the min_trades survival gate.
-        n_trades = len(
-            trades_from_position(wf.oos_result.position, bars["close"], include_open=False)
-        )
+        # Count only completed round-trips toward the min_trades survival gate.
+        # The resting engine hands back its EXACT round-trip count (re-arming can
+        # place adjacent trades that trades_from_position would merge); the
+        # position path counts closed trades, excluding a dangling open one.
+        if wf.oos_result.n_completed_trades is not None:
+            n_trades = wf.oos_result.n_completed_trades
+        else:
+            n_trades = len(
+                trades_from_position(wf.oos_result.position, bars["close"], include_open=False)
+            )
         last = wf.windows.iloc[-1]
         params = {k: _native(last[f"param_{k}"]) for k in sdef.param_grid}
         reasons = survival_reasons(metrics, n_trades, wf.param_stability, config)

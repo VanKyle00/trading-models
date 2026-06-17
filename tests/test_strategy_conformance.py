@@ -76,6 +76,29 @@ def test_signal_is_causal(key: str, params: dict, stance: str) -> None:
         pd.testing.assert_series_equal(part, full.iloc[:k], check_names=False, check_exact=True)
 
 
+RESTING_CASES = [
+    pytest.param(key, params, stance, id=f"{key}[{i}]-{stance}")
+    for key, sdef in STRATEGIES.items()
+    if sdef.resting_orders is not None
+    for i, params in enumerate(expand_grid(sdef.param_grid))
+    for stance in ("long", "short")
+]
+
+
+@pytest.mark.parametrize(("key", "params", "stance"), RESTING_CASES)
+def test_resting_orders_are_causal(key: str, params: dict, stance: str) -> None:
+    # Same truncation guard as the signal, applied to EVERY order column
+    # (entry/stop/target/entry_type/armed): removing future bars must not change
+    # any past resting order. Bollinger's bands are the highest leak risk — a
+    # band published from a window that peeked ahead would shift past orders here.
+    sdef = STRATEGIES[key]
+    train, test = _BARS.iloc[:TRAIN_BARS], _BARS.iloc[TRAIN_BARS:]
+    full = sdef.resting_orders(train, test, params, stance)
+    for k in (10, 60, 150, len(test) - 1):
+        part = sdef.resting_orders(train, test.iloc[:k], params, stance)
+        pd.testing.assert_frame_equal(part, full.iloc[:k], check_exact=True)
+
+
 @pytest.mark.parametrize(("key", "params", "stance"), CASES)
 def test_signal_contract(key: str, params: dict, stance: str) -> None:
     # Test-indexed output; {0, +1} long, {0, -1} short.
