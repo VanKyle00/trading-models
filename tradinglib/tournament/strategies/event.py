@@ -1,9 +1,11 @@
 """Event-driven tournament strategies (post-earnings-announcement drift).
 
 Bars MAY carry a boolean ``earnings`` column (True on the reaction bar — the
-first session at/after an announcement; the scan pipeline attaches it). When
-the column is absent the signal is all-flat and levels are ``None``, so the
-strategy simply never survives in contexts that lack event data.
+session that reacts to an announcement: a before-open report's own session, an
+after-close/undated report's next session; the scan pipeline attaches it,
+session-aware per #91/#96). When the column is absent the signal is all-flat and
+levels are ``None``, so the strategy simply never survives in contexts that lack
+event data.
 """
 
 from __future__ import annotations

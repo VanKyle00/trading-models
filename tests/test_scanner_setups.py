@@ -15,6 +15,7 @@ from tradinglib.scanner.setups import (
     detect_ma_rally_fade,
     detect_pead,
     detect_pead_down,
+    earnings_reaction_flags,
 )
 
 
@@ -355,3 +356,23 @@ def test_detect_all_threads_earnings_sessions() -> None:
     ] == ["pead"]
     amc = _et_stamp(bars.index[110], 16, 30)  # after close -> reacts next (flat) bar
     assert detect_all(bars, earnings_datetimes=[amc], earnings_sessions=["amc"]) == []
+
+
+# --- C3 (#96): the tournament earnings-FLAG column must be session-aware too ---
+
+
+def test_earnings_reaction_flags_are_session_aware() -> None:
+    idx = _pead_bars()[0].index
+    # bmo on bar 110's date flags bar 110 itself; amc flags the next session
+    bmo = earnings_reaction_flags(idx, [_et_stamp(idx[110], 8)], ["bmo"])
+    assert list(bmo.to_numpy().nonzero()[0]) == [110]
+    amc = earnings_reaction_flags(idx, [_et_stamp(idx[110], 16, 30)], ["amc"])
+    assert list(amc.to_numpy().nonzero()[0]) == [111]
+
+
+def test_earnings_reaction_flags_default_unknown_and_drops_future() -> None:
+    idx = _pead_bars()[0].index
+    future = idx[-1] + pd.Timedelta(days=30)  # beyond the bars -> not flagged
+    flags = earnings_reaction_flags(idx, [_et_stamp(idx[100], 8), future])
+    # no sessions -> 'unknown' -> next session after bar 100
+    assert list(flags.to_numpy().nonzero()[0]) == [101]

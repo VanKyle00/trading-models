@@ -35,7 +35,7 @@ from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.fa_gate import apply_edgar_trends, score_fundamentals
 from tradinglib.scanner.rank import rank_candidates
 from tradinglib.scanner.regime import gate_reason, regime_state
-from tradinglib.scanner.setups import detect_all
+from tradinglib.scanner.setups import detect_all, earnings_reaction_flags
 from tradinglib.scanner.tiers import apply_fdr, build_watchlist
 from tradinglib.strategist import build_ticket
 from tradinglib.tournament.run import run_tournament
@@ -265,13 +265,11 @@ def run_scan(
                     try:
                         earnings = get_earnings_dates([ticker], refresh=config.refresh)
                         dts = pd.DatetimeIndex(earnings["earnings_datetime"])
-                        if dts.tz is None:
-                            dts = dts.tz_localize("UTC")
-                        if t_bars.index.tz is None:
-                            dts = dts.tz_convert("UTC").tz_localize(None)
-                        pos = t_bars.index.searchsorted(dts)
-                        pos = pos[pos < len(t_bars)]
-                        flags.iloc[pos] = True
+                        # session-aware reaction bar so the PEAD tournament strategy
+                        # sees the spike bar, not the announcement bar (#96)
+                        flags = earnings_reaction_flags(
+                            t_bars.index, dts, list(earnings["session"])
+                        )
                     except Exception as exc:
                         errors.append(
                             {"ticker": ticker, "stage": "tournament", "error": f"earnings: {exc}"}

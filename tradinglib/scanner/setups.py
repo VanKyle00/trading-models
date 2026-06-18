@@ -298,25 +298,38 @@ def detect_ma_rally_fade(
     )
 
 
+def _reaction_bar(index: pd.DatetimeIndex, earnings: pd.Timestamp, session: str) -> int:
+    """Bar position that first reacts to a single earnings event.
+
+    The ``session`` decides which bar that is: a before-open (``bmo``) report
+    reacts the announcement session itself; an after-close (``amc``) or undated
+    (``unknown``) report reacts the *next* session. Anchored on the announcement's
+    **US-market (ET) calendar date** — daily bars are stamped at midnight UTC, one
+    per ET session, so a bar's UTC date IS its ET trading date. Anchoring on the
+    ET date (not the raw UTC timestamp) makes placement independent of the stamp's
+    time-of-day vs the midnight boundary: it fixes ``bmo`` reactions landing one
+    session late AND ``amc`` reports after ~20:00 ET (whose UTC stamp rolls onto
+    the next calendar day) landing one session late (#91). The result may be
+    ``>= len(index)`` when no bar in this frame reacts yet.
+    """
+    aware = earnings if earnings.tz is not None else earnings.tz_localize("UTC")
+    anchor = pd.Timestamp(aware.tz_convert("America/New_York").date())  # midnight of the ET date
+    if index.tz is not None:
+        anchor = anchor.tz_localize("UTC")
+    side = "left" if session == "bmo" else "right"
+    return int(index.searchsorted(anchor, side=side))
+
+
 def _reaction_pos(
     index: pd.DatetimeIndex,
     earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex,
     earnings_sessions: Sequence[str] | None,
 ) -> int | None:
-    """Position of the bar that first reacts to the most recent past earnings.
+    """Position of the bar that first reacts to the most recent PAST earnings.
 
-    The earnings ``session`` decides which bar that is: a before-open (``bmo``)
-    report reacts the announcement session itself; an after-close (``amc``) or
-    undated (``unknown``) report reacts the *next* session. Anchored on the
-    announcement's **US-market (ET) calendar date** — daily bars are stamped at
-    midnight UTC, one per ET session, so the bar's UTC date IS its ET trading
-    date. Anchoring on the ET date (not the raw UTC timestamp) makes placement
-    independent of the stamp's time-of-day vs the midnight boundary: it fixes
-    ``bmo`` reactions landing one session late AND ``amc`` reports after ~20:00 ET
-    (whose UTC stamp rolls onto the next calendar day) landing one session late
-    (#91). Sessions, when given, must align positionally with
-    ``earnings_datetimes``; absent, every event is treated as ``unknown`` (the
-    conservative next-session default).
+    Sessions, when given, must align positionally with ``earnings_datetimes``;
+    absent, every event is treated as ``unknown`` (the conservative next-session
+    default). See :func:`_reaction_bar` for the placement rule (#91).
     """
     events = pd.DatetimeIndex(earnings_datetimes)
     last = index[-1]
@@ -325,14 +338,32 @@ def _reaction_pos(
         return None
     latest = max(past, key=lambda i: events[i])
     session = earnings_sessions[latest] if earnings_sessions is not None else "unknown"
-    e = events[latest]
-    aware = e if e.tz is not None else e.tz_localize("UTC")
-    anchor = pd.Timestamp(aware.tz_convert("America/New_York").date())  # midnight of the ET date
-    if index.tz is not None:
-        anchor = anchor.tz_localize("UTC")
-    side = "left" if session == "bmo" else "right"
-    pos = int(index.searchsorted(anchor, side=side))
+    pos = _reaction_bar(index, events[latest], session)
     return pos if pos < len(index) else None
+
+
+def earnings_reaction_flags(
+    index: pd.DatetimeIndex,
+    earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex,
+    earnings_sessions: Sequence[str] | None = None,
+) -> pd.Series:
+    """Bool series over ``index`` flagging EACH earnings event's reaction bar.
+
+    Session-aware (#91/#96): the tournament PEAD event strategy keys off this
+    column and requires the move/volume spike ON the flagged bar, so it must mark
+    the bar that actually reacts — not the announcement bar a raw-timestamp
+    ``searchsorted`` would mark. Events whose reaction falls beyond ``index`` are
+    dropped. Sessions, when given, align positionally with ``earnings_datetimes``;
+    absent, every event is ``unknown`` (next session).
+    """
+    flags = pd.Series(False, index=index)
+    events = pd.DatetimeIndex(earnings_datetimes)
+    for i in range(len(events)):
+        session = earnings_sessions[i] if earnings_sessions is not None else "unknown"
+        pos = _reaction_bar(index, events[i], session)
+        if pos < len(index):
+            flags.iloc[pos] = True
+    return flags
 
 
 def detect_pead(

@@ -43,7 +43,7 @@ from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.ledger import _stats
 from tradinglib.scanner.pooled import build_certification
 from tradinglib.scanner.regime import gate_reason, regime_state
-from tradinglib.scanner.setups import detect_all
+from tradinglib.scanner.setups import detect_all, earnings_reaction_flags
 from tradinglib.scanner.tiers import apply_fdr, build_watchlist
 from tradinglib.strategist.evaluate import ENTRY_WINDOW, simulate_ticket
 from tradinglib.tournament.run import run_tournament
@@ -143,14 +143,15 @@ def _slice(bars: pd.DataFrame, asof: pd.Timestamp, window_days: int) -> pd.DataF
     return out
 
 
-def _earnings_flags(index: pd.DatetimeIndex, dts: pd.DatetimeIndex) -> pd.Series:
-    """Prod's earnings-column construction over an already-sliced index."""
-    flags = pd.Series(False, index=index)
-    if len(dts):
-        pos = index.searchsorted(dts)
-        pos = pos[pos < len(index)]
-        flags.iloc[pos] = True
-    return flags
+def _earnings_flags(
+    index: pd.DatetimeIndex, dts: pd.DatetimeIndex, sessions: list[str] | None = None
+) -> pd.Series:
+    """Prod's earnings-column construction over an already-sliced index.
+
+    Session-aware (#96): delegates to the shared reaction-bar placement so the
+    flag marks the bar that reacts, not the announcement bar.
+    """
+    return earnings_reaction_flags(index, dts, sessions)
 
 
 def _promote_certified(
@@ -220,7 +221,9 @@ def run_night(
                 continue
             t_bars = _slice(bars, asof, config.tournament_lookback_days)
             flags = _earnings_flags(
-                t_bars.index, earnings_by_ticker.get(ticker, pd.DatetimeIndex([]))
+                t_bars.index,
+                earnings_by_ticker.get(ticker, pd.DatetimeIndex([])),
+                sessions_by_ticker.get(ticker) if sessions_by_ticker else None,
             )
             try:
                 tr = run_tournament(t_bars.assign(earnings=flags), stance)
