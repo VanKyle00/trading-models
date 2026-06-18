@@ -17,6 +17,7 @@ Three long/short detector pairs:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import cast
 
@@ -297,20 +298,87 @@ def detect_ma_rally_fade(
     )
 
 
+def _reaction_bar(index: pd.DatetimeIndex, earnings: pd.Timestamp, session: str) -> int:
+    """Bar position that first reacts to a single earnings event.
+
+    The ``session`` decides which bar that is: a before-open (``bmo``) report
+    reacts the announcement session itself; an after-close (``amc``) or undated
+    (``unknown``) report reacts the *next* session. Anchored on the announcement's
+    **US-market (ET) calendar date** — daily bars are stamped at midnight UTC, one
+    per ET session, so a bar's UTC date IS its ET trading date. Anchoring on the
+    ET date (not the raw UTC timestamp) makes placement independent of the stamp's
+    time-of-day vs the midnight boundary: it fixes ``bmo`` reactions landing one
+    session late AND ``amc`` reports after ~20:00 ET (whose UTC stamp rolls onto
+    the next calendar day) landing one session late (#91). The result may be
+    ``>= len(index)`` when no bar in this frame reacts yet.
+    """
+    aware = earnings if earnings.tz is not None else earnings.tz_localize("UTC")
+    anchor = pd.Timestamp(aware.tz_convert("America/New_York").date())  # midnight of the ET date
+    if index.tz is not None:
+        anchor = anchor.tz_localize("UTC")
+    side = "left" if session == "bmo" else "right"
+    return int(index.searchsorted(anchor, side=side))
+
+
+def _reaction_pos(
+    index: pd.DatetimeIndex,
+    earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex,
+    earnings_sessions: Sequence[str] | None,
+) -> int | None:
+    """Position of the bar that first reacts to the most recent PAST earnings.
+
+    Sessions, when given, must align positionally with ``earnings_datetimes``;
+    absent, every event is treated as ``unknown`` (the conservative next-session
+    default). See :func:`_reaction_bar` for the placement rule (#91).
+    """
+    events = pd.DatetimeIndex(earnings_datetimes)
+    last = index[-1]
+    past = [i for i in range(len(events)) if events[i] <= last]
+    if not past:
+        return None
+    latest = max(past, key=lambda i: events[i])
+    session = earnings_sessions[latest] if earnings_sessions is not None else "unknown"
+    pos = _reaction_bar(index, events[latest], session)
+    return pos if pos < len(index) else None
+
+
+def earnings_reaction_flags(
+    index: pd.DatetimeIndex,
+    earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex,
+    earnings_sessions: Sequence[str] | None = None,
+) -> pd.Series:
+    """Bool series over ``index`` flagging EACH earnings event's reaction bar.
+
+    Session-aware (#91/#96): the tournament PEAD event strategy keys off this
+    column and requires the move/volume spike ON the flagged bar, so it must mark
+    the bar that actually reacts — not the announcement bar a raw-timestamp
+    ``searchsorted`` would mark. Events whose reaction falls beyond ``index`` are
+    dropped. Sessions, when given, align positionally with ``earnings_datetimes``;
+    absent, every event is ``unknown`` (next session).
+    """
+    flags = pd.Series(False, index=index)
+    events = pd.DatetimeIndex(earnings_datetimes)
+    for i in range(len(events)):
+        session = earnings_sessions[i] if earnings_sessions is not None else "unknown"
+        pos = _reaction_bar(index, events[i], session)
+        if pos < len(index):
+            flags.iloc[pos] = True
+    return flags
+
+
 def detect_pead(
-    bars: pd.DataFrame, earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex
+    bars: pd.DataFrame,
+    earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex,
+    *,
+    earnings_sessions: Sequence[str] | None = None,
 ) -> SetupSignal | None:
     if len(bars) < 60 or len(earnings_datetimes) == 0:
         return None
     close, low, volume = bars["close"], bars["low"], bars["volume"]
     index = cast(pd.DatetimeIndex, bars.index)
 
-    past = [ts for ts in pd.DatetimeIndex(earnings_datetimes) if ts <= index[-1]]
-    if not past:
-        return None
-    # the reaction bar is the first session on/after the most recent earnings
-    reaction_pos = int(index.searchsorted(max(past)))
-    if reaction_pos >= len(index):
+    reaction_pos = _reaction_pos(index, earnings_datetimes, earnings_sessions)
+    if reaction_pos is None:
         return None
     days_since = len(index) - 1 - reaction_pos
     if not (_PEAD_WINDOW[0] <= days_since <= _PEAD_WINDOW[1]):
@@ -355,19 +423,18 @@ def detect_pead(
 
 
 def detect_pead_down(
-    bars: pd.DataFrame, earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex
+    bars: pd.DataFrame,
+    earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex,
+    *,
+    earnings_sessions: Sequence[str] | None = None,
 ) -> SetupSignal | None:
     if len(bars) < 60 or len(earnings_datetimes) == 0:
         return None
     close, high, volume = bars["close"], bars["high"], bars["volume"]
     index = cast(pd.DatetimeIndex, bars.index)
 
-    past = [ts for ts in pd.DatetimeIndex(earnings_datetimes) if ts <= index[-1]]
-    if not past:
-        return None
-    # the reaction bar is the first session on/after the most recent earnings
-    reaction_pos = int(index.searchsorted(max(past)))
-    if reaction_pos >= len(index):
+    reaction_pos = _reaction_pos(index, earnings_datetimes, earnings_sessions)
+    if reaction_pos is None:
         return None
     days_since = len(index) - 1 - reaction_pos
     if not (_PEAD_WINDOW[0] <= days_since <= _PEAD_WINDOW[1]):
@@ -417,6 +484,7 @@ def detect_all(
     stance: str = "long",
     benchmark_close: pd.Series | None = None,
     earnings_datetimes: list[pd.Timestamp] | pd.DatetimeIndex | None = None,
+    earnings_sessions: Sequence[str] | None = None,
 ) -> list[SetupSignal]:
     """Run every detector for one stance on one ticker's bars; return all matches."""
     if stance == "long":
@@ -425,14 +493,18 @@ def detect_all(
             detect_ma_pullback(bars, benchmark_close=benchmark_close),
         ]
         if earnings_datetimes is not None:
-            signals.append(detect_pead(bars, earnings_datetimes))
+            signals.append(
+                detect_pead(bars, earnings_datetimes, earnings_sessions=earnings_sessions)
+            )
     elif stance == "short":
         signals = [
             detect_base_breakdown(bars, benchmark_close=benchmark_close),
             detect_ma_rally_fade(bars, benchmark_close=benchmark_close),
         ]
         if earnings_datetimes is not None:
-            signals.append(detect_pead_down(bars, earnings_datetimes))
+            signals.append(
+                detect_pead_down(bars, earnings_datetimes, earnings_sessions=earnings_sessions)
+            )
     else:
         raise ValueError(f"stance must be 'long' or 'short', got {stance!r}")
     return [s for s in signals if s is not None]

@@ -15,6 +15,7 @@ from tradinglib.scanner.setups import (
     detect_ma_rally_fade,
     detect_pead,
     detect_pead_down,
+    earnings_reaction_flags,
 )
 
 
@@ -266,3 +267,112 @@ def test_detect_all_rejects_unknown_stance() -> None:
     bars, earnings_ts = _pead_bars()
     with pytest.raises(ValueError, match="stance"):
         detect_all(bars, stance="neutral", earnings_datetimes=[earnings_ts])
+
+
+# --- C1 (#91): the reaction bar must be placed via the earnings session ---
+#
+# These use realistic intraday earnings stamps (UTC-aware, like the loader emits)
+# so the reaction-bar placement actually depends on the session — a midnight
+# bar-aligned stamp would make .normalize() a no-op and prove nothing.
+
+
+def _et_stamp(day: pd.Timestamp, hour: int, minute: int = 0) -> pd.Timestamp:
+    """A UTC-aware earnings stamp at a given ET wall-clock time on ``day``'s
+    calendar date — mirrors ``get_earnings_dates``' tz-aware-UTC output."""
+    d = pd.Timestamp(day).date()
+    return pd.Timestamp(f"{d} {hour:02d}:{minute:02d}", tz="America/New_York").tz_convert("UTC")
+
+
+def test_pead_bmo_reacts_same_session() -> None:
+    # a real before-open report (08:00 ET on the pop day) reacts THAT session;
+    # the old raw-timestamp searchsorted placed it one session late.
+    bars, _ = _pead_bars()
+    ann = _et_stamp(bars.index[110], 8)
+    sig = detect_pead(bars, [ann], earnings_sessions=["bmo"])
+
+    assert sig is not None
+    assert sig.evidence["earnings_day_move"] == pytest.approx(0.08)  # 108 / 100 - 1
+    assert sig.stop_level == 105.0  # the announcement session's low
+
+
+def test_pead_amc_reacts_next_session() -> None:
+    bars, _ = _pead_bars()
+    ann = _et_stamp(bars.index[110], 16, 30)  # after close on the pop day
+    # an after-close report reacts the NEXT session (a flat drift bar) -> no PEAD
+    assert detect_pead(bars, [ann], earnings_sessions=["amc"]) is None
+
+
+def test_pead_amc_prior_session_reacts_on_pop_bar() -> None:
+    bars, _ = _pead_bars()
+    ann = _et_stamp(bars.index[109], 16, 30)  # after close the session BEFORE the pop
+    sig = detect_pead(bars, [ann], earnings_sessions=["amc"])
+
+    assert sig is not None
+    assert sig.evidence["earnings_day_move"] == pytest.approx(0.08)
+
+
+def test_pead_late_amc_rollover_reacts_next_session() -> None:
+    # 20:00 ET rolls past UTC midnight; anchoring on the UTC date would push the
+    # reaction one session too late. Anchoring on the ET announcement date keeps
+    # an after-close report reacting the next session (the pop bar).
+    bars, _ = _pead_bars()
+    ann = _et_stamp(bars.index[109], 20)
+    sig = detect_pead(bars, [ann], earnings_sessions=["amc"])
+
+    assert sig is not None
+    assert sig.evidence["earnings_day_move"] == pytest.approx(0.08)
+
+
+def test_pead_unknown_session_defaults_to_next_session() -> None:
+    bars, _ = _pead_bars()
+    ann = _et_stamp(bars.index[110], 16, 30)
+    # 'unknown' (date-only) is treated like amc: react next session -> no PEAD
+    assert detect_pead(bars, [ann], earnings_sessions=["unknown"]) is None
+    # omitting sessions entirely uses the same conservative default
+    assert detect_pead(bars, [ann]) is None
+
+
+def test_pead_down_bmo_reacts_same_session() -> None:
+    bars, _ = _pead_down_bars()
+    ann = _et_stamp(bars.index[110], 8)
+    sig = detect_pead_down(bars, [ann], earnings_sessions=["bmo"])
+
+    assert sig is not None
+    assert sig.evidence["earnings_day_move"] == pytest.approx(-0.08)
+    assert sig.stop_level == 95.0
+
+
+def test_pead_down_amc_reacts_next_session() -> None:
+    bars, _ = _pead_down_bars()
+    ann = _et_stamp(bars.index[110], 16, 30)
+    assert detect_pead_down(bars, [ann], earnings_sessions=["amc"]) is None
+
+
+def test_detect_all_threads_earnings_sessions() -> None:
+    bars, _ = _pead_bars()
+    bmo = _et_stamp(bars.index[110], 8)  # before open -> reacts the pop bar
+    assert [
+        s.setup_type for s in detect_all(bars, earnings_datetimes=[bmo], earnings_sessions=["bmo"])
+    ] == ["pead"]
+    amc = _et_stamp(bars.index[110], 16, 30)  # after close -> reacts next (flat) bar
+    assert detect_all(bars, earnings_datetimes=[amc], earnings_sessions=["amc"]) == []
+
+
+# --- C3 (#96): the tournament earnings-FLAG column must be session-aware too ---
+
+
+def test_earnings_reaction_flags_are_session_aware() -> None:
+    idx = _pead_bars()[0].index
+    # bmo on bar 110's date flags bar 110 itself; amc flags the next session
+    bmo = earnings_reaction_flags(idx, [_et_stamp(idx[110], 8)], ["bmo"])
+    assert list(bmo.to_numpy().nonzero()[0]) == [110]
+    amc = earnings_reaction_flags(idx, [_et_stamp(idx[110], 16, 30)], ["amc"])
+    assert list(amc.to_numpy().nonzero()[0]) == [111]
+
+
+def test_earnings_reaction_flags_default_unknown_and_drops_future() -> None:
+    idx = _pead_bars()[0].index
+    future = idx[-1] + pd.Timedelta(days=30)  # beyond the bars -> not flagged
+    flags = earnings_reaction_flags(idx, [_et_stamp(idx[100], 8), future])
+    # no sessions -> 'unknown' -> next session after bar 100
+    assert list(flags.to_numpy().nonzero()[0]) == [101]

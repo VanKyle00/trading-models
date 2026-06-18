@@ -43,7 +43,7 @@ from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.ledger import _stats
 from tradinglib.scanner.pooled import build_certification
 from tradinglib.scanner.regime import gate_reason, regime_state
-from tradinglib.scanner.setups import detect_all
+from tradinglib.scanner.setups import detect_all, earnings_reaction_flags
 from tradinglib.scanner.tiers import apply_fdr, build_watchlist
 from tradinglib.strategist.evaluate import ENTRY_WINDOW, simulate_ticket
 from tradinglib.tournament.run import run_tournament
@@ -143,14 +143,15 @@ def _slice(bars: pd.DataFrame, asof: pd.Timestamp, window_days: int) -> pd.DataF
     return out
 
 
-def _earnings_flags(index: pd.DatetimeIndex, dts: pd.DatetimeIndex) -> pd.Series:
-    """Prod's earnings-column construction over an already-sliced index."""
-    flags = pd.Series(False, index=index)
-    if len(dts):
-        pos = index.searchsorted(dts)
-        pos = pos[pos < len(index)]
-        flags.iloc[pos] = True
-    return flags
+def _earnings_flags(
+    index: pd.DatetimeIndex, dts: pd.DatetimeIndex, sessions: list[str] | None = None
+) -> pd.Series:
+    """Prod's earnings-column construction over an already-sliced index.
+
+    Session-aware (#96): delegates to the shared reaction-bar placement so the
+    flag marks the bar that reacts, not the announcement bar.
+    """
+    return earnings_reaction_flags(index, dts, sessions)
 
 
 def _promote_certified(
@@ -207,6 +208,7 @@ def run_night(
     earnings_by_ticker: dict[str, pd.DatetimeIndex],
     config: ScanConfig,
     certification: dict | None = None,
+    sessions_by_ticker: dict[str, list[str]] | None = None,
 ) -> tuple[dict, list[dict], list[str]]:
     """One replayed night: (tournament-funnel summary, issued rows, errors)."""
     errors: list[str] = []
@@ -219,7 +221,9 @@ def run_night(
                 continue
             t_bars = _slice(bars, asof, config.tournament_lookback_days)
             flags = _earnings_flags(
-                t_bars.index, earnings_by_ticker.get(ticker, pd.DatetimeIndex([]))
+                t_bars.index,
+                earnings_by_ticker.get(ticker, pd.DatetimeIndex([])),
+                sessions_by_ticker.get(ticker) if sessions_by_ticker else None,
             )
             try:
                 tr = run_tournament(t_bars.assign(earnings=flags), stance)
@@ -259,6 +263,9 @@ def run_night(
                     stance=cohort,
                     benchmark_close=bench_close,
                     earnings_datetimes=earnings_by_ticker.get(ticker, pd.DatetimeIndex([])),
+                    earnings_sessions=(
+                        sessions_by_ticker.get(ticker) if sessions_by_ticker else None
+                    ),
                 )
             except Exception as exc:
                 errors.append(f"{ticker} setups: {exc}")
@@ -421,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
 
     bars_by_ticker: dict[str, pd.DataFrame] = {}
     earnings_by_ticker: dict[str, pd.DatetimeIndex] = {}
+    sessions_by_ticker: dict[str, list[str]] = {}
     for ticker in [*tickers, _BENCHMARK]:
         try:
             bars_by_ticker[ticker] = _naive_utc(load_daily(ticker, start=bar_start))
@@ -435,8 +443,10 @@ def main(argv: list[str] | None = None) -> int:
             if dts.tz is None:
                 dts = dts.tz_localize("UTC")
             earnings_by_ticker[ticker] = dts.tz_convert("UTC").tz_localize(None)
+            sessions_by_ticker[ticker] = list(earnings["session"])
         except Exception:
             earnings_by_ticker[ticker] = pd.DatetimeIndex([])
+            sessions_by_ticker[ticker] = []
     print(f"bars loaded: {len(bars_by_ticker)}/{len(tickers) + 1}")
 
     calendar = bars_by_ticker[_BENCHMARK].loc[lambda b: b.index >= replay_start].index
@@ -468,7 +478,11 @@ def main(argv: list[str] | None = None) -> int:
                     if t != _BENCHMARK
                 }
                 cert_cache[week] = build_certification(
-                    sliced, earnings_by_ticker, asof=asof, config=config
+                    sliced,
+                    earnings_by_ticker,
+                    asof=asof,
+                    config=config,
+                    sessions_by_ticker=sessions_by_ticker,
                 )
                 certified = sum(1 for v in cert_cache[week]["verdicts"].values() if v["certified"])
                 print(
@@ -479,7 +493,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
             certification = cert_cache[week]
         funnel, issued, errors = run_night(
-            asof, family, bars_by_ticker, earnings_by_ticker, config, certification=certification
+            asof,
+            family,
+            bars_by_ticker,
+            earnings_by_ticker,
+            config,
+            certification=certification,
+            sessions_by_ticker=sessions_by_ticker,
         )
         night_pit, night_leak = point_in_time_status(args.family_mode, family_source)
         funnel["point_in_time"], funnel["leak"] = night_pit, night_leak
