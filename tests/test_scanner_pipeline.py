@@ -217,6 +217,17 @@ def test_run_scan_respects_limit(patched_pipeline) -> None:
     assert result["funnel"]["universe"] == 1
 
 
+def test_run_scan_emits_honesty_provenance(patched_pipeline) -> None:
+    # #89: the run carries a machine-enforced leak flag — its universe membership
+    # is survivor-biased, so absolute backtest/replay numbers are biased upper bounds.
+    from tradinglib.provenance import MEMBERSHIP_SURVIVORSHIP
+
+    result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))
+    honesty = result["honesty"]
+    assert honesty["leak"] is True
+    assert MEMBERSHIP_SURVIVORSHIP in honesty["reasons"]
+
+
 def test_run_scan_edgar_enrichment_runs_by_default(patched_pipeline) -> None:
     result = patched_pipeline.run_scan(ScanConfig(fa_keep=3, skip_llm=True))
 
@@ -1071,6 +1082,11 @@ def test_pooled_certified_promotion(setup_watch_pipeline) -> None:
     assert row["tier_reason"] == "pooled-certified"
     assert row["strategy"] == "setup:pead"  # original strategy preserved
     assert row["pooled_evidence"] == {"pooled_dsr": 0.95, "n_dates": 24, "total_r": 12.0}
+    # #90: the promoted ticket carries the survivor-biased-evidence caveat
+    from tradinglib.provenance import MEMBERSHIP_SURVIVORSHIP
+
+    assert row["leak"] is True
+    assert MEMBERSHIP_SURVIVORSHIP in row["reasons"]
 
     # promoted out of the watchlist
     assert "DRIFT" not in {r["ticker"] for r in result["watchlist"]["long"]}

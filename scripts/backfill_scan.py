@@ -38,6 +38,7 @@ import pandas as pd
 from tradinglib.data.paths import processed_dir
 from tradinglib.loaders.equities.yfinance import load_daily
 from tradinglib.loaders.events.earnings import get_earnings_dates
+from tradinglib.provenance import BIASED_UPPER_BOUND_BANNER, honesty_summary
 from tradinglib.scanner.config import ScanConfig
 from tradinglib.scanner.ledger import _stats
 from tradinglib.scanner.pooled import build_certification
@@ -133,16 +134,6 @@ def point_in_time_status(family_mode: str, family_source: str | None) -> tuple[s
     if family_mode == "archived" and family_source == "fallback":
         return "fallback", True
     return "frozen", True
-
-
-def honesty_summary(records: list[dict]) -> dict:
-    """Aggregate per-record leak flags into a machine-readable honesty block."""
-    leaked_records = sum(1 for r in records if r.get("leak"))
-    return {
-        "leaked": leaked_records > 0,
-        "leaked_records": leaked_records,
-        "honest_records": len(records) - leaked_records,
-    }
 
 
 def _slice(bars: pd.DataFrame, asof: pd.Timestamp, window_days: int) -> pd.DataFrame:
@@ -604,11 +595,7 @@ def main(argv: list[str] | None = None) -> int:
         f" | leaked records: {honesty['leaked_records']}/{stats['issued']}"
     )
     if honesty["leaked"]:
-        print(
-            "  *** BIASED UPPER-BOUND DIAGNOSTIC — the absolute R/hit-rate below is "
-            "inflated by selection-layer survivorship (leak=True records). Trust only "
-            "RELATIVE A/B deltas; do NOT read these as an expected edge. ***"
-        )
+        print(f"  {BIASED_UPPER_BOUND_BANNER}")
     print(
         f"closed {len(closed)}: {stats['target']} target / {stats['stopped']} stopped"
         f" | hit_rate={stats['hit_rate']} total_r={stats['total_r']:+.2f}"

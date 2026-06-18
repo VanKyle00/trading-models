@@ -82,6 +82,38 @@ def test_get_sp500_constituents_caches(tmp_path: Path, monkeypatch: pytest.Monke
     assert len(first) == 3
 
 
+def test_get_sp500_constituents_carries_membership_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.universe import sp500 as loader
+    from tradinglib.provenance import MEMBERSHIP_SURVIVORSHIP
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+    with patch.object(loader.httpx, "get", lambda url, **kw: _FakeResponse()):
+        fresh = loader.get_sp500_constituents()
+        cached = loader.get_sp500_constituents()  # cache-hit path
+    for df in (fresh, cached):
+        prov = df.attrs["provenance"]
+        assert prov.leak is True and MEMBERSHIP_SURVIVORSHIP in prov.reasons
+
+
+def test_sp500_static_fallback_carries_membership_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.universe import sp500 as loader
+    from tradinglib.provenance import MEMBERSHIP_SURVIVORSHIP
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+
+    def boom(url: str, **kwargs: object) -> _FakeResponse:
+        raise ConnectionError("no network")
+
+    with patch.object(loader.httpx, "get", boom):
+        out = loader.get_sp500_constituents()
+    assert out.attrs["provenance"].leak is True
+    assert MEMBERSHIP_SURVIVORSHIP in out.attrs["provenance"].reasons
+
+
 def test_get_sp500_constituents_falls_back_to_static_csv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

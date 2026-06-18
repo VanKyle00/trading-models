@@ -25,6 +25,9 @@ from tradinglib.data.paths import processed_dir
 from tradinglib.loaders.edgar_client import EdgarClient
 from tradinglib.loaders.universe.cik_map import get_cik_map
 from tradinglib.loaders.universe.sp500 import _normalize_ticker
+from tradinglib.provenance import MEMBERSHIP_SURVIVORSHIP, from_reasons
+
+_MEMBERSHIP_PROV = from_reasons(MEMBERSHIP_SURVIVORSHIP)
 
 SOURCE = "universe"
 _SUBDIR = "russell1000"
@@ -80,6 +83,7 @@ def get_russell1000_constituents(
     if out.exists() and not refresh:
         df = pd.read_parquet(out)
         df.attrs["snapshot"] = snapshot
+        df.attrs["provenance"] = _MEMBERSHIP_PROV
         return df
     try:
         df = _download(get_cik_map(refresh=refresh, client=client))
@@ -92,8 +96,10 @@ def get_russell1000_constituents(
         )
         stale = pd.read_parquet(cached[-1])
         stale.attrs["snapshot"] = cached[-1].stem
+        stale.attrs["provenance"] = _MEMBERSHIP_PROV
         return stale
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out)
     df.attrs["snapshot"] = snapshot
+    df.attrs["provenance"] = _MEMBERSHIP_PROV
     return df

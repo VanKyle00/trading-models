@@ -32,6 +32,85 @@ def fake_yf_frame() -> pd.DataFrame:
     return df
 
 
+@pytest.fixture
+def fake_yf_unadjusted() -> pd.DataFrame:
+    """auto_adjust=False output: RAW (here 2x, as if pre a 2:1 split) OHLC plus a
+    separate 'Adj Close' column — what the second fetch returns."""
+    idx = pd.date_range("2024-01-01", periods=5, freq="D")
+    df = pd.DataFrame(
+        {
+            ("Open", "SPY"): [200.0, 202.0, 204.0, 206.0, 208.0],
+            ("High", "SPY"): [202.0, 204.0, 206.0, 208.0, 210.0],
+            ("Low", "SPY"): [198.0, 200.0, 202.0, 204.0, 206.0],
+            ("Close", "SPY"): [201.0, 203.0, 205.0, 207.0, 209.0],
+            ("Adj Close", "SPY"): [100.5, 101.5, 102.5, 103.5, 104.5],
+            ("Volume", "SPY"): [1_000_000, 1_100_000, 900_000, 1_200_000, 1_050_000],
+        },
+        index=idx,
+    )
+    df.index.name = "Date"
+    return df
+
+
+def test_load_daily_persists_unadjusted_alongside_adjusted(
+    fake_yf_frame: pd.DataFrame,
+    fake_yf_unadjusted: pd.DataFrame,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tradinglib.loaders.equities import yfinance as loader
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+
+    # first fetch = adjusted (auto_adjust=True), second = unadjusted (auto_adjust=False)
+    with patch.object(loader.yf, "download", side_effect=[fake_yf_frame, fake_yf_unadjusted]):
+        df = loader.load_daily("SPY")
+
+    assert {"unadj_open", "unadj_high", "unadj_low", "unadj_close"}.issubset(df.columns)
+    # adjusted columns are byte-identical to the auto_adjust=True canonicalization
+    assert df["close"].tolist() == [100.5, 101.5, 102.5, 103.5, 104.5]
+    # unadjusted columns carry the RAW (pre-split) prices the ticket actually traded
+    assert df["unadj_close"].tolist() == [201.0, 203.0, 205.0, 207.0, 209.0]
+    assert df["unadj_open"].iloc[0] == 200.0
+    # survives the parquet round-trip on the cache-hit read
+    cached = loader.load_daily("SPY")
+    assert cached["unadj_close"].tolist() == [201.0, 203.0, 205.0, 207.0, 209.0]
+
+
+def test_attach_unadjusted_is_all_or_nothing_on_index_gaps() -> None:
+    # If the auto_adjust=False fetch misses a trading day the adjusted fetch has,
+    # reindex would punch NaN into unadj_*; the ledger then swaps that NaN into
+    # open/high/low/close and simulate_ticket's dropna silently drops the bar AND
+    # the scored_unadjusted=True suppresses the A5b fallback -> wrong R. So a gappy
+    # unadjusted fetch must attach NOTHING (fall back to the adjusted/A5b path).
+    from tradinglib.loaders.equities.yfinance import _attach_unadjusted, _canonicalize
+
+    idx = pd.date_range("2024-01-01", periods=3, freq="D")
+    adj = pd.DataFrame(
+        {
+            ("Open", "SPY"): [50.0, 51.0, 52.0],
+            ("High", "SPY"): [50.5, 51.5, 52.5],
+            ("Low", "SPY"): [49.5, 50.5, 51.5],
+            ("Close", "SPY"): [50.0, 51.0, 52.0],
+            ("Volume", "SPY"): [1, 2, 3],
+        },
+        index=idx,
+    )
+    base = _canonicalize(adj, "SPY")
+    gappy = pd.DataFrame(  # missing 2024-01-02
+        {
+            ("Open", "SPY"): [100.0, 104.0],
+            ("High", "SPY"): [101.0, 105.0],
+            ("Low", "SPY"): [99.0, 103.0],
+            ("Close", "SPY"): [100.0, 104.0],
+        },
+        index=pd.DatetimeIndex(["2024-01-01", "2024-01-03"]),
+    )
+    out = _attach_unadjusted(base.copy(), gappy)
+    assert "unadj_close" not in out.columns  # all-or-nothing: gap -> no attach
+    assert list(out.columns) == ["open", "high", "low", "close", "volume", "symbol"]
+
+
 def test_canonicalize_flattens_and_renames(fake_yf_frame: pd.DataFrame) -> None:
     from tradinglib.loaders.equities.yfinance import _canonicalize
 
@@ -68,9 +147,10 @@ def test_load_daily_uses_cache_on_second_call(
 
     with patch.object(loader.yf, "download", return_value=fake_yf_frame) as mock_dl:
         loader.load_daily("SPY")
+        after_first = mock_dl.call_count  # 2: the adjusted + unadjusted fetches
         loader.load_daily("SPY")
-        # Second call must hit the cache, not the network
-        assert mock_dl.call_count == 1
+        # Second call must hit the cache, not the network — no new download calls
+        assert mock_dl.call_count == after_first
 
 
 def test_load_daily_filters_by_date_range(

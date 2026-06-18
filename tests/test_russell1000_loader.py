@@ -54,6 +54,22 @@ def test_canonicalize_schema_cik_join_and_normalization() -> None:
     assert indexed.loc["AAPL", "sector"] == "Information Technology"
 
 
+def test_russell1000_carries_membership_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradinglib.loaders.universe import russell1000 as loader
+    from tradinglib.provenance import MEMBERSHIP_SURVIVORSHIP
+
+    monkeypatch.setattr(loader, "processed_dir", lambda source: tmp_path / source)
+    _patch_cik_map(monkeypatch, loader)
+    with patch.object(loader.httpx, "get", lambda url, **kw: _FakeResponse()):
+        fresh = loader.get_russell1000_constituents()
+        cached = loader.get_russell1000_constituents()  # cache-hit path
+    for df in (fresh, cached):
+        prov = df.attrs["provenance"]
+        assert prov.leak is True and MEMBERSHIP_SURVIVORSHIP in prov.reasons
+
+
 def test_get_russell1000_constituents_caches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
