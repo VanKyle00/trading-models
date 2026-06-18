@@ -58,6 +58,28 @@ def test_get_earnings_dates_caches_and_filters(
     assert len(df) == 2
 
 
+def test_download_one_requests_deep_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """C2 (#92): the fetch limit must cover deep replay nights, not ~6 years."""
+    from tradinglib.loaders.events import earnings as loader
+
+    captured: dict[str, int] = {}
+
+    class _Ticker:
+        def __init__(self, symbol: str) -> None:
+            pass
+
+        def get_earnings_dates(self, limit: int = 24) -> pd.DataFrame | None:
+            captured["limit"] = limit
+            return None
+
+    with patch.object(loader.yf, "Ticker", _Ticker):
+        loader._download_one("AAPL")
+
+    # 24 quarters (~6y, minus future estimates) leaves old replay nights bare;
+    # require enough quarters to cover a decade-plus of replay history.
+    assert captured["limit"] >= 44
+
+
 def test_get_earnings_dates_handles_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from tradinglib.loaders.events import earnings as loader
 
