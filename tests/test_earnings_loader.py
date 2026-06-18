@@ -75,9 +75,10 @@ def test_download_one_requests_deep_history(monkeypatch: pytest.MonkeyPatch) -> 
     with patch.object(loader.yf, "Ticker", _Ticker):
         loader._download_one("AAPL")
 
-    # 24 quarters (~6y, minus future estimates) leaves old replay nights bare;
-    # require enough quarters to cover a decade-plus of replay history.
-    assert captured["limit"] >= 44
+    # tracks the constant so a future reduction toward the old thin 24 is caught;
+    # 24 quarters (~6y minus future estimates) left old replay nights bare.
+    assert captured["limit"] == loader._EARNINGS_LIMIT
+    assert loader._EARNINGS_LIMIT >= 44
 
 
 def test_get_earnings_dates_handles_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

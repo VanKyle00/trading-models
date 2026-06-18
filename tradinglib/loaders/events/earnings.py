@@ -31,7 +31,9 @@ _MARKET_CLOSE_MIN = 16 * 60  # 16:00 ET
 # yfinance returns the most recent ``limit`` quarterly dates (a few of them
 # future estimates). 24 covers only ~6 years, so deep backfill-replay nights
 # get no earnings and PEAD is silently inactive there (#92). ~12 years keeps
-# replay coverage flat with age. The snapshot-keyed cache is unaffected.
+# replay coverage flat with age (covers a backfill --days up to ~8y on top of
+# the ~3.3y tournament lookback; beyond that the earliest nights starve again).
+# The snapshot-keyed cache is unaffected.
 _EARNINGS_LIMIT = 48
 
 

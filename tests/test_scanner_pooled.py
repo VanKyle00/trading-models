@@ -87,6 +87,49 @@ def test_sweep_firings_bait_fires_and_round_trips() -> None:
     assert "status" in result  # firing rows are valid simulate_ticket tickets
 
 
+def _pead_sweep_bars(symbol: str = "POP", n_flat: int = 80, n_drift: int = 20) -> pd.DataFrame:
+    # flat at 100, an +8% pop on 3x volume, then a drift holding above the pop low
+    close = np.concatenate([np.full(n_flat, 100.0), [108.0], np.linspace(108.2, 110.0, n_drift)])
+    low = np.concatenate([np.full(n_flat, 99.0), [105.0], np.linspace(107.0, 108.8, n_drift)])
+    volume = np.concatenate([np.full(n_flat, 1e6), [3e6], np.full(n_drift, 1.2e6)])
+    idx = pd.date_range("2024-01-01", periods=len(close), freq="B")
+    return pd.DataFrame(
+        {
+            "open": close,
+            "high": close * 1.01,
+            "low": low,
+            "close": close,
+            "volume": volume,
+            "symbol": symbol,
+        },
+        index=idx,
+    )
+
+
+def test_sweep_firings_threads_session_for_pead() -> None:
+    # C1 (#91): the session must thread through the pooled certification path and
+    # decide the reaction bar — the certification verdict feeds pooled promotion.
+    bars = {"POP": _pead_sweep_bars()}
+    pop_day = bars["POP"].index[80]
+    # a before-open report on the pop day, tz-naive UTC like the replay path feeds
+    earnings = {"POP": pd.DatetimeIndex([pd.Timestamp(f"{pop_day.date()} 13:00")])}
+    kw = dict(
+        setup_types=("pead",),
+        stance="long",
+        asof=bars["POP"].index[-1],
+        lookback_days=120,
+        step_sessions=1,
+        earnings_by_ticker=earnings,
+    )
+
+    bmo = sweep_firings(bars, sessions_by_ticker={"POP": ["bmo"]}, **kw)
+    assert any(f["setup_type"] == "pead" for f in bmo), "bmo report must react the pop bar -> PEAD"
+
+    # default (no sessions) -> 'unknown' -> next session (a flat drift bar) -> no PEAD
+    default = sweep_firings(bars, **kw)
+    assert not any(f["setup_type"] == "pead" for f in default)
+
+
 def test_pooled_r_series_aggregates_same_date() -> None:
     scored = [
         {"date": "2025-01-06", "r": 2.0, "status": "target"},

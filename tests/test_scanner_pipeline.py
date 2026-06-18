@@ -125,8 +125,7 @@ def patched_pipeline(monkeypatch: pytest.MonkeyPatch, make_chain):
         rows = []
         for t in tickers:
             if t == "DRIFT":
-                # before-open report on the pop bar: its reaction IS index[110] (#91)
-                rows.append({"ticker": t, "earnings_datetime": drift_earnings, "session": "bmo"})
+                rows.append({"ticker": t, "earnings_datetime": drift_earnings, "session": "amc"})
                 rows.append({"ticker": t, "earnings_datetime": next_earnings, "session": "amc"})
         return pd.DataFrame(rows, columns=["ticker", "earnings_datetime", "session"])
 

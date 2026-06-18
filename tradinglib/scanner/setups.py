@@ -308,11 +308,15 @@ def _reaction_pos(
     The earnings ``session`` decides which bar that is: a before-open (``bmo``)
     report reacts the announcement session itself; an after-close (``amc``) or
     undated (``unknown``) report reacts the *next* session. Anchored on the
-    event's normalized date, so the placement does not depend on the raw
-    timestamp's time-of-day relative to the (midnight) bar boundary — which is
-    what mislabels ``bmo`` reactions one session late (#91). Sessions, when
-    given, must align positionally with ``earnings_datetimes``; absent, every
-    event is treated as ``unknown`` (the conservative next-session default).
+    announcement's **US-market (ET) calendar date** — daily bars are stamped at
+    midnight UTC, one per ET session, so the bar's UTC date IS its ET trading
+    date. Anchoring on the ET date (not the raw UTC timestamp) makes placement
+    independent of the stamp's time-of-day vs the midnight boundary: it fixes
+    ``bmo`` reactions landing one session late AND ``amc`` reports after ~20:00 ET
+    (whose UTC stamp rolls onto the next calendar day) landing one session late
+    (#91). Sessions, when given, must align positionally with
+    ``earnings_datetimes``; absent, every event is treated as ``unknown`` (the
+    conservative next-session default).
     """
     events = pd.DatetimeIndex(earnings_datetimes)
     last = index[-1]
@@ -321,8 +325,13 @@ def _reaction_pos(
         return None
     latest = max(past, key=lambda i: events[i])
     session = earnings_sessions[latest] if earnings_sessions is not None else "unknown"
+    e = events[latest]
+    aware = e if e.tz is not None else e.tz_localize("UTC")
+    anchor = pd.Timestamp(aware.tz_convert("America/New_York").date())  # midnight of the ET date
+    if index.tz is not None:
+        anchor = anchor.tz_localize("UTC")
     side = "left" if session == "bmo" else "right"
-    pos = int(index.searchsorted(events[latest].normalize(), side=side))
+    pos = int(index.searchsorted(anchor, side=side))
     return pos if pos < len(index) else None
 
 
