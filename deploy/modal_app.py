@@ -237,6 +237,7 @@ def scheduled_swing_scan() -> None:
             ).strftime("%Y-%m-%d")
             bars_by_ticker: dict = {}
             earnings_by_ticker: dict = {}
+            sessions_by_ticker: dict = {}
             for ticker in tickers:
                 try:
                     bars_by_ticker[ticker] = load_daily(ticker, start=start)
@@ -247,14 +248,18 @@ def scheduled_swing_scan() -> None:
                     # tz-naive to match the sweep's internally naive-ized bars
                     # (detect_pead compares these against the bars index directly)
                     earnings_by_ticker[ticker] = dts.tz_convert("UTC").tz_localize(None)
+                    # session (bmo/amc/unknown) places the PEAD reaction bar (#91)
+                    sessions_by_ticker[ticker] = list(earnings["session"])
                 except Exception:
                     earnings_by_ticker.setdefault(ticker, pd.DatetimeIndex([]))
+                    sessions_by_ticker.setdefault(ticker, [])
             print(f"certification bars: {len(bars_by_ticker)}/{len(tickers)} tickers loaded")
             certification = build_certification(
                 bars_by_ticker,
                 earnings_by_ticker,
                 asof=pd.Timestamp(datetime.now(UTC).strftime("%Y-%m-%d")),
                 config=config,
+                sessions_by_ticker=sessions_by_ticker,
             )
             cert_path.write_text(json.dumps(certification, indent=2), encoding="utf-8")
             print(

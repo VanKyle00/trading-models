@@ -187,15 +187,18 @@ def run_scan(
                 try:
                     earnings = get_earnings_dates([ticker], refresh=config.refresh)
                     earnings_dts = pd.DatetimeIndex(earnings["earnings_datetime"])
+                    earnings_sessions = list(earnings["session"])
                 except Exception as exc:
                     errors.append({"ticker": ticker, "stage": "earnings", "error": str(exc)})
                     earnings_dts = pd.DatetimeIndex([], tz="UTC")
+                    earnings_sessions = []
 
                 setups = detect_all(
                     bars,
                     stance=cohort,
                     benchmark_close=benchmark_close,
                     earnings_datetimes=earnings_dts,
+                    earnings_sessions=earnings_sessions,
                 )
                 if not setups:
                     continue

@@ -13,6 +13,8 @@ separately would inflate the statistic.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pandas as pd
 
 from tradinglib.backtest.metrics import benjamini_hochberg_fdr, compute_metrics
@@ -39,11 +41,14 @@ def sweep_firings(
     lookback_days: int,
     step_sessions: int,
     earnings_by_ticker: dict[str, pd.DatetimeIndex],
+    sessions_by_ticker: dict[str, Sequence[str]] | None = None,
     setup_window_days: int = 450,
 ) -> list[dict]:
     """Every firing of the given setup types on a step-grid of past nights <= asof.
 
-    tz-aware inputs are normalized to tz-naive UTC internally.
+    tz-aware inputs are normalized to tz-naive UTC internally. ``sessions_by_ticker``
+    (bmo/amc/unknown, aligned to each ticker's ``earnings_by_ticker`` entry) places
+    the PEAD reaction bar correctly (#91); absent, events default to next-session.
     """
     bars_by_ticker = {t: _naive(b) for t, b in bars_by_ticker.items()}
     if asof.tz is not None:
@@ -66,6 +71,7 @@ def sweep_firings(
                 window,
                 stance=stance,
                 earnings_datetimes=earnings_by_ticker.get(ticker, pd.DatetimeIndex([])),
+                earnings_sessions=(sessions_by_ticker.get(ticker) if sessions_by_ticker else None),
             ):
                 if s.setup_type not in setup_types:
                     continue
@@ -160,6 +166,7 @@ def build_certification(
     *,
     asof: pd.Timestamp,
     config: ScanConfig,
+    sessions_by_ticker: dict[str, Sequence[str]] | None = None,
 ) -> dict:
     """The weekly certification sidecar: every setup type x stance, pooled and judged.
 
@@ -185,6 +192,7 @@ def build_certification(
             lookback_days=config.pooled_lookback_days,
             step_sessions=config.pooled_step_sessions,
             earnings_by_ticker=earnings_by_ticker,
+            sessions_by_ticker=sessions_by_ticker,
         )
         scored = []
         for row in firings:

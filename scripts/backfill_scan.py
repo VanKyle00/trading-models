@@ -207,6 +207,7 @@ def run_night(
     earnings_by_ticker: dict[str, pd.DatetimeIndex],
     config: ScanConfig,
     certification: dict | None = None,
+    sessions_by_ticker: dict[str, list[str]] | None = None,
 ) -> tuple[dict, list[dict], list[str]]:
     """One replayed night: (tournament-funnel summary, issued rows, errors)."""
     errors: list[str] = []
@@ -259,6 +260,9 @@ def run_night(
                     stance=cohort,
                     benchmark_close=bench_close,
                     earnings_datetimes=earnings_by_ticker.get(ticker, pd.DatetimeIndex([])),
+                    earnings_sessions=(
+                        sessions_by_ticker.get(ticker) if sessions_by_ticker else None
+                    ),
                 )
             except Exception as exc:
                 errors.append(f"{ticker} setups: {exc}")
@@ -421,6 +425,7 @@ def main(argv: list[str] | None = None) -> int:
 
     bars_by_ticker: dict[str, pd.DataFrame] = {}
     earnings_by_ticker: dict[str, pd.DatetimeIndex] = {}
+    sessions_by_ticker: dict[str, list[str]] = {}
     for ticker in [*tickers, _BENCHMARK]:
         try:
             bars_by_ticker[ticker] = _naive_utc(load_daily(ticker, start=bar_start))
@@ -435,8 +440,10 @@ def main(argv: list[str] | None = None) -> int:
             if dts.tz is None:
                 dts = dts.tz_localize("UTC")
             earnings_by_ticker[ticker] = dts.tz_convert("UTC").tz_localize(None)
+            sessions_by_ticker[ticker] = list(earnings["session"])
         except Exception:
             earnings_by_ticker[ticker] = pd.DatetimeIndex([])
+            sessions_by_ticker[ticker] = []
     print(f"bars loaded: {len(bars_by_ticker)}/{len(tickers) + 1}")
 
     calendar = bars_by_ticker[_BENCHMARK].loc[lambda b: b.index >= replay_start].index
@@ -468,7 +475,11 @@ def main(argv: list[str] | None = None) -> int:
                     if t != _BENCHMARK
                 }
                 cert_cache[week] = build_certification(
-                    sliced, earnings_by_ticker, asof=asof, config=config
+                    sliced,
+                    earnings_by_ticker,
+                    asof=asof,
+                    config=config,
+                    sessions_by_ticker=sessions_by_ticker,
                 )
                 certified = sum(1 for v in cert_cache[week]["verdicts"].values() if v["certified"])
                 print(
@@ -479,7 +490,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
             certification = cert_cache[week]
         funnel, issued, errors = run_night(
-            asof, family, bars_by_ticker, earnings_by_ticker, config, certification=certification
+            asof,
+            family,
+            bars_by_ticker,
+            earnings_by_ticker,
+            config,
+            certification=certification,
+            sessions_by_ticker=sessions_by_ticker,
         )
         night_pit, night_leak = point_in_time_status(args.family_mode, family_source)
         funnel["point_in_time"], funnel["leak"] = night_pit, night_leak
