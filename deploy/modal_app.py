@@ -146,7 +146,7 @@ class LocalModel:
     # Holds ANTHROPIC_API_KEY. Remove this line to deploy without the key — the
     # chat console then degrades gracefully to "Assistant is unavailable".
     secrets=[modal.Secret.from_name("trading-models-secrets")],
-    min_containers=0,  # scale to zero; set to 1 to eliminate cold starts (costs more)
+    min_containers=1,  # keep one CPU container warm 24/7 — no everyday cold start (~single-digit $/mo)
     scaledown_window=300,  # keep a warm container for 5 min after the last request
     timeout=600,  # allows a GPU cold start (container spin + first generation) within one request
 )
